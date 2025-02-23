@@ -1,0 +1,13 @@
+[project]
+authors = ["Seth Stadick <sstadick@gmail.com>"]
+channels = ["https://conda.modular.com/max-nightly", "https://conda.modular.com/max", "https://repo.prefix.dev/modular-community", "conda-forge"]
+name = "ish"
+platforms = ["osx-arm64"]
+version = "0.1.0"
+
+[tasks]
+build = "magic run mojo build -I /Users/sethstadick/dev/ExtraMojo -o ish main.mojo"
+
+[dependencies]
+max = "=25.1.0"
+# extramojo = ">=0.9.0,<0.10"
