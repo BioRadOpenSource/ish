@@ -149,12 +149,12 @@ fn test_sw_byte() raises:
     # For DNA-like alphabet (size 4), representing A=0, C=1, G=2, T=3
 
     # Query: ACGTACGT
-    # var query = List[UInt8](0, 1, 2, 3, 0, 1, 2, 3)
-    var query = List[UInt8](2, 0, 3, 0, 1, 0)
+    var query = List[UInt8](0, 1, 2, 3, 0, 1, 2, 3)
+    # var query = List[UInt8](2, 0, 3, 0, 1, 0)
 
     # Reference: TACGTACGTACG
-    # var reference = List[UInt8](3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2)
-    var reference = List[UInt8](1)
+    var reference = List[UInt8](3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2)
+    # var reference = List[UInt8](1)
 
     # Create scoring matrix (match=2, mismatch=-1)
     var matrix = ScoringMatrix.default_matrix(4)
@@ -243,7 +243,7 @@ fn test_sw_byte() raises:
 
     # Test reverse direction to ensure it works
     var reverse_alignments = sw_byte(
-        Span(reference),
+        Span(poor_reference),
         ReferenceDirection.Reverse,
         len(query),
         gap_open,
@@ -261,7 +261,7 @@ fn test_sw_byte() raises:
 
     # Score should be the same, but positions will be different
     assert_true(
-        reverse_alignments[0].score == alignments[0].score,
+        reverse_alignments[0].score == poor_alignments[0].score,
         "Reverse alignment should have same score",
     )
 
@@ -410,11 +410,11 @@ fn test_compare_vs_c() raises:
 
 # Run tests
 fn main() raises:
-    # print("Running basic test...")
-    # test_sw_byte()
+    print("Running basic test...")
+    test_sw_byte()
 
     # print("\nRunning comprehensive test...")
     # test_sw_byte_comprehensive()
 
-    print("Test vs C")
-    test_compare_vs_c()
+    # print("Test vs C")
+    # test_compare_vs_c()
