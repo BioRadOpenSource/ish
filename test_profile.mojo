@@ -8,7 +8,8 @@ from ishlib.matcher.alignment.ssw_align import (
     ScoreSize,
     SIMD_U8_WIDTH,
     SIMD_U16_WIDTH,
-    sw_byte,
+    sw,
+    ssw_align,
     ReferenceDirection,
     nt_to_num,
 )
@@ -169,7 +170,7 @@ fn test_sw_byte() raises:
     var gap_extend = UInt8(1)  # Gap extension penalty
 
     # Run Smith-Waterman alignment
-    var alignments = sw_byte(
+    var alignments = sw[DType.uint8, SIMD_U8_WIDTH](
         Span(reference),
         ReferenceDirection.Forward,
         len(query),
@@ -215,7 +216,7 @@ fn test_sw_byte() raises:
     for _ in range(9):
         poor_reference.append(UInt8(3))  # all Ts
 
-    var poor_alignments = sw_byte(
+    var poor_alignments = sw[DType.uint8, SIMD_U8_WIDTH](
         Span(poor_reference),
         ReferenceDirection.Forward,
         len(query),
@@ -242,7 +243,7 @@ fn test_sw_byte() raises:
     )
 
     # Test reverse direction to ensure it works
-    var reverse_alignments = sw_byte(
+    var reverse_alignments = sw[DType.uint8, SIMD_U8_WIDTH](
         Span(poor_reference),
         ReferenceDirection.Reverse,
         len(query),
@@ -307,7 +308,7 @@ fn test_sw_byte_comprehensive() raises:
         Span(query1), matrix, ScoreSize.Adaptive
     )
 
-    var alignments1 = sw_byte(
+    var alignments1 = sw[DType.uint8, SIMD_U8_WIDTH](
         Span(ref1),
         ReferenceDirection.Forward,
         len(query1),
@@ -333,7 +334,7 @@ fn test_sw_byte_comprehensive() raises:
         Span(query2), matrix, ScoreSize.Adaptive
     )
 
-    var alignments2 = sw_byte(
+    var alignments2 = sw[DType.uint8, SIMD_U8_WIDTH](
         Span(ref2),
         ReferenceDirection.Forward,
         len(query2),
@@ -355,7 +356,7 @@ fn test_sw_byte_comprehensive() raises:
         Span(query3), matrix, ScoreSize.Adaptive
     )
 
-    var alignments3 = sw_byte(
+    var alignments3 = sw[DType.uint8, SIMD_U8_WIDTH](
         Span(ref3),
         ReferenceDirection.Forward,
         len(query3),
@@ -393,7 +394,7 @@ fn test_compare_vs_c() raises:
     var gap_extend = UInt8(1)  # Gap extension penalty
 
     # Run Smith-Waterman alignment
-    var alignments = sw_byte(
+    var alignments = sw[DType.uint8, SIMD_U8_WIDTH](
         Span(ref_seq),
         ReferenceDirection.Forward,
         len(read_seq),
@@ -404,17 +405,149 @@ fn test_compare_vs_c() raises:
         profile.bias,
         15,  # Small mask length
     )
-    print(alignments[0].score, alignments[0].reference, alignments[0].query)
-    print(alignments[1].score, alignments[1].reference, alignments[1].query)
+    assert_equal(alignments[0].score, 21)
+    assert_equal(alignments[0].reference, 21)
+    assert_equal(alignments[0].query, 21)
+
+    assert_equal(alignments[1].score, 8)
+    assert_equal(alignments[1].reference, 4)
+    assert_equal(alignments[1].query, 0)
+
+
+fn test_compare_vs_c_ssw_align() raises:
+    var reference = List("CAGCCTTTCTGACCCGGAAATCAAAATAGGCACAACAAA".as_bytes())
+    var ref_seq = nt_to_num(reference)
+    var read = List("CTGAGCCGGTAAATC".as_bytes())
+    var read_seq = nt_to_num(read)
+
+    var matrix = ScoringMatrix.default_matrix(5, matched=2, mismatched=-2)
+    matrix.set_last_row_to_value(0)
+    # Create query profile
+    var profile = Profile[__origin_of(read_seq), __origin_of(matrix)](
+        Span(read_seq), matrix, ScoreSize.Adaptive
+    )
+
+    # Set gap penalties
+    var gap_open = UInt8(3)  # Gap open penalty
+    var gap_extend = UInt8(1)  # Gap extension penalty
+
+    # Run Smith-Waterman alignment
+    print("Doing ssw_align")
+    var alignment = ssw_align[__origin_of(profile)](
+        profile,
+        ref_seq,
+        gap_open_penalty=gap_open,
+        gap_extension_penalty=gap_extend,
+        return_only_alignment_end=False,
+        mask_length=15,
+    ).value()
+
+    assert_equal(alignment.score1, 21)
+    assert_equal(alignment.score2, 8)
+    # Note, subtracted 1 from ssw C because they add 1
+    assert_equal(alignment.ref_begin1, 8)
+    assert_equal(alignment.ref_end1, 21)
+    print(alignment.read_begin1, alignment.read_end1)
+    assert_equal(alignment.read_begin1, 0)
+    assert_equal(alignment.read_end1, 14)
+
+
+fn test_compare_vs_c_ssw_align2() raises:
+    var reference = List(
+        "CAGCCTTTCTGACCCGGAAATCAAAATAGGCACAACAAACAGCCTTTCTGACCCGGAAATCAAAATAGGCACAACAAA"
+        .as_bytes()
+    )
+    var ref_seq = nt_to_num(reference)
+    var read = List(
+        "CTGAGCCGGTAAATCCTGAGCCGGTAAATCCTGAGCCGGTAAATCCTGAGCCGGTAAATCCTGAGCCGGTAAATCCTGAGCCGGTAAATCCTGAGCCGGTAAATC"
+        .as_bytes()
+    )
+    var read_seq = nt_to_num(read)
+
+    var matrix = ScoringMatrix.default_matrix(5, matched=2, mismatched=-2)
+    matrix.set_last_row_to_value(0)
+    # Create query profile
+    var profile = Profile[__origin_of(read_seq), __origin_of(matrix)](
+        Span(read_seq), matrix, ScoreSize.Adaptive
+    )
+
+    # Set gap penalties
+    var gap_open = UInt8(3)  # Gap open penalty
+    var gap_extend = UInt8(1)  # Gap extension penalty
+
+    # Run Smith-Waterman alignment
+    print("Doing ssw_align")
+    var alignment = ssw_align[__origin_of(profile)](
+        profile,
+        ref_seq,
+        gap_open_penalty=gap_open,
+        gap_extension_penalty=gap_extend,
+        return_only_alignment_end=False,
+        mask_length=15,
+    ).value()
+
+    assert_equal(alignment.score1, 32)
+    assert_equal(alignment.score2, 26)
+    # Note, subtracted 1 from ssw C because they add 1
+    assert_equal(alignment.ref_begin1, 1)
+    assert_equal(alignment.ref_end1, 60)
+    print(alignment.read_begin1, alignment.read_end1)
+    assert_equal(alignment.read_end1, 74)
+    assert_equal(alignment.read_begin1, 3)
+
+
+fn test_compare_vs_c_ssw_align3() raises:
+    var reference = List(
+        "CAGCCTTTCTGACCCGGAAATCAAAATAGGCACAACAAACAGCCTTTCTGACCCGGAAATCAAAATAGGCACAACAAA"
+        .as_bytes()
+    )
+    var ref_seq = nt_to_num(reference)
+    var read = List(
+        "CTGAGCCGGTAAATCCTGAGCCGGTAAATCCTGAGCCGGTAAATCCTGAGCCGGTAAATCCTGAGCCGGTAAATCCTGAGCCGGTAAATCCTGAGCCGGTAAATC"
+        .as_bytes()
+    )
+    var read_seq = nt_to_num(read)
+
+    var matrix = ScoringMatrix.default_matrix(5, matched=2, mismatched=-2)
+    matrix.set_last_row_to_value(0)
+    # Create query profile
+    var profile = Profile[__origin_of(read_seq), __origin_of(matrix)](
+        Span(read_seq), matrix, ScoreSize.Word
+    )
+
+    # Set gap penalties
+    var gap_open = UInt8(3)  # Gap open penalty
+    var gap_extend = UInt8(1)  # Gap extension penalty
+
+    # Run Smith-Waterman alignment
+    print("Doing ssw_align")
+    var alignment = ssw_align[__origin_of(profile)](
+        profile,
+        ref_seq,
+        gap_open_penalty=gap_open,
+        gap_extension_penalty=gap_extend,
+        return_only_alignment_end=False,
+        mask_length=15,
+    ).value()
+
+    assert_equal(alignment.score1, 32)
+    assert_equal(alignment.score2, 26)
+    # Note, subtracted 1 from ssw C because they add 1
+    assert_equal(alignment.ref_begin1, 1)
+    assert_equal(alignment.ref_end1, 60)
+    print(alignment.read_begin1, alignment.read_end1)
+    assert_equal(alignment.read_end1, 74)
+    assert_equal(alignment.read_begin1, 3)
 
 
 # Run tests
 fn main() raises:
-    print("Running basic test...")
-    test_sw_byte()
+    # print("Running basic test...")
+    # test_sw_byte()
 
     # print("\nRunning comprehensive test...")
     # test_sw_byte_comprehensive()
 
-    # print("Test vs C")
+    print("Test vs C")
     # test_compare_vs_c()
+    test_compare_vs_c_ssw_align3()

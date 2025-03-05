@@ -288,6 +288,13 @@ struct Profile[
             ](query, score_matrix, bias)
 
         if score_size == ScoreSize.Word or score_size == ScoreSize.Adaptive:
+            # Find the bias to use in the substitution matrix
+            # The bias will be smallest value in the scoring matrix
+            var bias_tmp: Int8 = 0
+            for i in range(0, len(score_matrix.values)):
+                if score_matrix.values[i] < bias_tmp:
+                    bias_tmp = score_matrix.values[i]
+            bias = abs(bias_tmp).cast[DType.uint8]()
             profile_word = Self.generate_query_profile[
                 DType.uint16, SIMD_U16_WIDTH
             ](query, score_matrix, bias)
@@ -352,14 +359,10 @@ struct Alignment:
     var score2: UInt16
     var ref_begin1: Int32
     var ref_end1: Int32
-    var ref_begin2: Int32
-    var ref_end2: Int32
     var read_begin1: Int32
     var read_end1: Int32
-    var read_begin2: Int32
-    var read_end2: Int32
+    var ref_end2: Int32
     var cigar: List[UInt32]
-    var flag: UInt16
 
 
 @value
@@ -406,48 +409,167 @@ fn ssw_align[
     *,
     gap_open_penalty: UInt8 = 3,
     gap_extension_penalty: UInt8 = 1,
-    settings_flag: UInt8 = 0,
-    filter_score: UInt16 = 0,
-    filter_distance: Int32 = 0,
-    mask_length: UInt32 = 15,  # for second best score
-) -> Alignment:
+    return_only_alignment_end: Bool = False,
+    mask_length: Int32 = 15,  # for second best score
+) -> Optional[Alignment]:
     # Find the alignment scores and ending positions
     var bests: List[AlignmentEnd]
+
+    var used_word = False
+
     if profile.profile_byte:
-        bests = sw_byte(
+        print("Doing Byte SW")
+        bests = sw[DType.uint8, SIMD_U8_WIDTH](
             reference,
             ReferenceDirection.Forward,
             profile.query_len,
             gap_open_penalty,
             gap_extension_penalty,
             profile.profile_byte.value(),
-            255,
+            0,
             profile.bias,
             mask_length,
         )
         if profile.profile_word and bests[0].score == 255:
+            print("Doing Word SW")
             bests.clear()
-            # TODO: run word version
+            bests = sw[DType.uint16, SIMD_U16_WIDTH](
+                reference,
+                ReferenceDirection.Forward,
+                profile.query_len,
+                gap_open_penalty.cast[DType.uint16](),
+                gap_extension_penalty.cast[DType.uint16](),
+                profile.profile_word.value(),
+                0,
+                profile.bias.cast[DType.uint16](),
+                mask_length,
+            )
+            used_word = True
+        elif bests[0].score == 255:
+            print(
+                "Please overflow in alignments detected, please provide a"
+                " larger query profile"
+            )
+            return None
+
     elif profile.profile_word:
-        bests = List[AlignmentEnd]()
-        # TODO
+        bests = sw[DType.uint16, SIMD_U16_WIDTH](
+            reference,
+            ReferenceDirection.Forward,
+            profile.query_len,
+            gap_open_penalty.cast[DType.uint16](),
+            gap_extension_penalty.cast[DType.uint16](),
+            profile.profile_word.value(),
+            -1,
+            profile.bias.cast[DType.uint16](),
+            mask_length,
+        )
+        used_word = True
     else:
-        pass
-        # TODO explode
+        print("Failed to provide a valid query profile")
+        return None
 
-    pass
+    if bests[0].score <= 0:
+        return None
+
+    var score1 = bests[0].score
+    var ref_end1 = bests[0].reference
+    var read_end1 = bests[0].query
+
+    var score2: UInt16 = 0
+    var ref_end2: Int32 = -1
+
+    if mask_length >= 15:
+        score2 = bests[1].score
+        ref_end2 = bests[1].reference
+
+    if return_only_alignment_end:
+        return Alignment(
+            score1=score1,
+            score2=score2,
+            ref_begin1=-1,
+            ref_end1=ref_end1,
+            read_begin1=-1,
+            read_end1=read_end1,
+            ref_end2=ref_end2,
+            cigar=List[UInt32](),
+        )
+
+    # Get the start position
+    var bests_rev: List[AlignmentEnd]
+    # Reverse the query sequence and truncate it
+    print("read_end1", read_end1)
+    print("Reverse and truncate query")
+    print("was len", len(profile.query))
+    var query_reverse = List[UInt8](capacity=Int(read_end1 + 1))
+    var count = 0
+    for nt in profile.query.__reversed__():
+        if count == Int(read_end1 + 1):
+            break
+        query_reverse.append(nt[])
+        count += 1
+    print("now ", len(query_reverse))
+
+    # var query_reverse_truncated = query_reverse[0: Int(read_end1)+1]
+    if not used_word:
+        var profile = Profile[
+            __origin_of(query_reverse), __origin_of(profile.scoring_matrix[])
+        ](query_reverse, profile.scoring_matrix[], ScoreSize.Byte)
+        bests_rev = sw[DType.uint8, SIMD_U8_WIDTH](
+            reference[: Int(ref_end1 + 1)],
+            ReferenceDirection.Reverse,
+            len(query_reverse),
+            gap_open_penalty,
+            gap_extension_penalty,
+            profile.profile_byte.value(),
+            0,
+            profile.bias,
+            mask_length,
+        )
+    else:
+        var profile = Profile[
+            __origin_of(query_reverse), __origin_of(profile.scoring_matrix[])
+        ](query_reverse, profile.scoring_matrix[], ScoreSize.Word)
+        bests_rev = sw[DType.uint16, SIMD_U16_WIDTH](
+            reference[: Int(ref_end1 + 1)],
+            ReferenceDirection.Reverse,
+            len(query_reverse),
+            gap_open_penalty.cast[DType.uint16](),
+            gap_extension_penalty.cast[DType.uint16](),
+            profile.profile_word.value(),
+            0,
+            profile.bias.cast[DType.uint16](),
+            mask_length,
+        )
+    var ref_begin1 = bests_rev[0].reference
+    var read_begin1 = read_end1 - bests_rev[0].query
+    # if fwd score  > rev score, we might be missing something?
+
+    # Skipping CIGAR for now
+    return Alignment(
+        score1=score1,
+        score2=score2,
+        ref_begin1=ref_begin1,
+        ref_end1=ref_end1,
+        read_begin1=read_begin1,
+        read_end1=read_end1,
+        ref_end2=ref_end2,
+        cigar=List[UInt32](),
+    )
 
 
-fn sw_byte(
+fn sw[
+    dt: DType, width: Int
+](
     reference: Span[UInt8],
     reference_direction: ReferenceDirection,
     query_len: Int32,
-    gap_open_penalty: UInt8,
-    gap_extension_penalty: UInt8,
-    profile: Span[SIMD[DType.uint8, SIMD_U8_WIDTH]],
-    terminate: UInt8,
-    bias: UInt8,
-    mask_length: UInt32,
+    gap_open_penalty: SIMD[dt, 1],
+    gap_extension_penalty: SIMD[dt, 1],
+    profile: Span[SIMD[dt, width]],
+    terminate: SIMD[dt, 1],
+    bias: SIMD[dt, 1],
+    mask_length: Int32,
 ) -> List[AlignmentEnd]:
     """Smith-Waterman local alignment.
 
@@ -456,47 +578,49 @@ fn sw_byte(
 
     """
 
-    var max_score: UInt8 = 0
+    var max_score = UInt8(0).cast[dt]()
     var end_query: Int32 = query_len - 1
     var end_reference: Int32 = -1  # 0 based best alignment ending point; initialized as isn't aligned -1
-    var segment_length = (query_len + SIMD_U8_WIDTH - 1) // SIMD_U8_WIDTH
+    var segment_length = (query_len + width - 1) // width
 
     # Note:
     # H - Score for match / mismatch (diagonal move)
     # E - Score for gap in query (horizontal move)
     # F - Score for gap in reference (vertical move)
     print("Segment length:", segment_length)
-    print("Byte Profile")
+    print("RefLen: ", len(reference))
+    print("querylen: ", query_len)
+    print("SIMD DType", dt)
+    print("SIMD WIDTH", width)
     for i in range(0, 5):  # TODO: hardcoded, should be length alphabet
         print(chr(Int(NUM_TO_NT[i])), ": ", sep="", end="")
         for j in range(0, segment_length):
             print(profile[i * segment_length + j], ", ", end="")
         print()
+    print("Initializing")
 
     # List to record the largest score of each reference position
-    var max_column = List[UInt8](capacity=len(reference))
+    var max_column = List[SIMD[dt, 1]](capacity=len(reference))
     # List to record the alignment query ending position of the largest score of each reference position
     var end_query_column = List[Int32](capacity=len(reference))
     for _ in range(0, len(reference)):
-        max_column.append(0)
+        max_column.append(UInt8(0).cast[dt]())
         end_query_column.append(0)
 
-    var zero = SIMD[DType.uint8, SIMD_U8_WIDTH](0)
+    var zero = SIMD[dt, width](0)
     # Note: I'm using the `pv` prefix from the source even though its irrelevant here, it means `pointer` `vector`
     # Stores the H values (scores) for the current row of the dynamic programming matrix
-    var pv_h_store = List[SIMD[DType.uint8, SIMD_U8_WIDTH]](
+    var pv_h_store = List[SIMD[dt, width]](
         capacity=Int(segment_length)
     )  # aka: pvHStore
     # Contains scores from the previous row that will be loaded for calculation
-    var pv_h_load = List[SIMD[DType.uint8, SIMD_U8_WIDTH]](
+    var pv_h_load = List[SIMD[dt, width]](
         capacity=Int(segment_length)
     )  # aka: pvHLoad
     # Tracks scores for alignments that end with gaps in the query seq (horizontal gaps in visualization)
-    var pv_e = List[SIMD[DType.uint8, SIMD_U8_WIDTH]](
-        capacity=Int(segment_length)
-    )  # aka: pvE
+    var pv_e = List[SIMD[dt, width]](capacity=Int(segment_length))  # aka: pvE
     # Stores the max scores seen in each column for traceback
-    var pv_h_max = List[SIMD[DType.uint8, SIMD_U8_WIDTH]](
+    var pv_h_max = List[SIMD[dt, width]](
         capacity=Int(segment_length)
     )  # aka: pvHmax
 
@@ -507,13 +631,9 @@ fn sw_byte(
         pv_e.append(zero)
         pv_h_max.append(zero)
 
-    var v_gap_open = SIMD[DType.uint8, SIMD_U8_WIDTH](
-        gap_open_penalty
-    )  # aka: vGap0
-    var v_gap_ext = SIMD[DType.uint8, SIMD_U8_WIDTH](
-        gap_extension_penalty
-    )  # aka: vGapE
-    var v_bias = SIMD[DType.uint8, SIMD_U8_WIDTH](bias)  # aka: vBias
+    var v_gap_open = SIMD[dt, width](gap_open_penalty)  # aka: vGap0
+    var v_gap_ext = SIMD[dt, width](gap_extension_penalty)  # aka: vGapE
+    var v_bias = SIMD[dt, width](bias)  # aka: vBias
     # Trace the highest scro of the whole SW matrix
     var v_max_score = zero  # aka: vMaxScore
     # Trace the highest score till the previous column
@@ -623,7 +743,7 @@ fn sw_byte(
         print("\tStarting LazyF")
         # Lazy_F loop, disallows adjacent insertion and then deletion from SWPS3
         var break_out = False
-        for k in range(0, SIMD_U8_WIDTH):
+        for k in range(0, width):
             v_f = v_f.shift_right[1]()
             print("\tLeft Shift vF:", v_f)
             print("\tWalking Segments")
@@ -661,7 +781,7 @@ fn sw_byte(
 
             if likely(temp > max_score):
                 max_score = temp
-                if (max_score + bias) >= UInt8.MAX:
+                if (max_score + bias) >= SIMD[dt, 1].MAX:
                     print("OVERFLOW")
                     break
                 end_reference = i
@@ -683,9 +803,9 @@ fn sw_byte(
     # Trace the alignment ending position on query
     # var column_len = segment_length * SIMD_U8_WIDTH
     for i in range(0, segment_length):
-        for j in range(0, SIMD_U8_WIDTH):
+        for j in range(0, width):
             if pv_h_max[i][j] == max_score:
-                var temp = i + j * SIMD_U8_WIDTH
+                var temp = i + j * segment_length
                 if temp < Int(end_query):
                     end_query = temp
 
@@ -709,32 +829,43 @@ fn sw_byte(
         print(end_query_column[i], ", ", end="")
     print()
     # Find the most possible 2nd alignment
-    var score_0 = max_score.cast[DType.uint16]() + bias.cast[
-        DType.uint16
-    ]() if max_score.cast[DType.uint16]() + bias.cast[
-        DType.uint16
-    ]() >= 255 else max_score.cast[
-        DType.uint16
-    ]()
+    var score_0 = max_score + bias if max_score + bias >= 255 else max_score
     var bests = List[AlignmentEnd](
-        AlignmentEnd(score_0, end_reference, end_query), AlignmentEnd(0, 0, 0)
+        AlignmentEnd(score_0.cast[DType.uint16](), end_reference, end_query),
+        AlignmentEnd(0, 0, 0),
     )
 
-    edge = (end_reference - mask_length.cast[DType.int32]()) if (
-        end_reference - mask_length.cast[DType.int32]()
+    edge = (end_reference - mask_length) if (
+        end_reference - mask_length
     ) > 0 else 0
     for i in range(0, edge):
-        if max_column[i].cast[DType.uint16]() > bests[1].score:
+        if max_column[i] > bests[1].score.cast[dt]():
             bests[1].score = max_column[i].cast[DType.uint16]()
             bests[1].reference = i
 
     edge = (
-        len(reference) if (end_reference + mask_length.cast[DType.int32]())
-        > len(reference) else end_reference + mask_length.cast[DType.int32]()
+        len(reference) if (end_reference + mask_length)
+        > len(reference) else end_reference + mask_length
     )
     for i in range(edge + 1, len(reference)):
-        if max_column[i].cast[DType.uint16]() > bests[1].score:
+        if max_column[i] > bests[1].score.cast[dt]():
             bests[1].score = max_column[i].cast[DType.uint16]()
             bests[1].reference = i
 
+    print(
+        "score:",
+        bests[0].score,
+        "ref:",
+        bests[0].reference,
+        "read:",
+        bests[0].query,
+    )
+    print(
+        "score:",
+        bests[1].score,
+        "ref:",
+        bests[1].reference,
+        "read:",
+        bests[1].query,
+    )
     return bests
