@@ -23,9 +23,7 @@ fn test_profile() raises:
         query.append(i)
     var matrix = ScoringMatrix.default_matrix(alphabet_size)
 
-    var profile = Profile[__origin_of(query)](
-        Span(query), matrix, ScoreSize.Adaptive
-    )
+    var profile = Profile(Span(query), matrix, ScoreSize.Adaptive)
 
     # Verify basic properties
     assert_equal(profile.bias, 1)
@@ -161,9 +159,7 @@ fn test_sw_byte() raises:
     var matrix = ScoringMatrix.default_matrix(4)
 
     # Create query profile
-    var profile = Profile[__origin_of(query)](
-        Span(query), matrix, ScoreSize.Adaptive
-    )
+    var profile = Profile(Span(query), matrix, ScoreSize.Adaptive)
 
     # Set gap penalties
     var gap_open = UInt8(3)  # Gap open penalty
@@ -177,6 +173,7 @@ fn test_sw_byte() raises:
         gap_open,
         gap_extend,
         profile.profile_byte.value(),
+        profile.byte_vectors,
         0,  # No early termination
         profile.bias,
         4,  # Small mask length
@@ -184,9 +181,9 @@ fn test_sw_byte() raises:
 
     # Validate results
     print("Alignment results:")
-    print("Best alignment score:", alignments[0].score)
-    print("Reference end position:", alignments[0].reference)
-    print("Query end position:", alignments[0].query)
+    print("Best alignment score:", alignments.best.score)
+    print("Reference end position:", alignments.best.reference)
+    print("Query end position:", alignments.best.query)
 
     # Given our specific sequences, we expect:
     # - The optimal alignment is to skip the first T in reference (gap in query)
@@ -201,12 +198,12 @@ fn test_sw_byte() raises:
     # - Query end at position 7 (0-based, the last position)
 
     # Check for reasonable results (exact values may vary based on implementation details)
-    assert_true(alignments[0].score > 10, "Score should be at least 10")
+    assert_true(alignments.best.score > 10, "Score should be at least 10")
     assert_true(
-        alignments[0].reference >= 7, "Reference end position seems wrong"
+        alignments.best.reference >= 7, "Reference end position seems wrong"
     )
     assert_true(
-        alignments[0].query == 7,
+        alignments.best.query == 7,
         "Query end position should be the last position (7)",
     )
 
@@ -215,7 +212,6 @@ fn test_sw_byte() raises:
     var poor_reference = List[UInt8]()
     for _ in range(9):
         poor_reference.append(UInt8(3))  # all Ts
-
     var poor_alignments = sw[DType.uint8, SIMD_U8_WIDTH](
         Span(poor_reference),
         ReferenceDirection.Forward,
@@ -223,22 +219,23 @@ fn test_sw_byte() raises:
         gap_open,
         gap_extend,
         profile.profile_byte.value(),
-        0,
+        profile.byte_vectors,
+        -1,
         profile.bias,
         4,
     )
 
     print("\nPoor alignment results:")
-    print("Best alignment score:", poor_alignments[0].score)
-    print("Reference end position:", poor_alignments[0].reference)
-    print("Query end position:", poor_alignments[0].query)
+    print("Best alignment score:", poor_alignments.best.score)
+    print("Reference end position:", poor_alignments.best.reference)
+    print("Query end position:", poor_alignments.best.query)
 
     # With all Ts in reference, we expect:
     # - Only T in query would match (positions 3 and 7)
     # - Much lower score than good alignment
 
     assert_true(
-        poor_alignments[0].score < alignments[0].score,
+        poor_alignments.best.score < alignments.best.score,
         "Poor alignment should have lower score",
     )
 
@@ -250,19 +247,20 @@ fn test_sw_byte() raises:
         gap_open,
         gap_extend,
         profile.profile_byte.value(),
+        profile.byte_vectors,
         0,
         profile.bias,
         4,
     )
 
     print("\nReverse direction alignment results:")
-    print("Best alignment score:", reverse_alignments[0].score)
-    print("Reference end position:", reverse_alignments[0].reference)
-    print("Query end position:", reverse_alignments[0].query)
+    print("Best alignment score:", reverse_alignments.best.score)
+    print("Reference end position:", reverse_alignments.best.reference)
+    print("Query end position:", reverse_alignments.best.query)
 
     # Score should be the same, but positions will be different
     assert_true(
-        reverse_alignments[0].score == poor_alignments[0].score,
+        reverse_alignments.best.score == poor_alignments.best.score,
         "Reverse alignment should have same score",
     )
 
@@ -304,9 +302,7 @@ fn test_sw_byte_comprehensive() raises:
     print("=== Comprehensive Smith-Waterman Tests ===")
 
     # Test 1: Perfect alignment
-    var profile1 = Profile[__origin_of(query1)](
-        Span(query1), matrix, ScoreSize.Adaptive
-    )
+    var profile1 = Profile(Span(query1), matrix, ScoreSize.Adaptive)
 
     var alignments1 = sw[DType.uint8, SIMD_U8_WIDTH](
         Span(ref1),
@@ -315,24 +311,23 @@ fn test_sw_byte_comprehensive() raises:
         gap_open,
         gap_extend,
         profile1.profile_byte.value(),
+        profile1.byte_vectors,
         0,
         profile1.bias,
         4,
     )
 
     print("\nTest 1 - Perfect alignment:")
-    print("Score:", alignments1[0].score)
-    print("Reference end:", alignments1[0].reference)
-    print("Query end:", alignments1[0].query)
+    print("Score:", alignments1.best.score)
+    print("Reference end:", alignments1.best.reference)
+    print("Query end:", alignments1.best.query)
     assert_true(
-        alignments1[0].score == UInt16(len(query1) * 2),
+        alignments1.best.score == UInt16(len(query1) * 2),
         "Perfect match should have score = 2 * length",
     )
 
     # Test 2: Gap in query
-    var profile2 = Profile[__origin_of(query2)](
-        Span(query2), matrix, ScoreSize.Adaptive
-    )
+    var profile2 = Profile(Span(query2), matrix, ScoreSize.Adaptive)
 
     var alignments2 = sw[DType.uint8, SIMD_U8_WIDTH](
         Span(ref2),
@@ -341,20 +336,19 @@ fn test_sw_byte_comprehensive() raises:
         gap_open,
         gap_extend,
         profile2.profile_byte.value(),
+        profile2.byte_vectors,
         0,
         profile2.bias,
         4,
     )
 
     print("\nTest 2 - Gap in query:")
-    print("Score:", alignments2[0].score)
-    print("Reference end:", alignments2[0].reference)
-    print("Query end:", alignments2[0].query)
+    print("Score:", alignments2.best.score)
+    print("Reference end:", alignments2.best.reference)
+    print("Query end:", alignments2.best.query)
 
     # Test 3: Gap in reference
-    var profile3 = Profile[__origin_of(query3)](
-        Span(query3), matrix, ScoreSize.Adaptive
-    )
+    var profile3 = Profile(Span(query3), matrix, ScoreSize.Adaptive)
 
     var alignments3 = sw[DType.uint8, SIMD_U8_WIDTH](
         Span(ref3),
@@ -363,15 +357,16 @@ fn test_sw_byte_comprehensive() raises:
         gap_open,
         gap_extend,
         profile3.profile_byte.value(),
+        profile3.byte_vectors,
         0,
         profile3.bias,
         4,
     )
 
     print("\nTest 3 - Gap in reference:")
-    print("Score:", alignments3[0].score)
-    print("Reference end:", alignments3[0].reference)
-    print("Query end:", alignments3[0].query)
+    print("Score:", alignments3.best.score)
+    print("Reference end:", alignments3.best.reference)
+    print("Query end:", alignments3.best.query)
 
     print("\nAll comprehensive tests completed!")
 
@@ -385,9 +380,7 @@ fn test_compare_vs_c() raises:
     var matrix = ScoringMatrix.default_matrix(5, matched=2, mismatched=-2)
     matrix.set_last_row_to_value(0)
     # Create query profile
-    var profile = Profile[__origin_of(read_seq)](
-        Span(read_seq), matrix, ScoreSize.Adaptive
-    )
+    var profile = Profile(Span(read_seq), matrix, ScoreSize.Adaptive)
 
     # Set gap penalties
     var gap_open = UInt8(3)  # Gap open penalty
@@ -401,17 +394,18 @@ fn test_compare_vs_c() raises:
         gap_open,
         gap_extend,
         profile.profile_byte.value(),
+        profile.byte_vectors,
         0,  # No early termination
         profile.bias,
         15,  # Small mask length
     )
-    assert_equal(alignments[0].score, 21)
-    assert_equal(alignments[0].reference, 21)
-    assert_equal(alignments[0].query, 14)
+    assert_equal(alignments.best.score, 21)
+    assert_equal(alignments.best.reference, 21)
+    assert_equal(alignments.best.query, 14)
 
-    assert_equal(alignments[1].score, 8)
-    assert_equal(alignments[1].reference, 4)
-    assert_equal(alignments[1].query, 0)
+    assert_equal(alignments.second_best.score, 8)
+    assert_equal(alignments.second_best.reference, 4)
+    assert_equal(alignments.second_best.query, 0)
 
 
 fn test_compare_vs_c_ssw_align() raises:
@@ -423,9 +417,11 @@ fn test_compare_vs_c_ssw_align() raises:
     var matrix = ScoringMatrix.default_matrix(5, matched=2, mismatched=-2)
     matrix.set_last_row_to_value(0)
     # Create query profile
-    var profile = Profile[__origin_of(read_seq)](
-        Span(read_seq), matrix, ScoreSize.Adaptive
-    )
+    var profile = Profile(Span(read_seq), matrix, ScoreSize.Adaptive)
+    var rev_pattern = List[UInt8](capacity=len(read_seq))
+    for char in reversed(read_seq):
+        rev_pattern.append(char[])
+    var rev_profile = Profile(Span(rev_pattern), matrix, ScoreSize.Adaptive)
 
     # Set gap penalties
     var gap_open = UInt8(3)  # Gap open penalty
@@ -437,6 +433,8 @@ fn test_compare_vs_c_ssw_align() raises:
         profile,
         matrix,
         ref_seq,
+        query=read_seq,
+        reverse_profile=rev_profile,
         gap_open_penalty=gap_open,
         gap_extension_penalty=gap_extend,
         return_only_alignment_end=False,
@@ -468,9 +466,11 @@ fn test_compare_vs_c_ssw_align2() raises:
     var matrix = ScoringMatrix.default_matrix(5, matched=2, mismatched=-2)
     matrix.set_last_row_to_value(0)
     # Create query profile
-    var profile = Profile[__origin_of(read_seq)](
-        Span(read_seq), matrix, ScoreSize.Adaptive
-    )
+    var profile = Profile(Span(read_seq), matrix, ScoreSize.Adaptive)
+    var rev_pattern = List[UInt8](capacity=len(read_seq))
+    for char in reversed(read_seq):
+        rev_pattern.append(char[])
+    var rev_profile = Profile(Span(rev_pattern), matrix, ScoreSize.Adaptive)
 
     # Set gap penalties
     var gap_open = UInt8(3)  # Gap open penalty
@@ -482,12 +482,13 @@ fn test_compare_vs_c_ssw_align2() raises:
         profile,
         matrix,
         ref_seq,
+        query=read_seq,
+        reverse_profile=rev_profile,
         gap_open_penalty=gap_open,
         gap_extension_penalty=gap_extend,
         return_only_alignment_end=False,
         mask_length=15,
     ).value()
-
     assert_equal(alignment.score1, 32)
     assert_equal(alignment.score2, 26)
     # Note, subtracted 1 from ssw C because they add 1
@@ -513,9 +514,11 @@ fn test_compare_vs_c_ssw_align3() raises:
     var matrix = ScoringMatrix.default_matrix(5, matched=2, mismatched=-2)
     matrix.set_last_row_to_value(0)
     # Create query profile
-    var profile = Profile[__origin_of(read_seq)](
-        Span(read_seq), matrix, ScoreSize.Word
-    )
+    var profile = Profile(Span(read_seq), matrix, ScoreSize.Adaptive)
+    var rev_pattern = List[UInt8](capacity=len(read_seq))
+    for char in reversed(read_seq):
+        rev_pattern.append(char[])
+    var rev_profile = Profile(Span(rev_pattern), matrix, ScoreSize.Adaptive)
 
     # Set gap penalties
     var gap_open = UInt8(3)  # Gap open penalty
@@ -527,6 +530,8 @@ fn test_compare_vs_c_ssw_align3() raises:
         profile,
         matrix,
         ref_seq,
+        query=read_seq,
+        reverse_profile=rev_profile,
         gap_open_penalty=gap_open,
         gap_extension_penalty=gap_extend,
         return_only_alignment_end=False,

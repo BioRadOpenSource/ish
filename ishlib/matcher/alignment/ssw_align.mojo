@@ -2,7 +2,7 @@
 
 from builtin.math import max
 from collections import InlineArray
-from memory import pack_bits
+from memory import pack_bits, memset_zero
 from sys.intrinsics import likely, unlikely
 from sys.info import simdwidthof
 
@@ -246,12 +246,66 @@ struct ScoreSize:
 
 
 @value
+struct ProfileVectors[dt: DType, width: Int]:
+    var pv_h_store: List[SIMD[dt, width]]
+    var pv_h_load: List[SIMD[dt, width]]
+    var pv_e: List[SIMD[dt, width]]
+    var pv_h_max: List[SIMD[dt, width]]
+    var zero: SIMD[dt, width]
+    var segment_length: Int32
+    var query_len: Int32
+
+    fn __init__(out self, query_len: Int32):
+        var segment_length = (query_len + width - 1) // width
+
+        var zero = SIMD[dt, width](0)
+        # Stores the H values (scores) for the current row of the dynamic programming matrix
+        var pv_h_store = List[SIMD[dt, width]](
+            capacity=Int(segment_length)
+        )  # aka: pvHStore
+        # Contains scores from the previous row that will be loaded for calculation
+        var pv_h_load = List[SIMD[dt, width]](
+            capacity=Int(segment_length)
+        )  # aka: pvHLoad
+        # Tracks scores for alignments that end with gaps in the query seq (horizontal gaps in visualization)
+        var pv_e = List[SIMD[dt, width]](
+            capacity=Int(segment_length)
+        )  # aka: pvE
+        # Stores the max scores seen in each column for traceback
+        var pv_h_max = List[SIMD[dt, width]](
+            capacity=Int(segment_length)
+        )  # aka: pvHmax
+
+        # init all of the above to zeros
+        memset_zero(pv_h_store.unsafe_ptr(), Int(segment_length))
+        memset_zero(pv_h_load.unsafe_ptr(), Int(segment_length))
+        memset_zero(pv_e.unsafe_ptr(), Int(segment_length))
+        memset_zero(pv_h_max.unsafe_ptr(), Int(segment_length))
+
+        self.pv_h_store = pv_h_store
+        self.pv_h_load = pv_h_load
+        self.pv_e = pv_e
+        self.pv_h_max = pv_h_max
+        self.zero = zero
+        self.segment_length = segment_length
+        self.query_len = query_len
+
+    fn zero_out(mut self):
+        memset_zero(self.pv_h_store.unsafe_ptr(), Int(self.segment_length))
+        memset_zero(self.pv_h_load.unsafe_ptr(), Int(self.segment_length))
+        memset_zero(self.pv_e.unsafe_ptr(), Int(self.segment_length))
+        memset_zero(self.pv_h_max.unsafe_ptr(), Int(self.segment_length))
+
+
+@value
 struct Profile:
     alias ByteVProfile = List[SIMD[DType.uint8, SIMD_U8_WIDTH]]
     alias WordVProfile = List[SIMD[DType.uint16, SIMD_U16_WIDTH]]
 
     var profile_byte: Optional[Self.ByteVProfile]
     var profile_word: Optional[Self.WordVProfile]
+    var byte_vectors: ProfileVectors[DType.uint8, SIMD_U8_WIDTH]
+    var word_vectors: ProfileVectors[DType.uint16, SIMD_U16_WIDTH]
     var query_len: Int32
     var alphabet_size: UInt32
     var bias: UInt8
@@ -303,6 +357,8 @@ struct Profile:
         return Self(
             profile_byte,
             profile_word,
+            ProfileVectors[DType.uint8, SIMD_U8_WIDTH](len(query)),
+            ProfileVectors[DType.uint16, SIMD_U16_WIDTH](len(query)),
             len(query),
             score_matrix.size,
             bias,
@@ -408,15 +464,16 @@ fn saturating_add[
 
 
 fn ssw_align(
-    read profile: Profile,
+    mut profile: Profile,
     read matrix: ScoringMatrix,
     reference: Span[UInt8],
+    query: Span[UInt8],
+    mut reverse_profile: Profile,
     *,
     gap_open_penalty: UInt8 = 3,
     gap_extension_penalty: UInt8 = 1,
     return_only_alignment_end: Bool = False,
     mask_length: Int32 = 15,  # for second best score
-    reverse_profile: Optional[Profile] = None,
 ) -> Optional[Alignment]:
     # Find the alignment scores and ending positions
     var bests: AlignmentResult
@@ -432,6 +489,7 @@ fn ssw_align(
             gap_open_penalty,
             gap_extension_penalty,
             profile.profile_byte.value(),
+            profile.byte_vectors,
             -1,
             profile.bias,
             mask_length,
@@ -445,6 +503,7 @@ fn ssw_align(
                 gap_open_penalty.cast[DType.uint16](),
                 gap_extension_penalty.cast[DType.uint16](),
                 profile.profile_word.value(),
+                profile.word_vectors,
                 -1,
                 profile.bias.cast[DType.uint16](),
                 mask_length,
@@ -465,6 +524,7 @@ fn ssw_align(
             gap_open_penalty.cast[DType.uint16](),
             gap_extension_penalty.cast[DType.uint16](),
             profile.profile_word.value(),
+            profile.word_vectors,
             -1,
             profile.bias.cast[DType.uint16](),
             mask_length,
@@ -485,8 +545,8 @@ fn ssw_align(
     var ref_end2: Int32 = -1
 
     if mask_length >= 15:
-        score2 = bests.best.score
-        ref_end2 = bests.best.reference
+        score2 = bests.second_best.score
+        ref_end2 = bests.second_best.reference
 
     if return_only_alignment_end or ref_end1 <= 0 or read_end1 <= 0:
         return Alignment(
@@ -507,7 +567,7 @@ fn ssw_align(
     # print("was len", len(profile.query))
     # var query_reverse = List[UInt8](capacity=Int(read_end1 + 1))
     # var count = 0
-    # for nt in profile.query.__reversed__():
+    # for nt in query.__reversed__():
     #     if count == Int(read_end1 + 1):
     #         break
     #     query_reverse.append(nt[])
@@ -517,9 +577,7 @@ fn ssw_align(
 
     # # var query_reverse_truncated = query_reverse[0: Int(read_end1)+1]
     # if not used_word:
-    #     var profile = Profile[__origin_of(query_reverse)](
-    #         query_reverse, matrix, ScoreSize.Byte
-    #     )
+    #     var profile = Profile(query_reverse, matrix, ScoreSize.Byte)
     #     # print("Running rev align")
     #     bests_rev = sw[DType.uint8, SIMD_U8_WIDTH](
     #         reference[: Int(ref_end1 + 1)],
@@ -533,9 +591,7 @@ fn ssw_align(
     #         mask_length,
     #     )
     # else:
-    #     var profile = Profile[__origin_of(query_reverse)](
-    #         query_reverse, matrix, ScoreSize.Word
-    #     )
+    #     var profile = Profile(query_reverse, matrix, ScoreSize.Word)
     #     bests_rev = sw[DType.uint16, SIMD_U16_WIDTH](
     #         reference[: Int(ref_end1 + 1)],
     #         ReferenceDirection.Reverse,
@@ -552,24 +608,26 @@ fn ssw_align(
         bests_rev = sw[DType.uint8, SIMD_U8_WIDTH](
             reference,
             ReferenceDirection.Reverse,
-            reverse_profile.value().query_len,
+            reverse_profile.query_len,
             gap_open_penalty,
             gap_extension_penalty,
-            reverse_profile.value().profile_byte.value(),
+            reverse_profile.profile_byte.value(),
+            reverse_profile.byte_vectors,
             -1,
-            reverse_profile.value().bias,
+            reverse_profile.bias,
             mask_length,
         )
     else:
         bests_rev = sw[DType.uint16, SIMD_U16_WIDTH](
             reference,
             ReferenceDirection.Reverse,
-            reverse_profile.value().query_len,
+            reverse_profile.query_len,
             gap_open_penalty.cast[DType.uint16](),
             gap_extension_penalty.cast[DType.uint16](),
-            reverse_profile.value().profile_word.value(),
+            reverse_profile.profile_word.value(),
+            reverse_profile.word_vectors,
             -1,
-            reverse_profile.value().bias.cast[DType.uint16](),
+            reverse_profile.bias.cast[DType.uint16](),
             mask_length,
         )
     var ref_begin1 = bests_rev.best.reference
@@ -587,6 +645,16 @@ fn ssw_align(
         ref_end2=ref_end2,
     )
 
+    # return Alignment(
+    #     score1=score1,
+    #     score2=score2,
+    #     ref_begin1=-1,
+    #     ref_end1=ref_end1,
+    #     read_begin1=-1,
+    #     read_end1=read_end1,
+    #     ref_end2=ref_end2,
+    # )
+
 
 fn sw[
     dt: DType, width: Int
@@ -597,6 +665,7 @@ fn sw[
     gap_open_penalty: SIMD[dt, 1],
     gap_extension_penalty: SIMD[dt, 1],
     profile: Span[SIMD[dt, width]],
+    mut p_vecs: ProfileVectors[dt, width],
     terminate: SIMD[dt, 1],
     bias: SIMD[dt, 1],
     mask_length: Int32,
@@ -607,11 +676,12 @@ fn sw[
         terminate: The best alignment score, used to terminate the matrix calc when locating the alignment beginning point. If this score is set to 0, it will not be used.
 
     """
-
+    p_vecs.zero_out()
     var max_score = UInt8(0).cast[dt]()
     var end_query: Int32 = query_len - 1
     var end_reference: Int32 = -1  # 0 based best alignment ending point; initialized as isn't aligned -1
-    var segment_length = (query_len + width - 1) // width
+    # var segment_length = (query_len + width - 1) // width
+    var segment_length = p_vecs.segment_length
 
     # Note:
     # H - Score for match / mismatch (diagonal move)
@@ -638,28 +708,6 @@ fn sw[
         end_query_column.append(0)
 
     var zero = SIMD[dt, width](0)
-    # Note: I'm using the `pv` prefix from the source even though its irrelevant here, it means `pointer` `vector`
-    # Stores the H values (scores) for the current row of the dynamic programming matrix
-    var pv_h_store = List[SIMD[dt, width]](
-        capacity=Int(segment_length)
-    )  # aka: pvHStore
-    # Contains scores from the previous row that will be loaded for calculation
-    var pv_h_load = List[SIMD[dt, width]](
-        capacity=Int(segment_length)
-    )  # aka: pvHLoad
-    # Tracks scores for alignments that end with gaps in the query seq (horizontal gaps in visualization)
-    var pv_e = List[SIMD[dt, width]](capacity=Int(segment_length))  # aka: pvE
-    # Stores the max scores seen in each column for traceback
-    var pv_h_max = List[SIMD[dt, width]](
-        capacity=Int(segment_length)
-    )  # aka: pvHmax
-
-    # init all of the above to zeros
-    for _ in range(0, segment_length):
-        pv_h_store.append(zero)
-        pv_h_load.append(zero)
-        pv_e.append(zero)
-        pv_h_max.append(zero)
 
     var v_gap_open = SIMD[dt, width](gap_open_penalty)  # aka: vGap0
     var v_gap_ext = SIMD[dt, width](gap_extension_penalty)  # aka: vGapE
@@ -690,14 +738,14 @@ fn sw[
         # the max score in the current column
         var v_max_column = zero  # aka: vMaxColumn
         # The score value currently being calculated
-        var v_h = pv_h_store[segment_length - 1]  # aka: vH
+        var v_h = p_vecs.pv_h_store[segment_length - 1]  # aka: vH
         v_h = v_h.shift_right[1]()
 
         # Select the right vector from the query profile
         var profile_idx = reference[i].cast[DType.int32]() * segment_length
 
         # Swap the two score buffers
-        swap(pv_h_load, pv_h_store)
+        swap(p_vecs.pv_h_load, p_vecs.pv_h_store)
         # print("vH State:", v_h)
         # print("pvHLoad State:", end="")
         # for i in range(0, segment_length):
@@ -743,7 +791,7 @@ fn sw[
 
             # Get max from current_cell_score, horizontal gap, and vertical gap score
             # print("\t\t", "Get max from current cell / hgap / vgap")
-            e = pv_e[j]
+            e = p_vecs.pv_e[j]
             v_h = max(v_h, e)
             v_h = max(v_h, v_f)
             v_max_column = max(v_max_column, v_h)
@@ -752,13 +800,13 @@ fn sw[
             # print("\t\tvH State after getting max: ", v_h)
 
             # Save current_cell_score
-            pv_h_store[j] = v_h
+            p_vecs.pv_h_store[j] = v_h
 
             # update vE
             v_h = saturating_sub(v_h, v_gap_open)
             e = saturating_sub(e, v_gap_ext)
             e = max(e, v_h)
-            pv_e[j] = e
+            p_vecs.pv_e[j] = e
             # print("\t\te State after update: ", e)
 
             # update vF
@@ -767,7 +815,7 @@ fn sw[
             # print("\t\tvF State after update:", v_f)
 
             # load the next vH
-            v_h = pv_h_load[j]
+            v_h = p_vecs.pv_h_load[j]
             # print("\t\tnext vH:", v_h)
 
         # print("\tStarting LazyF")
@@ -778,12 +826,12 @@ fn sw[
             # print("\tLeft Shift vF:", v_f)
             # print("\tWalking Segments")
             for j in range(0, segment_length):
-                v_h = pv_h_store[j]
+                v_h = p_vecs.pv_h_store[j]
                 v_h = max(v_h, v_f)
                 # print("\t\tvH after left shift and max vF", v_h)
                 v_max_column = max(v_max_column, v_h)
                 # print("\t\t vMaxColumn State:", v_max_column)
-                pv_h_store[j] = v_h
+                p_vecs.pv_h_store[j] = v_h
 
                 v_h = saturating_sub(v_h, v_gap_open)
                 v_f = saturating_sub(v_f, v_gap_ext)
@@ -818,7 +866,7 @@ fn sw[
 
                 # Store the column with the highest alignment score in order to trace teh alignment ending position on the query
                 for j in range(0, segment_length):
-                    pv_h_max[j] = pv_h_store[j]
+                    p_vecs.pv_h_max[j] = p_vecs.pv_h_store[j]
 
         # Record the max score of current column
         max_column[i] = v_max_column.reduce_max()
@@ -834,7 +882,7 @@ fn sw[
     # var column_len = segment_length * SIMD_U8_WIDTH
     for i in range(0, segment_length):
         for j in range(0, width):
-            if pv_h_max[i][j] == max_score:
+            if p_vecs.pv_h_max[i][j] == max_score:
                 var temp = i + j * segment_length
                 if temp < Int(end_query):
                     end_query = temp
@@ -865,6 +913,7 @@ fn sw[
         AlignmentEnd(0, 0, 0),
     )
 
+    # Candidate for SIMD?
     edge = (end_reference - mask_length) if (
         end_reference - mask_length
     ) > 0 else 0

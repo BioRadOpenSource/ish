@@ -38,6 +38,7 @@ struct SSWMatcher[mut: Bool, //, origin: Origin[mut]](Matcher):
             self.profile,
             self.matrix,
             haystack,
+            self.pattern,
             reverse_profile=self.reverse_profile,
         )
         if (

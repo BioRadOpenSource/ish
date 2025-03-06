@@ -36,6 +36,7 @@ struct SearchRunner[M: Matcher]:
                     ":",
                     line_number,
                     " ",
+                    # ByteSpanWriter(buffer[:]),
                     ByteSpanWriter(buffer[0 : m.value().start]),
                     "\033[1;31m",
                     ByteSpanWriter(buffer[m.value().start : m.value().end]),
