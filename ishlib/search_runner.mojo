@@ -29,10 +29,8 @@ struct SearchRunner[M: Matcher]:
         while True:
             if reader.read_until(buffer) == 0:
                 break
-            print("CHECKING", ByteSpanWriter(buffer[:]))
             var m = self.matcher.first_match(buffer, self.settings.pattern)
             if m:
-                print("FOUND:", m.value().start, "-", m.value().end)
                 writer.write(
                     file,
                     ":",

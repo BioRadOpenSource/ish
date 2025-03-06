@@ -11,23 +11,35 @@ from ishlib.matcher.alignment.ssw_align import (
 @value
 struct SSWMatcher[mut: Bool, //, origin: Origin[mut]](Matcher):
     var pattern: Span[UInt8, origin]
-    var profile: Profile[origin]
+    var rev_pattern: List[UInt8]
+    var profile: Profile
+    var reverse_profile: Profile
     var matrix: ScoringMatrix
 
     fn __init__(out self, pattern: Span[UInt8, origin]):
         var matrix = ScoringMatrix.default_matrix(256, matched=2, mismatched=-2)
         self.matrix = matrix
         self.pattern = pattern
-        var profile = Profile[origin](
-            self.pattern, self.matrix, ScoreSize.Adaptive
-        )
+        self.rev_pattern = List[UInt8](capacity=len(pattern))
+        for char in reversed(pattern):
+            self.rev_pattern.append(char[])
+        var profile = Profile(self.pattern, self.matrix, ScoreSize.Adaptive)
         self.profile = profile
+        var reverse_profile = Profile(
+            self.rev_pattern, self.matrix, ScoreSize.Adaptive
+        )
+        self.reverse_profile = reverse_profile
 
     fn first_match(
         mut self, haystack: Span[UInt8], pattern: Span[UInt8]
     ) -> Optional[MatchResult]:
         """Find the first match in the haystack."""
-        var result = ssw_align(self.profile, self.matrix, haystack)
+        var result = ssw_align(
+            self.profile,
+            self.matrix,
+            haystack,
+            reverse_profile=self.reverse_profile,
+        )
         if (
             result
             and (
