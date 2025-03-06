@@ -249,7 +249,6 @@ struct ScoreSize:
 struct Profile[
     mut: Bool, //,
     query_origin: Origin[mut],
-    score_matrix_origin: ImmutableOrigin,
 ]:
     alias ByteVProfile = List[SIMD[DType.uint8, SIMD_U8_WIDTH]]
     alias WordVProfile = List[SIMD[DType.uint16, SIMD_U16_WIDTH]]
@@ -257,7 +256,6 @@ struct Profile[
     var profile_byte: Optional[Self.ByteVProfile]
     var profile_word: Optional[Self.WordVProfile]
     var query: Span[UInt8, query_origin]  # changing "read" to query
-    var scoring_matrix: Pointer[ScoringMatrix, score_matrix_origin]
     var query_len: Int32
     var alphabet_size: UInt32
     var bias: UInt8
@@ -265,17 +263,22 @@ struct Profile[
     fn __init__(
         out self,
         query: Span[UInt8, query_origin],
-        ref [score_matrix_origin]score_matrix: ScoringMatrix,
+        read score_matrix: ScoringMatrix,
         score_size: ScoreSize,
     ):
         """Query is expected to be converted to range of [0:score_matrix.size].
 
         i.e. ACTG should be 0, 1, 2, 3
         """
+        print("Intializing a profile for a query of len", len(query))
         var profile_byte: Optional[Self.ByteVProfile] = None
         var profile_word: Optional[Self.WordVProfile] = None
         var bias: UInt8 = 0
         if score_size == ScoreSize.Byte or score_size == ScoreSize.Adaptive:
+            print("Score size is byte")
+            print(
+                len(score_matrix.values)
+            )  # Problem is around here, score matrix is garbage
             # Find the bias to use in the substitution matrix
             # The bias will be smallest value in the scoring matrix
             var bias_tmp: Int8 = 0
@@ -283,11 +286,13 @@ struct Profile[
                 if score_matrix.values[i] < bias_tmp:
                     bias_tmp = score_matrix.values[i]
             bias = abs(bias_tmp).cast[DType.uint8]()
+            print("Calling generate profile")
             profile_byte = Self.generate_query_profile[
                 DType.uint8, SIMD_U8_WIDTH
             ](query, score_matrix, bias)
 
         if score_size == ScoreSize.Word or score_size == ScoreSize.Adaptive:
+            print("Score size is adaptive")
             # Find the bias to use in the substitution matrix
             # The bias will be smallest value in the scoring matrix
             var bias_tmp: Int8 = 0
@@ -303,7 +308,6 @@ struct Profile[
             profile_byte,
             profile_word,
             query,
-            Pointer.address_of(score_matrix),
             len(query),
             score_matrix.size,
             bias,
@@ -316,7 +320,7 @@ struct Profile[
         query: Span[UInt8], read score_matrix: ScoringMatrix, bias: UInt8
     ) -> List[SIMD[T, size]]:
         """Divide the query into segments."""
-
+        print("Generating query profile")
         var segment_length = (len(query) + size - 1) // size
         # for i in range(0, len(score_matrix.values)):
         #     print(score_matrix.values[i])
@@ -401,10 +405,9 @@ fn saturating_add[
     return resp
 
 
-fn ssw_align[
-    profile_origin: ImmutableOrigin
-](
+fn ssw_align(
     read profile: Profile,
+    read matrix: ScoringMatrix,
     reference: Span[UInt8],
     *,
     gap_open_penalty: UInt8 = 3,
@@ -426,7 +429,7 @@ fn ssw_align[
             gap_open_penalty,
             gap_extension_penalty,
             profile.profile_byte.value(),
-            0,
+            -1,
             profile.bias,
             mask_length,
         )
@@ -440,7 +443,7 @@ fn ssw_align[
                 gap_open_penalty.cast[DType.uint16](),
                 gap_extension_penalty.cast[DType.uint16](),
                 profile.profile_word.value(),
-                0,
+                -1,
                 profile.bias.cast[DType.uint16](),
                 mask_length,
             )
@@ -483,7 +486,7 @@ fn ssw_align[
         score2 = bests[1].score
         ref_end2 = bests[1].reference
 
-    if return_only_alignment_end:
+    if return_only_alignment_end or ref_end1 <= 0 or read_end1 <= 0:
         return Alignment(
             score1=score1,
             score2=score2,
@@ -509,12 +512,14 @@ fn ssw_align[
         query_reverse.append(nt[])
         count += 1
     print("now ", len(query_reverse))
+    print("reflen: ", len(reference[: Int(ref_end1 + 1)]))
 
     # var query_reverse_truncated = query_reverse[0: Int(read_end1)+1]
     if not used_word:
-        var profile = Profile[
-            __origin_of(query_reverse), __origin_of(profile.scoring_matrix[])
-        ](query_reverse, profile.scoring_matrix[], ScoreSize.Byte)
+        var profile = Profile[__origin_of(query_reverse)](
+            query_reverse, matrix, ScoreSize.Byte
+        )
+        print("Running rev align")
         bests_rev = sw[DType.uint8, SIMD_U8_WIDTH](
             reference[: Int(ref_end1 + 1)],
             ReferenceDirection.Reverse,
@@ -527,9 +532,9 @@ fn ssw_align[
             mask_length,
         )
     else:
-        var profile = Profile[
-            __origin_of(query_reverse), __origin_of(profile.scoring_matrix[])
-        ](query_reverse, profile.scoring_matrix[], ScoreSize.Word)
+        var profile = Profile[__origin_of(query_reverse)](
+            query_reverse, matrix, ScoreSize.Word
+        )
         bests_rev = sw[DType.uint16, SIMD_U16_WIDTH](
             reference[: Int(ref_end1 + 1)],
             ReferenceDirection.Reverse,
@@ -592,8 +597,8 @@ fn sw[
     print("querylen: ", query_len)
     print("SIMD DType", dt)
     print("SIMD WIDTH", width)
-    for i in range(0, 5):  # TODO: hardcoded, should be length alphabet
-        print(chr(Int(NUM_TO_NT[i])), ": ", sep="", end="")
+    for i in range(0, 256):  # TODO: hardcoded, should be length alphabet
+        print(chr(Int(i)), ": ", sep="", end="")
         for j in range(0, segment_length):
             print(profile[i * segment_length + j], ", ", end="")
         print()
@@ -649,10 +654,10 @@ fn sw[
         begin = len(reference) - 1
         end = -1
         step = -1
-
+    print("Done with init")
     var i = begin
     while likely(i != end):
-        print("Outer loop:", i, "-", chr(Int(NUM_TO_NT[reference[i]])))
+        print("Outer loop:", i, "-", chr(Int(reference[i])))
         # Initialize to 0, any errors in vH will be corrected in lazy_f
         var e = zero
         # Represents scores for alignments that end with gaps in the reference seq

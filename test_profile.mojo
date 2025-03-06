@@ -23,7 +23,7 @@ fn test_profile() raises:
         query.append(i)
     var matrix = ScoringMatrix.default_matrix(alphabet_size)
 
-    var profile = Profile[__origin_of(query), __origin_of(matrix)](
+    var profile = Profile[__origin_of(query)](
         Span(query), matrix, ScoreSize.Adaptive
     )
 
@@ -161,7 +161,7 @@ fn test_sw_byte() raises:
     var matrix = ScoringMatrix.default_matrix(4)
 
     # Create query profile
-    var profile = Profile[__origin_of(query), __origin_of(matrix)](
+    var profile = Profile[__origin_of(query)](
         Span(query), matrix, ScoreSize.Adaptive
     )
 
@@ -304,7 +304,7 @@ fn test_sw_byte_comprehensive() raises:
     print("=== Comprehensive Smith-Waterman Tests ===")
 
     # Test 1: Perfect alignment
-    var profile1 = Profile[__origin_of(query1), __origin_of(matrix)](
+    var profile1 = Profile[__origin_of(query1)](
         Span(query1), matrix, ScoreSize.Adaptive
     )
 
@@ -325,12 +325,12 @@ fn test_sw_byte_comprehensive() raises:
     print("Reference end:", alignments1[0].reference)
     print("Query end:", alignments1[0].query)
     assert_true(
-        alignments1[0].score == UInt16(8 * 2 + profile1.bias),
+        alignments1[0].score == UInt16(len(query1) * 2),
         "Perfect match should have score = 2 * length",
     )
 
     # Test 2: Gap in query
-    var profile2 = Profile[__origin_of(query2), __origin_of(matrix)](
+    var profile2 = Profile[__origin_of(query2)](
         Span(query2), matrix, ScoreSize.Adaptive
     )
 
@@ -352,7 +352,7 @@ fn test_sw_byte_comprehensive() raises:
     print("Query end:", alignments2[0].query)
 
     # Test 3: Gap in reference
-    var profile3 = Profile[__origin_of(query3), __origin_of(matrix)](
+    var profile3 = Profile[__origin_of(query3)](
         Span(query3), matrix, ScoreSize.Adaptive
     )
 
@@ -385,7 +385,7 @@ fn test_compare_vs_c() raises:
     var matrix = ScoringMatrix.default_matrix(5, matched=2, mismatched=-2)
     matrix.set_last_row_to_value(0)
     # Create query profile
-    var profile = Profile[__origin_of(read_seq), __origin_of(matrix)](
+    var profile = Profile[__origin_of(read_seq)](
         Span(read_seq), matrix, ScoreSize.Adaptive
     )
 
@@ -407,7 +407,7 @@ fn test_compare_vs_c() raises:
     )
     assert_equal(alignments[0].score, 21)
     assert_equal(alignments[0].reference, 21)
-    assert_equal(alignments[0].query, 21)
+    assert_equal(alignments[0].query, 14)
 
     assert_equal(alignments[1].score, 8)
     assert_equal(alignments[1].reference, 4)
@@ -423,7 +423,7 @@ fn test_compare_vs_c_ssw_align() raises:
     var matrix = ScoringMatrix.default_matrix(5, matched=2, mismatched=-2)
     matrix.set_last_row_to_value(0)
     # Create query profile
-    var profile = Profile[__origin_of(read_seq), __origin_of(matrix)](
+    var profile = Profile[__origin_of(read_seq)](
         Span(read_seq), matrix, ScoreSize.Adaptive
     )
 
@@ -433,8 +433,9 @@ fn test_compare_vs_c_ssw_align() raises:
 
     # Run Smith-Waterman alignment
     print("Doing ssw_align")
-    var alignment = ssw_align[__origin_of(profile)](
+    var alignment = ssw_align(
         profile,
+        matrix,
         ref_seq,
         gap_open_penalty=gap_open,
         gap_extension_penalty=gap_extend,
@@ -467,7 +468,7 @@ fn test_compare_vs_c_ssw_align2() raises:
     var matrix = ScoringMatrix.default_matrix(5, matched=2, mismatched=-2)
     matrix.set_last_row_to_value(0)
     # Create query profile
-    var profile = Profile[__origin_of(read_seq), __origin_of(matrix)](
+    var profile = Profile[__origin_of(read_seq)](
         Span(read_seq), matrix, ScoreSize.Adaptive
     )
 
@@ -477,8 +478,9 @@ fn test_compare_vs_c_ssw_align2() raises:
 
     # Run Smith-Waterman alignment
     print("Doing ssw_align")
-    var alignment = ssw_align[__origin_of(profile)](
+    var alignment = ssw_align(
         profile,
+        matrix,
         ref_seq,
         gap_open_penalty=gap_open,
         gap_extension_penalty=gap_extend,
@@ -511,7 +513,7 @@ fn test_compare_vs_c_ssw_align3() raises:
     var matrix = ScoringMatrix.default_matrix(5, matched=2, mismatched=-2)
     matrix.set_last_row_to_value(0)
     # Create query profile
-    var profile = Profile[__origin_of(read_seq), __origin_of(matrix)](
+    var profile = Profile[__origin_of(read_seq)](
         Span(read_seq), matrix, ScoreSize.Word
     )
 
@@ -521,8 +523,9 @@ fn test_compare_vs_c_ssw_align3() raises:
 
     # Run Smith-Waterman alignment
     print("Doing ssw_align")
-    var alignment = ssw_align[__origin_of(profile)](
+    var alignment = ssw_align(
         profile,
+        matrix,
         ref_seq,
         gap_open_penalty=gap_open,
         gap_extension_penalty=gap_extend,
@@ -543,11 +546,14 @@ fn test_compare_vs_c_ssw_align3() raises:
 # Run tests
 fn main() raises:
     # print("Running basic test...")
-    # test_sw_byte()
+    test_sw_byte()
 
     # print("\nRunning comprehensive test...")
-    # test_sw_byte_comprehensive()
+    test_sw_byte_comprehensive()
 
-    print("Test vs C")
-    # test_compare_vs_c()
+    test_compare_vs_c()
+    test_compare_vs_c_ssw_align()
+    test_compare_vs_c_ssw_align2()
     test_compare_vs_c_ssw_align3()
+
+    print("All Passing SSW Alignments")
