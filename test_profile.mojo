@@ -548,6 +548,43 @@ fn test_compare_vs_c_ssw_align3() raises:
     assert_equal(alignment.read_begin1, 3)
 
 
+from ExtraMojo.utils.ir import dump_ir
+from ishlib.matcher.alignment.ssw_align import AlignmentResult, ProfileVectors
+
+
+@export
+fn sw_bytes[
+    mut: Bool, //, origin: Origin[mut]
+](
+    reference: Span[UInt8, origin],
+    reference_direction: ReferenceDirection,
+    query_len: Int32,
+    gap_open_penalty: SIMD[DType.uint8, 1],
+    gap_extension_penalty: SIMD[DType.uint8, 1],
+    profile: Span[SIMD[DType.uint8, 16], origin],
+    mut p_vecs: ProfileVectors[DType.uint8, 16],
+    terminate: SIMD[DType.uint8, 1],
+    bias: SIMD[DType.uint8, 1],
+    mask_length: Int32,
+) -> AlignmentResult:
+    return sw[DType.uint8, 16](
+        reference,
+        reference_direction,
+        query_len,
+        gap_open_penalty,
+        gap_extension_penalty,
+        profile,
+        p_vecs,
+        terminate,
+        bias,
+        mask_length,
+    )
+
+
+fn reduce_max(vec: SIMD[DType.uint8, 16]) -> UInt8:
+    return vec.reduce_max()
+
+
 # Run tests
 fn main() raises:
     # print("Running basic test...")
@@ -562,3 +599,4 @@ fn main() raises:
     test_compare_vs_c_ssw_align3()
 
     print("All Passing SSW Alignments")
+    # dump_ir[reduce_max, "sw"](dir="/tmp")

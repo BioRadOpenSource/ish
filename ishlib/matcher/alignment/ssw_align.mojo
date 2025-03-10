@@ -2,149 +2,132 @@
 
 from builtin.math import max
 from collections import InlineArray
+from math import sqrt
 from memory import pack_bits, memset_zero
-from sys.intrinsics import likely, unlikely
+from sys.intrinsics import likely, unlikely, assume, prefetch
 from sys.info import simdwidthof
 
 alias SIMD_U8_WIDTH = simdwidthof[UInt8]()
 alias SIMD_U16_WIDTH = simdwidthof[UInt16]()
 
+# fmt: off
+alias AA_TO_NUM = InlineArray[UInt8, 128](
+    23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
+    23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
+    23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
+    23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
+    23, 0,  20, 4,  3,  6,  13, 7,  8,  9,  23, 11, 10, 12, 2,  23,
+    14, 5,  1,  15, 16, 23, 19, 17, 22, 18, 21, 23, 23, 23, 23, 23,
+    23, 0,  20, 4,  3,  6,  13, 7,  8,  9,  23, 11, 10, 12, 2,  23,
+    14, 5,  1,  15, 16, 23, 19, 17, 22, 18, 21, 23, 23, 23, 23, 23
+)
+"""Table to convert a UInt8 to an AA corresponding to the index in the Blosum50 matrix"""
+
+alias NUM_TO_AA = InlineArray[UInt8, 24](
+ord("A"), ord("R"), ord("N"), ord("D"), ord("C"), ord("Q"),
+ord("E"), ord("G"), ord("H"), ord("I"), ord("L"), ord("K"), 
+ord("M"), ord("F"), ord("P"), ord("S"), ord("T"), ord("W"),
+ord("Y"), ord("V"), ord("B"), ord("Z"), ord("X"), ord("*")
+)
+"""Convert an AA from Blosum50 to ascii"""
+
+# alias BLOSUM50= InlineArray[Int8, 576]( # copied from SSW
+#     # A   R   N   D   C   Q   E   G   H   I   L   K   M   F   P   S   T   W   Y   V   B   Z   X   *
+#      5, -2, -1, -2, -1, -1, -1,  0, -2, -1, -2, -1, -1, -3, -1,  1,  0, -3, -2,  0, -2, -1, -1, -5,  # A
+#     -2,  7, -1, -2, -4,  1,  0, -3,  0, -4, -3,  3, -2, -3, -3, -1, -1, -3, -1, -3, -1,  0, -1, -5,  # R
+#     -1, -1,  7,  2, -2,  0,  0,  0,  1, -3, -4,  0, -2, -4, -2,  1,  0, -4, -2, -3,  5,  0, -1, -5,  # N
+#     -2, -2,  2,  8, -4,  0,  2, -1, -1, -4, -4, -1, -4, -5, -1,  0, -1, -5, -3, -4,  6,  1, -1, -5,  # D
+#     -1, -4, -2, -4, 13, -3, -3, -3, -3, -2, -2, -3, -2, -2, -4, -1, -1, -5, -3, -1, -3, -3, -1, -5,  # C
+#     -1,  1,  0,  0, -3,  7,  2, -2,  1, -3, -2,  2,  0, -4, -1,  0, -1, -1, -1, -3,  0,  4, -1, -5,  # Q
+#     -1,  0,  0,  2, -3,  2,  6, -3,  0, -4, -3,  1, -2, -3, -1, -1, -1, -3, -2, -3,  1,  5, -1, -5,  # E
+#      0, -3,  0, -1, -3, -2, -3,  8, -2, -4, -4, -2, -3, -4, -2,  0, -2, -3, -3, -4, -1, -2, -1, -5,  # G
+#     -2,  0,  1, -1, -3,  1,  0, -2, 10, -4, -3,  0, -1, -1, -2, -1, -2, -3,  2, -4,  0,  0, -1, -5,  # H
+#     -1, -4, -3, -4, -2, -3, -4, -4, -4,  5,  2, -3,  2,  0, -3, -3, -1, -3, -1,  4, -4, -3, -1, -5,  # I
+#     -2, -3, -4, -4, -2, -2, -3, -4, -3,  2,  5, -3,  3,  1, -4, -3, -1, -2, -1,  1, -4, -3, -1, -5,  # L
+#     -1,  3,  0, -1, -3,  2,  1, -2,  0, -3, -3,  6, -2, -4, -1,  0, -1, -3, -2, -3,  0,  1, -1, -5,  # K
+#     -1, -2, -2, -4, -2,  0, -2, -3, -1,  2,  3, -2,  7,  0, -3, -2, -1, -1,  0,  1, -3, -1, -1, -5,  # M
+#     -3, -3, -4, -5, -2, -4, -3, -4, -1,  0,  1, -4,  0,  8, -4, -3, -2,  1,  4, -1, -4, -4, -1, -5,  # F
+#     -1, -3, -2, -1, -4, -1, -1, -2, -2, -3, -4, -1, -3, -4, 10, -1, -1, -4, -3, -3, -2, -1, -1, -5,  # P
+#      1, -1,  1,  0, -1,  0, -1,  0, -1, -3, -3,  0, -2, -3, -1,  5,  2, -4, -2, -2,  0,  0, -1, -5,  # S
+#      0, -1,  0, -1, -1, -1, -1, -2, -2, -1, -1, -1, -1, -2, -1,  2,  5, -3, -2,  0,  0, -1, -1, -5,  # T
+#     -3, -3, -4, -5, -5, -1, -3, -3, -3, -3, -2, -3, -1,  1, -4, -4, -3, 15,  2, -3, -5, -2, -1, -5,  # W
+#     -2, -1, -2, -3, -3, -1, -2, -3,  2, -1, -1, -2,  0,  4, -3, -2, -2,  2,  8, -1, -3, -2, -1, -5,  # Y
+#      0, -3, -3, -4, -1, -3, -3, -4, -4,  4,  1, -3,  1, -1, -3, -2,  0, -3, -1,  5, -3, -3, -1, -5,  # V
+#     -2, -1,  5,  6, -3,  0,  1, -1,  0, -4, -4,  0, -3, -4, -2,  0,  0, -5, -3, -3,  6,  1, -1, -5,  # B
+#     -1,  0,  0,  1, -3,  4,  5, -2,  0, -3, -3,  1, -1, -4, -1,  0, -1, -2, -2, -3,  1,  5, -1, -5,  # Z
+#     -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -5,  # X
+#     -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5,  1   # *
+# )
+# """Blosum50 scoring matrix."""
+
+
+# Why are they different?
+
+alias BLOSUM50= InlineArray[Int8, 576]( # copied from parasail
+# A   R   N   D   C   Q   E   G   H   I   L   K   M   F   P   S   T   W   Y   V   B   Z   X   * */
+   5, -2, -1, -2, -1, -1, -1,  0, -2, -1, -2, -1, -1, -3, -1,  1,  0, -3, -2,  0, -2, -1, -1, -5,
+  -2,  7, -1, -2, -4,  1,  0, -3,  0, -4, -3,  3, -2, -3, -3, -1, -1, -3, -1, -3, -1,  0, -1, -5,
+  -1, -1,  7,  2, -2,  0,  0,  0,  1, -3, -4,  0, -2, -4, -2,  1,  0, -4, -2, -3,  4,  0, -1, -5,
+  -2, -2,  2,  8, -4,  0,  2, -1, -1, -4, -4, -1, -4, -5, -1,  0, -1, -5, -3, -4,  5,  1, -1, -5,
+  -1, -4, -2, -4, 13, -3, -3, -3, -3, -2, -2, -3, -2, -2, -4, -1, -1, -5, -3, -1, -3, -3, -2, -5,
+  -1,  1,  0,  0, -3,  7,  2, -2,  1, -3, -2,  2,  0, -4, -1,  0, -1, -1, -1, -3,  0,  4, -1, -5,
+  -1,  0,  0,  2, -3,  2,  6, -3,  0, -4, -3,  1, -2, -3, -1, -1, -1, -3, -2, -3,  1,  5, -1, -5,
+   0, -3,  0, -1, -3, -2, -3,  8, -2, -4, -4, -2, -3, -4, -2,  0, -2, -3, -3, -4, -1, -2, -2, -5,
+  -2,  0,  1, -1, -3,  1,  0, -2, 10, -4, -3,  0, -1, -1, -2, -1, -2, -3,  2, -4,  0,  0, -1, -5,
+  -1, -4, -3, -4, -2, -3, -4, -4, -4,  5,  2, -3,  2,  0, -3, -3, -1, -3, -1,  4, -4, -3, -1, -5,
+  -2, -3, -4, -4, -2, -2, -3, -4, -3,  2,  5, -3,  3,  1, -4, -3, -1, -2, -1,  1, -4, -3, -1, -5,
+  -1,  3,  0, -1, -3,  2,  1, -2,  0, -3, -3,  6, -2, -4, -1,  0, -1, -3, -2, -3,  0,  1, -1, -5,
+  -1, -2, -2, -4, -2,  0, -2, -3, -1,  2,  3, -2,  7,  0, -3, -2, -1, -1,  0,  1, -3, -1, -1, -5,
+  -3, -3, -4, -5, -2, -4, -3, -4, -1,  0,  1, -4,  0,  8, -4, -3, -2,  1,  4, -1, -4, -4, -2, -5,
+  -1, -3, -2, -1, -4, -1, -1, -2, -2, -3, -4, -1, -3, -4, 10, -1, -1, -4, -3, -3, -2, -1, -2, -5,
+   1, -1,  1,  0, -1,  0, -1,  0, -1, -3, -3,  0, -2, -3, -1,  5,  2, -4, -2, -2,  0,  0, -1, -5,
+   0, -1,  0, -1, -1, -1, -1, -2, -2, -1, -1, -1, -1, -2, -1,  2,  5, -3, -2,  0,  0, -1,  0, -5,
+  -3, -3, -4, -5, -5, -1, -3, -3, -3, -3, -2, -3, -1,  1, -4, -4, -3, 15,  2, -3, -5, -2, -3, -5,
+  -2, -1, -2, -3, -3, -1, -2, -3,  2, -1, -1, -2,  0,  4, -3, -2, -2,  2,  8, -1, -3, -2, -1, -5,
+   0, -3, -3, -4, -1, -3, -3, -4, -4,  4,  1, -3,  1, -1, -3, -2,  0, -3, -1,  5, -4, -3, -1, -5,
+  -2, -1,  4,  5, -3,  0,  1, -1,  0, -4, -4,  0, -3, -4, -2,  0,  0, -5, -3, -4,  5,  2, -1, -5,
+  -1,  0,  0,  1, -3,  4,  5, -2,  0, -3, -3,  1, -1, -4, -1,  0, -1, -2, -2, -3,  2,  5, -1, -5,
+  -1, -1, -1, -1, -2, -1, -1, -2, -1, -1, -1, -1, -1, -2, -2, -1,  0, -3, -1, -1, -1, -1, -1, -5,
+  -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5,  1
+)
+
 alias NUM_TO_NT = InlineArray[UInt8, 5](
     ord("A"), ord("C"), ord("G"), ord("T"), ord("N")
 )
 """Table to convert an Int8 to the ascii value of a nucleotide"""
-# This table is used to transform nucleotide letters into numbers.
+
 alias NT_TO_NUM = InlineArray[UInt8, 128](
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    0,
-    4,
-    1,
-    4,
-    4,
-    4,
-    2,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    3,
-    0,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    0,
-    4,
-    1,
-    4,
-    4,
-    4,
-    2,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    3,
-    0,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
+		4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+		4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+		4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+		4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+		4, 0, 4, 1,  4, 4, 4, 2,  4, 4, 4, 4,  4, 4, 4, 4,
+		4, 4, 4, 4,  3, 3, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+		4, 0, 4, 1,  4, 4, 4, 2,  4, 4, 4, 4,  4, 4, 4, 4,
+		4, 4, 4, 4,  3, 3, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4
 )
 """Table used to transform nucleotide letters into numbers."""
+# fmt: on
+
+
+@always_inline
+fn aa_to_num(owned seq: List[Int8]) -> List[UInt8]:
+    var out = List[UInt8](capacity=len(seq))
+    for value in seq:
+        out.append(AA_TO_NUM[Int(value[])])
+    return out
+
+
+fn aa_to_num(owned seq: List[UInt8]) -> List[UInt8]:
+    for value in seq:
+        value[] = AA_TO_NUM[Int(value[])]
+    return seq
+
+
+@always_inline
+fn num_to_aa(mut seq: List[UInt8]):
+    for value in seq:
+        value[] = NUM_TO_AA[Int(value[])]
 
 
 @always_inline
@@ -176,6 +159,12 @@ struct ScoringMatrix:
     fn set_last_row_to_value(mut self, value: Int8 = 2):
         for i in range((self.size - 1) * self.size, len(self.values)):
             self.values[i] = value
+
+    @staticmethod
+    fn blosm50() -> Self:
+        var size = sqrt(len(BLOSUM50))
+        var values = List(Span(BLOSUM50))
+        return Self(values, size)
 
     @staticmethod
     fn default_matrix(
@@ -495,7 +484,6 @@ fn ssw_align(
             mask_length,
         )
         if profile.profile_word and bests.best.score == 255:
-            # print("Doing Word SW")
             bests = sw[DType.uint16, SIMD_U16_WIDTH](
                 reference,
                 ReferenceDirection.Forward,
@@ -508,6 +496,8 @@ fn ssw_align(
                 profile.bias.cast[DType.uint16](),
                 mask_length,
             )
+            bests.best.score -= profile.bias.cast[DType.uint16]()
+            bests.second_best.score -= profile.bias.cast[DType.uint16]()
             used_word = True
         elif bests.best.score == 255:
             print(
@@ -529,6 +519,9 @@ fn ssw_align(
             profile.bias.cast[DType.uint16](),
             mask_length,
         )
+        bests.best.score -= profile.bias.cast[DType.uint16]()
+        bests.second_best.score -= profile.bias.cast[DType.uint16]()
+
         used_word = True
     else:
         print("Failed to provide a valid query profile")
@@ -656,6 +649,7 @@ fn ssw_align(
     # )
 
 
+@export
 fn sw[
     dt: DType, width: Int
 ](
@@ -682,6 +676,7 @@ fn sw[
     var end_reference: Int32 = -1  # 0 based best alignment ending point; initialized as isn't aligned -1
     # var segment_length = (query_len + width - 1) // width
     var segment_length = p_vecs.segment_length
+    assume(segment_length > 0)
 
     # Note:
     # H - Score for match / mismatch (diagonal move)
@@ -692,8 +687,11 @@ fn sw[
     # print("querylen: ", query_len)
     # print("SIMD DType", dt)
     # print("SIMD WIDTH", width)
-    # for i in range(0, 256):  # TODO: hardcoded, should be length alphabet
-    #     print(chr(Int(i)), ": ", sep="", end="")
+    # print("bias", bias)
+    # for i in range(
+    #     0, ScoringMatrix.blosm50().size
+    # ):  # TODO: hardcoded, should be length alphabet
+    #     print(chr(Int(NUM_TO_AA[i])), ": ", sep="", end="")
     #     for j in range(0, segment_length):
     #         print(profile[i * segment_length + j], ", ", end="")
     #     print()
@@ -730,7 +728,8 @@ fn sw[
     # print("Done with init")
     var i = begin
     while likely(i != end):
-        # print("Outer loop:", i, "-", chr(Int(reference[i])))
+        assume(i >= 0)
+        # print("Outer loop:", i, "-", chr(Int(NUM_TO_AA[Int(reference[i])])))
         # Initialize to 0, any errors in vH will be corrected in lazy_f
         var e = zero
         # Represents scores for alignments that end with gaps in the reference seq
@@ -749,22 +748,22 @@ fn sw[
         # print("vH State:", v_h)
         # print("pvHLoad State:", end="")
         # for i in range(0, segment_length):
-        #     print(pv_h_load[i], ", ", end="")
+        #     print(p_vecs.pv_h_load[i], ", ", end="")
         # print()
 
         # print("pvHStore State:", end="")
         # for i in range(0, segment_length):
-        #     print(pv_h_store[i], ", ", end="")
+        #     print(p_vecs.pv_h_store[i], ", ", end="")
         # print()
 
         # print("pvE State:", end="")
         # for i in range(0, segment_length):
-        #     print(pv_e[i], ", ", end="")
+        #     print(p_vecs.pv_e[i], ", ", end="")
         # print()
 
         # print("pvHMax State:", end="")
         # for i in range(0, segment_length):
-        #     print(pv_h_max[i], ", ", end="")
+        #     print(p_vecs.pv_h_max[i], ", ", end="")
         # print()
 
         # print("max_column State:", end="")
@@ -820,8 +819,13 @@ fn sw[
 
         # print("\tStarting LazyF")
         # Lazy_F loop, disallows adjacent insertion and then deletion from SWPS3
+        # Possible speedup - check if v_f has any updates to start with
+        # var break_out = (v_f == zero).reduce_and()
+        # var k = 0
+        # while not break_out and k < width:
+        # k += 1
         var break_out = False
-        for k in range(0, width):
+        for _k in range(0, width):
             v_f = v_f.shift_right[1]()
             # print("\tLeft Shift vF:", v_f)
             # print("\tWalking Segments")
@@ -870,7 +874,7 @@ fn sw[
 
         # Record the max score of current column
         max_column[i] = v_max_column.reduce_max()
-        if max_column[i] == terminate:
+        if unlikely(max_column[i] == terminate):
             # TODO: What's this doing?
             # print("terminate early")
             break
@@ -894,7 +898,7 @@ fn sw[
 
     # print("pvHMax State:", end="")
     # for i in range(0, segment_length):
-    #     print(pv_h_max[i], ", ", end="")
+    #     print(p_vecs.pv_h_max[i], ", ", end="")
     # print()
 
     # print("max_column State:", end="")
@@ -933,18 +937,18 @@ fn sw[
 
     # print(
     #     "score:",
-    #     bests[0].score,
+    #     bests.best.score,
     #     "ref:",
-    #     bests[0].reference,
+    #     bests.best.reference,
     #     "read:",
-    #     bests[0].query,
+    #     bests.best.query,
     # )
     # print(
     #     "score:",
-    #     bests[1].score,
+    #     bests.second_best.score,
     #     "ref:",
-    #     bests[1].reference,
+    #     bests.second_best.reference,
     #     "read:",
-    #     bests[1].query,
+    #     bests.second_best.query,
     # )
     return bests
