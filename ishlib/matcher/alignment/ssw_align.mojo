@@ -7,194 +7,10 @@ from memory import pack_bits, memset_zero
 from sys.intrinsics import likely, unlikely, assume, prefetch
 from sys.info import simdwidthof
 
+from ishlib.matcher.alignment.scoring_matrix import ScoringMatrix
+
 alias SIMD_U8_WIDTH = simdwidthof[UInt8]()
 alias SIMD_U16_WIDTH = simdwidthof[UInt16]()
-
-# fmt: off
-alias AA_TO_NUM = InlineArray[UInt8, 128](
-    23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
-    23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
-    23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
-    23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
-    23, 0,  20, 4,  3,  6,  13, 7,  8,  9,  23, 11, 10, 12, 2,  23,
-    14, 5,  1,  15, 16, 23, 19, 17, 22, 18, 21, 23, 23, 23, 23, 23,
-    23, 0,  20, 4,  3,  6,  13, 7,  8,  9,  23, 11, 10, 12, 2,  23,
-    14, 5,  1,  15, 16, 23, 19, 17, 22, 18, 21, 23, 23, 23, 23, 23
-)
-"""Table to convert a UInt8 to an AA corresponding to the index in the Blosum50 matrix"""
-
-alias NUM_TO_AA = InlineArray[UInt8, 24](
-ord("A"), ord("R"), ord("N"), ord("D"), ord("C"), ord("Q"),
-ord("E"), ord("G"), ord("H"), ord("I"), ord("L"), ord("K"), 
-ord("M"), ord("F"), ord("P"), ord("S"), ord("T"), ord("W"),
-ord("Y"), ord("V"), ord("B"), ord("Z"), ord("X"), ord("*")
-)
-"""Convert an AA from Blosum50 to ascii"""
-
-# alias BLOSUM50= InlineArray[Int8, 576]( # copied from SSW
-#     # A   R   N   D   C   Q   E   G   H   I   L   K   M   F   P   S   T   W   Y   V   B   Z   X   *
-#      5, -2, -1, -2, -1, -1, -1,  0, -2, -1, -2, -1, -1, -3, -1,  1,  0, -3, -2,  0, -2, -1, -1, -5,  # A
-#     -2,  7, -1, -2, -4,  1,  0, -3,  0, -4, -3,  3, -2, -3, -3, -1, -1, -3, -1, -3, -1,  0, -1, -5,  # R
-#     -1, -1,  7,  2, -2,  0,  0,  0,  1, -3, -4,  0, -2, -4, -2,  1,  0, -4, -2, -3,  5,  0, -1, -5,  # N
-#     -2, -2,  2,  8, -4,  0,  2, -1, -1, -4, -4, -1, -4, -5, -1,  0, -1, -5, -3, -4,  6,  1, -1, -5,  # D
-#     -1, -4, -2, -4, 13, -3, -3, -3, -3, -2, -2, -3, -2, -2, -4, -1, -1, -5, -3, -1, -3, -3, -1, -5,  # C
-#     -1,  1,  0,  0, -3,  7,  2, -2,  1, -3, -2,  2,  0, -4, -1,  0, -1, -1, -1, -3,  0,  4, -1, -5,  # Q
-#     -1,  0,  0,  2, -3,  2,  6, -3,  0, -4, -3,  1, -2, -3, -1, -1, -1, -3, -2, -3,  1,  5, -1, -5,  # E
-#      0, -3,  0, -1, -3, -2, -3,  8, -2, -4, -4, -2, -3, -4, -2,  0, -2, -3, -3, -4, -1, -2, -1, -5,  # G
-#     -2,  0,  1, -1, -3,  1,  0, -2, 10, -4, -3,  0, -1, -1, -2, -1, -2, -3,  2, -4,  0,  0, -1, -5,  # H
-#     -1, -4, -3, -4, -2, -3, -4, -4, -4,  5,  2, -3,  2,  0, -3, -3, -1, -3, -1,  4, -4, -3, -1, -5,  # I
-#     -2, -3, -4, -4, -2, -2, -3, -4, -3,  2,  5, -3,  3,  1, -4, -3, -1, -2, -1,  1, -4, -3, -1, -5,  # L
-#     -1,  3,  0, -1, -3,  2,  1, -2,  0, -3, -3,  6, -2, -4, -1,  0, -1, -3, -2, -3,  0,  1, -1, -5,  # K
-#     -1, -2, -2, -4, -2,  0, -2, -3, -1,  2,  3, -2,  7,  0, -3, -2, -1, -1,  0,  1, -3, -1, -1, -5,  # M
-#     -3, -3, -4, -5, -2, -4, -3, -4, -1,  0,  1, -4,  0,  8, -4, -3, -2,  1,  4, -1, -4, -4, -1, -5,  # F
-#     -1, -3, -2, -1, -4, -1, -1, -2, -2, -3, -4, -1, -3, -4, 10, -1, -1, -4, -3, -3, -2, -1, -1, -5,  # P
-#      1, -1,  1,  0, -1,  0, -1,  0, -1, -3, -3,  0, -2, -3, -1,  5,  2, -4, -2, -2,  0,  0, -1, -5,  # S
-#      0, -1,  0, -1, -1, -1, -1, -2, -2, -1, -1, -1, -1, -2, -1,  2,  5, -3, -2,  0,  0, -1, -1, -5,  # T
-#     -3, -3, -4, -5, -5, -1, -3, -3, -3, -3, -2, -3, -1,  1, -4, -4, -3, 15,  2, -3, -5, -2, -1, -5,  # W
-#     -2, -1, -2, -3, -3, -1, -2, -3,  2, -1, -1, -2,  0,  4, -3, -2, -2,  2,  8, -1, -3, -2, -1, -5,  # Y
-#      0, -3, -3, -4, -1, -3, -3, -4, -4,  4,  1, -3,  1, -1, -3, -2,  0, -3, -1,  5, -3, -3, -1, -5,  # V
-#     -2, -1,  5,  6, -3,  0,  1, -1,  0, -4, -4,  0, -3, -4, -2,  0,  0, -5, -3, -3,  6,  1, -1, -5,  # B
-#     -1,  0,  0,  1, -3,  4,  5, -2,  0, -3, -3,  1, -1, -4, -1,  0, -1, -2, -2, -3,  1,  5, -1, -5,  # Z
-#     -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -5,  # X
-#     -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5,  1   # *
-# )
-# """Blosum50 scoring matrix."""
-
-
-# Why are they different?
-
-alias BLOSUM50= InlineArray[Int8, 576]( # copied from parasail
-# A   R   N   D   C   Q   E   G   H   I   L   K   M   F   P   S   T   W   Y   V   B   Z   X   * */
-   5, -2, -1, -2, -1, -1, -1,  0, -2, -1, -2, -1, -1, -3, -1,  1,  0, -3, -2,  0, -2, -1, -1, -5,
-  -2,  7, -1, -2, -4,  1,  0, -3,  0, -4, -3,  3, -2, -3, -3, -1, -1, -3, -1, -3, -1,  0, -1, -5,
-  -1, -1,  7,  2, -2,  0,  0,  0,  1, -3, -4,  0, -2, -4, -2,  1,  0, -4, -2, -3,  4,  0, -1, -5,
-  -2, -2,  2,  8, -4,  0,  2, -1, -1, -4, -4, -1, -4, -5, -1,  0, -1, -5, -3, -4,  5,  1, -1, -5,
-  -1, -4, -2, -4, 13, -3, -3, -3, -3, -2, -2, -3, -2, -2, -4, -1, -1, -5, -3, -1, -3, -3, -2, -5,
-  -1,  1,  0,  0, -3,  7,  2, -2,  1, -3, -2,  2,  0, -4, -1,  0, -1, -1, -1, -3,  0,  4, -1, -5,
-  -1,  0,  0,  2, -3,  2,  6, -3,  0, -4, -3,  1, -2, -3, -1, -1, -1, -3, -2, -3,  1,  5, -1, -5,
-   0, -3,  0, -1, -3, -2, -3,  8, -2, -4, -4, -2, -3, -4, -2,  0, -2, -3, -3, -4, -1, -2, -2, -5,
-  -2,  0,  1, -1, -3,  1,  0, -2, 10, -4, -3,  0, -1, -1, -2, -1, -2, -3,  2, -4,  0,  0, -1, -5,
-  -1, -4, -3, -4, -2, -3, -4, -4, -4,  5,  2, -3,  2,  0, -3, -3, -1, -3, -1,  4, -4, -3, -1, -5,
-  -2, -3, -4, -4, -2, -2, -3, -4, -3,  2,  5, -3,  3,  1, -4, -3, -1, -2, -1,  1, -4, -3, -1, -5,
-  -1,  3,  0, -1, -3,  2,  1, -2,  0, -3, -3,  6, -2, -4, -1,  0, -1, -3, -2, -3,  0,  1, -1, -5,
-  -1, -2, -2, -4, -2,  0, -2, -3, -1,  2,  3, -2,  7,  0, -3, -2, -1, -1,  0,  1, -3, -1, -1, -5,
-  -3, -3, -4, -5, -2, -4, -3, -4, -1,  0,  1, -4,  0,  8, -4, -3, -2,  1,  4, -1, -4, -4, -2, -5,
-  -1, -3, -2, -1, -4, -1, -1, -2, -2, -3, -4, -1, -3, -4, 10, -1, -1, -4, -3, -3, -2, -1, -2, -5,
-   1, -1,  1,  0, -1,  0, -1,  0, -1, -3, -3,  0, -2, -3, -1,  5,  2, -4, -2, -2,  0,  0, -1, -5,
-   0, -1,  0, -1, -1, -1, -1, -2, -2, -1, -1, -1, -1, -2, -1,  2,  5, -3, -2,  0,  0, -1,  0, -5,
-  -3, -3, -4, -5, -5, -1, -3, -3, -3, -3, -2, -3, -1,  1, -4, -4, -3, 15,  2, -3, -5, -2, -3, -5,
-  -2, -1, -2, -3, -3, -1, -2, -3,  2, -1, -1, -2,  0,  4, -3, -2, -2,  2,  8, -1, -3, -2, -1, -5,
-   0, -3, -3, -4, -1, -3, -3, -4, -4,  4,  1, -3,  1, -1, -3, -2,  0, -3, -1,  5, -4, -3, -1, -5,
-  -2, -1,  4,  5, -3,  0,  1, -1,  0, -4, -4,  0, -3, -4, -2,  0,  0, -5, -3, -4,  5,  2, -1, -5,
-  -1,  0,  0,  1, -3,  4,  5, -2,  0, -3, -3,  1, -1, -4, -1,  0, -1, -2, -2, -3,  2,  5, -1, -5,
-  -1, -1, -1, -1, -2, -1, -1, -2, -1, -1, -1, -1, -1, -2, -2, -1,  0, -3, -1, -1, -1, -1, -1, -5,
-  -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5,  1
-)
-
-alias NUM_TO_NT = InlineArray[UInt8, 5](
-    ord("A"), ord("C"), ord("G"), ord("T"), ord("N")
-)
-"""Table to convert an Int8 to the ascii value of a nucleotide"""
-
-alias NT_TO_NUM = InlineArray[UInt8, 128](
-		4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
-		4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
-		4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
-		4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
-		4, 0, 4, 1,  4, 4, 4, 2,  4, 4, 4, 4,  4, 4, 4, 4,
-		4, 4, 4, 4,  3, 3, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
-		4, 0, 4, 1,  4, 4, 4, 2,  4, 4, 4, 4,  4, 4, 4, 4,
-		4, 4, 4, 4,  3, 3, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4
-)
-"""Table used to transform nucleotide letters into numbers."""
-# fmt: on
-
-
-@always_inline
-fn aa_to_num(owned seq: List[Int8]) -> List[UInt8]:
-    var out = List[UInt8](capacity=len(seq))
-    for value in seq:
-        out.append(AA_TO_NUM[Int(value[])])
-    return out
-
-
-fn aa_to_num(owned seq: List[UInt8]) -> List[UInt8]:
-    for value in seq:
-        value[] = AA_TO_NUM[Int(value[])]
-    return seq
-
-
-@always_inline
-fn num_to_aa(mut seq: List[UInt8]):
-    for value in seq:
-        value[] = NUM_TO_AA[Int(value[])]
-
-
-@always_inline
-fn nt_to_num(owned seq: List[Int8]) -> List[UInt8]:
-    var out = List[UInt8](capacity=len(seq))
-    for value in seq:
-        out.append(NT_TO_NUM[Int(value[])])
-    return out
-
-
-fn nt_to_num(owned seq: List[UInt8]) -> List[UInt8]:
-    for value in seq:
-        value[] = NT_TO_NUM[Int(value[])]
-    return seq
-
-
-@always_inline
-fn num_to_nt(mut seq: List[UInt8]):
-    for value in seq:
-        value[] = NUM_TO_NT[Int(value[])]
-
-
-@value
-struct ScoringMatrix:
-    # TODO: force this to be an inline list that can be copied onto the profile?
-    var values: List[Int8]
-    var size: UInt32  # The number of values represented (which is the length of an edge of the square matrix)
-
-    fn set_last_row_to_value(mut self, value: Int8 = 2):
-        for i in range((self.size - 1) * self.size, len(self.values)):
-            self.values[i] = value
-
-    @staticmethod
-    fn blosm50() -> Self:
-        var size = sqrt(len(BLOSUM50))
-        var values = List(Span(BLOSUM50))
-        return Self(values, size)
-
-    @staticmethod
-    fn default_matrix(
-        size: UInt32, matched: Int8 = 2, mismatched: Int8 = -2
-    ) -> Self:
-        var values = List[Int8](capacity=Int(size * size))
-        for _ in range(0, Int(size * size)):
-            values.append(0)
-        for i in range(0, size):
-            for j in range(0, size):
-                if i == j:
-                    values[i * size + j] = matched  # match
-                else:
-                    values[i * size + j] = mismatched  # Mismatch
-        return Self(values, size)
-
-    @staticmethod
-    fn actg_default_matrix() -> Self:
-        return Self.default_matrix(4)
-
-    @staticmethod
-    fn actgn_default_matrix() -> Self:
-        return Self.default_matrix(5)
-
-    @staticmethod
-    fn all_ascii_default_matrix() -> Self:
-        return Self.default_matrix(256)
-
-    fn get(read self, i: Int, j: Int) -> Int8:
-        return self.values[i * self.size + j]
 
 
 @value
@@ -241,6 +57,8 @@ struct ProfileVectors[dt: DType, width: Int]:
     var pv_e: List[SIMD[dt, width]]
     var pv_h_max: List[SIMD[dt, width]]
     var zero: SIMD[dt, width]
+    var max_column: List[SIMD[dt, 1]]
+    var end_query_column: List[Int32]
     var segment_length: Int32
     var query_len: Int32
 
@@ -271,6 +89,11 @@ struct ProfileVectors[dt: DType, width: Int]:
         memset_zero(pv_e.unsafe_ptr(), Int(segment_length))
         memset_zero(pv_h_max.unsafe_ptr(), Int(segment_length))
 
+        # List to record the largest score of each reference position
+        var max_column = List[SIMD[dt, 1]]()
+        # List to record the alignment query ending position of the largest score of each reference position
+        var end_query_column = List[Int32]()
+
         self.pv_h_store = pv_h_store
         self.pv_h_load = pv_h_load
         self.pv_e = pv_e
@@ -278,12 +101,20 @@ struct ProfileVectors[dt: DType, width: Int]:
         self.zero = zero
         self.segment_length = segment_length
         self.query_len = query_len
+        self.max_column = max_column
+        self.end_query_column = end_query_column
 
     fn zero_out(mut self):
         memset_zero(self.pv_h_store.unsafe_ptr(), Int(self.segment_length))
         memset_zero(self.pv_h_load.unsafe_ptr(), Int(self.segment_length))
         memset_zero(self.pv_e.unsafe_ptr(), Int(self.segment_length))
         memset_zero(self.pv_h_max.unsafe_ptr(), Int(self.segment_length))
+
+    fn init_columns(mut self, ref_len: Int):
+        self.max_column.resize(ref_len, 0)
+        self.end_query_column.resize(ref_len, 0)
+        memset_zero(self.max_column.unsafe_ptr(), ref_len)
+        memset_zero(self.end_query_column.unsafe_ptr(), ref_len)
 
 
 @value
@@ -671,6 +502,7 @@ fn sw[
 
     """
     p_vecs.zero_out()
+    p_vecs.init_columns(len(reference))
     var max_score = UInt8(0).cast[dt]()
     var end_query: Int32 = query_len - 1
     var end_reference: Int32 = -1  # 0 based best alignment ending point; initialized as isn't aligned -1
@@ -698,12 +530,13 @@ fn sw[
     # print("Initializing")
 
     # List to record the largest score of each reference position
-    var max_column = List[SIMD[dt, 1]](capacity=len(reference))
+    # var max_column = List[SIMD[dt, 1]](capacity=len(reference))
     # List to record the alignment query ending position of the largest score of each reference position
-    var end_query_column = List[Int32](capacity=len(reference))
-    for _ in range(0, len(reference)):
-        max_column.append(UInt8(0).cast[dt]())
-        end_query_column.append(0)
+    # var end_query_column = List[Int32](capacity=len(reference))
+
+    # for _ in range(0, len(reference)):
+    #     p_vecs.max_column.append(UInt8(0).cast[dt]())
+    #     p_vecs.end_query_column.append(0)
 
     var zero = SIMD[dt, width](0)
 
@@ -715,7 +548,6 @@ fn sw[
     # Trace the highest score till the previous column
     var v_max_mark = zero  # aka: vMaxMark
 
-    var edge: Int32 = 0
     var begin: Int32 = 0
     var end: Int32 = len(reference)
     var step: Int32 = 1
@@ -825,6 +657,8 @@ fn sw[
         # while not break_out and k < width:
         # k += 1
         var break_out = False
+
+        @parameter
         for _k in range(0, width):
             v_f = v_f.shift_right[1]()
             # print("\tLeft Shift vF:", v_f)
@@ -873,10 +707,8 @@ fn sw[
                     p_vecs.pv_h_max[j] = p_vecs.pv_h_store[j]
 
         # Record the max score of current column
-        max_column[i] = v_max_column.reduce_max()
-        if unlikely(max_column[i] == terminate):
-            # TODO: What's this doing?
-            # print("terminate early")
+        p_vecs.max_column[i] = v_max_column.reduce_max()
+        if unlikely(p_vecs.max_column[i] == terminate):
             break
 
         # Increment the while loop
@@ -890,11 +722,6 @@ fn sw[
                 var temp = i + j * segment_length
                 if temp < Int(end_query):
                     end_query = temp
-
-        # if pv_h_max[i / SIMD_U8_WIDTH][i % SIMD_U8_WIDTH] == max_score:
-        #     var temp = i // SIMD_U8_WIDTH + (i % 16) * segment_length
-        #     if temp < end_query:
-        #         end_query = temp
 
     # print("pvHMax State:", end="")
     # for i in range(0, segment_length):
@@ -922,8 +749,8 @@ fn sw[
         end_reference - mask_length
     ) > 0 else 0
     for i in range(0, edge):
-        if max_column[i] > bests.second_best.score.cast[dt]():
-            bests.second_best.score = max_column[i].cast[DType.uint16]()
+        if p_vecs.max_column[i] > bests.second_best.score.cast[dt]():
+            bests.second_best.score = p_vecs.max_column[i].cast[DType.uint16]()
             bests.second_best.reference = i
 
     edge = (
@@ -931,8 +758,8 @@ fn sw[
         > len(reference) else end_reference + mask_length
     )
     for i in range(edge + 1, len(reference)):
-        if max_column[i] > bests.second_best.score.cast[dt]():
-            bests.second_best.score = max_column[i].cast[DType.uint16]()
+        if p_vecs.max_column[i] > bests.second_best.score.cast[dt]():
+            bests.second_best.score = p_vecs.max_column[i].cast[DType.uint16]()
             bests.second_best.reference = i
 
     # print(
