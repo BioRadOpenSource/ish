@@ -9,12 +9,41 @@ from sys.intrinsics import likely, unlikely, assume, prefetch
 from ishlib.matcher.alignment.scoring_matrix import ScoringMatrix
 
 
+@always_inline
+fn saturating_sub[
+    data: DType, width: Int
+](lhs: SIMD[data, width], rhs: SIMD[data, width]) -> SIMD[data, width]:
+    """Saturating SIMD subtraction.
+
+    https://stackoverflow.com/questions/33481295/saturating-subtract-add-for-unsigned-bytes
+    """
+    constrained[data.is_unsigned()]()
+    var resp = lhs - rhs
+    resp &= -(resp <= lhs).cast[data]()
+    return resp
+
+
+@always_inline
+fn saturating_add[
+    data: DType, width: Int
+](lhs: SIMD[data, width], rhs: SIMD[data, width]) -> SIMD[data, width]:
+    """Saturating SIMD subtraction.
+
+    https://stackoverflow.com/questions/33481295/saturating-subtract-add-for-unsigned-bytes
+    """
+    constrained[data.is_unsigned()]()
+    var resp = lhs + rhs
+    resp |= -(resp < lhs).cast[data]()
+    return resp
+
+
 @value
 struct Cigar:
     var seq: List[UInt32]
 
 
 @value
+@register_passable
 struct ReferenceDirection:
     """Direction of the reference sequence."""
 
@@ -27,6 +56,7 @@ struct ReferenceDirection:
 
 
 @value
+@register_passable
 struct ScoreSize:
     """Controls the precision used for alignment scores.
 
@@ -44,6 +74,33 @@ struct ScoreSize:
 
     fn __eq__(read self, read other: Self) -> Bool:
         return self.value == other.value
+
+
+@value
+@register_passable("trivial")
+struct Alignment:
+    var score1: UInt16
+    var score2: UInt16
+    var ref_begin1: Int32
+    var ref_end1: Int32
+    var read_begin1: Int32
+    var read_end1: Int32
+    var ref_end2: Int32
+
+
+@value
+@register_passable("trivial")
+struct AlignmentResult:
+    var best: AlignmentEnd
+    var second_best: AlignmentEnd
+
+
+@value
+@register_passable("trivial")
+struct AlignmentEnd:
+    var score: UInt16
+    var reference: Int32  # 0-based
+    var query: Int32  # alignment ending position on query, 0-based
 
 
 @value
@@ -224,61 +281,6 @@ struct Profile[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
         return profile
 
 
-@value
-@register_passable("trivial")
-struct Alignment:
-    var score1: UInt16
-    var score2: UInt16
-    var ref_begin1: Int32
-    var ref_end1: Int32
-    var read_begin1: Int32
-    var read_end1: Int32
-    var ref_end2: Int32
-
-
-@value
-@register_passable("trivial")
-struct AlignmentResult:
-    var best: AlignmentEnd
-    var second_best: AlignmentEnd
-
-
-@value
-@register_passable("trivial")
-struct AlignmentEnd:
-    var score: UInt16
-    var reference: Int32  # 0-based
-    var query: Int32  # alignment ending position on query, 0-based
-
-
-@always_inline
-fn saturating_sub[
-    data: DType, width: Int
-](lhs: SIMD[data, width], rhs: SIMD[data, width]) -> SIMD[data, width]:
-    """Saturating SIMD subtraction.
-
-    https://stackoverflow.com/questions/33481295/saturating-subtract-add-for-unsigned-bytes
-    """
-    constrained[data.is_unsigned()]()
-    var resp = lhs - rhs
-    resp &= -(resp <= lhs).cast[data]()
-    return resp
-
-
-@always_inline
-fn saturating_add[
-    data: DType, width: Int
-](lhs: SIMD[data, width], rhs: SIMD[data, width]) -> SIMD[data, width]:
-    """Saturating SIMD subtraction.
-
-    https://stackoverflow.com/questions/33481295/saturating-subtract-add-for-unsigned-bytes
-    """
-    constrained[data.is_unsigned()]()
-    var resp = lhs + rhs
-    resp |= -(resp < lhs).cast[data]()
-    return resp
-
-
 fn ssw_align[
     SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int
 ](
@@ -383,48 +385,6 @@ fn ssw_align[
 
     # Get the start position
     var bests_rev: AlignmentResult
-    # Reverse the query sequence and truncate it
-    # print("read_end1", read_end1)
-    # print("Reverse and truncate query")
-    # print("was len", len(profile.query))
-    # var query_reverse = List[UInt8](capacity=Int(read_end1 + 1))
-    # var count = 0
-    # for nt in query.__reversed__():
-    #     if count == Int(read_end1 + 1):
-    #         break
-    #     query_reverse.append(nt[])
-    #     count += 1
-    # # print("now ", len(query_reverse))
-    # # print("reflen: ", len(reference[: Int(ref_end1 + 1)]))
-
-    # # var query_reverse_truncated = query_reverse[0: Int(read_end1)+1]
-    # if not used_word:
-    #     var profile = Profile(query_reverse, matrix, ScoreSize.Byte)
-    #     # print("Running rev align")
-    #     bests_rev = sw[DType.uint8, SIMD_U8_WIDTH](
-    #         reference[: Int(ref_end1 + 1)],
-    #         ReferenceDirection.Reverse,
-    #         len(query_reverse),
-    #         gap_open_penalty,
-    #         gap_extension_penalty,
-    #         profile.profile_byte.value(),
-    #         -1,
-    #         profile.bias,
-    #         mask_length,
-    #     )
-    # else:
-    #     var profile = Profile(query_reverse, matrix, ScoreSize.Word)
-    #     bests_rev = sw[DType.uint16, SIMD_U16_WIDTH](
-    #         reference[: Int(ref_end1 + 1)],
-    #         ReferenceDirection.Reverse,
-    #         len(query_reverse),
-    #         gap_open_penalty.cast[DType.uint16](),
-    #         gap_extension_penalty.cast[DType.uint16](),
-    #         profile.profile_word.value(),
-    #         -1,
-    #         profile.bias.cast[DType.uint16](),
-    #         mask_length,
-    #     )
     if not used_word:
         # print("Running rev align")
         bests_rev = sw[DType.uint8, SIMD_U8_WIDTH](
@@ -466,16 +426,6 @@ fn ssw_align[
         read_end1=read_end1,
         ref_end2=ref_end2,
     )
-
-    # return Alignment(
-    #     score1=score1,
-    #     score2=score2,
-    #     ref_begin1=-1,
-    #     ref_end1=ref_end1,
-    #     read_begin1=-1,
-    #     read_end1=read_end1,
-    #     ref_end2=ref_end2,
-    # )
 
 
 @export

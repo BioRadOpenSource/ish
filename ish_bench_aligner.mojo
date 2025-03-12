@@ -151,10 +151,10 @@ struct Profiles[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
         out self, read record: ByteFastaRecord, read matrix: ScoringMatrix
     ):
         self.fwd = Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
-            record.seq, matrix, ScoreSize.Word
+            record.seq, matrix, ScoreSize.Adaptive
         )
         self.rev = Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
-            record.rev, matrix, ScoreSize.Word
+            record.rev, matrix, ScoreSize.Adaptive
         )
 
 
