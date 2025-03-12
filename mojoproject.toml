@@ -7,13 +7,13 @@ channels = [
     "conda-forge",
 ]
 name = "ish"
-platforms = ["osx-arm64"]
+platforms = ["osx-arm64", "linux-64"]
 version = "0.1.0"
 
 [tasks]
-build-bench = "magic run mojo build --march native -I /Users/u103330/dev/ExtraMojo -I ./ishlib -o ish-aligner ./ish_bench_aligner.mojo"
-build = "magic run mojo build -I /Users/u103330/dev/ExtraMojo -o ish main.mojo"
-pkglib = "magic run mojo package -I /Users/u103330/dev/ExtraMojo ./ishlib"
+build-bench = "magic run mojo build --march native -I /home/ubuntu/dev/ExtraMojo -I ./ishlib -o ish-aligner ./ish_bench_aligner.mojo"
+build = "magic run mojo build -I /home/ubuntu/dev/ExtraMojo -o ish main.mojo"
+pkglib = "magic run mojo package -I /home/ubuntu/dev/ExtraMojo ./ishlib"
 testlib = "magic run mojo test -I ./ishlib ./tests"
 
 [dependencies]

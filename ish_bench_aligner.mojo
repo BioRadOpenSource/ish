@@ -1,5 +1,6 @@
 """Test program for SSW."""
 from sys import stdout, stderr
+from sys.info import simdwidthof, has_avx512f
 from time.time import perf_counter
 
 from ExtraMojo.cli.parser import OptParser, OptConfig, OptKind, ParsedOpts
@@ -13,6 +14,19 @@ from ishlib.matcher.alignment.ssw_align import (
 )
 from ishlib.matcher.alignment.scoring_matrix import ScoringMatrix
 from ishlib.formats.fasta import FastaRecord
+
+# Force half width vectors in the case of avx512 since avx 2 seems faster up to around 700len queries.
+alias SIMD_U8_WIDTH = simdwidthof[
+    UInt8
+]() if not has_avx512f() else simdwidthof[UInt8]() // 2
+alias SIMD_U16_WIDTH = simdwidthof[
+    UInt16
+]() if not has_avx512f() else simdwidthof[UInt16]() // 2
+
+alias FULL_SIMD_U8_WIDTH = simdwidthof[UInt8]()
+alias FULL_SIMD_U16_WIDTH = simdwidthof[UInt16]()
+# alias SIMD_U8_WIDTH = simdwidthof[UInt8]()
+# alias SIMD_U16_WIDTH = simdwidthof[UInt16]()
 
 
 fn parse_args() raises -> ParsedOpts:
@@ -129,15 +143,19 @@ struct ByteFastaRecord:
 
 
 @value
-struct Profiles:
-    var fwd: Profile
-    var rev: Profile
+struct Profiles[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
+    var fwd: Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH]
+    var rev: Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH]
 
     fn __init__(
         out self, read record: ByteFastaRecord, read matrix: ScoringMatrix
     ):
-        self.fwd = Profile(record.seq, matrix, ScoreSize.Adaptive)
-        self.rev = Profile(record.rev, matrix, ScoreSize.Adaptive)
+        self.fwd = Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
+            record.seq, matrix, ScoreSize.Word
+        )
+        self.rev = Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
+            record.rev, matrix, ScoreSize.Word
+        )
 
 
 @value
@@ -237,9 +255,11 @@ fn main() raises:
     queries.reverse()
 
     # Create query profiles
-    var profiles = List[Profiles](capacity=len(queries))
+    var profiles = List[Profiles[SIMD_U8_WIDTH, SIMD_U16_WIDTH]](
+        capacity=len(queries)
+    )
     for q in queries:
-        profiles.append(Profiles(q[], matrix))
+        profiles.append(Profiles[SIMD_U8_WIDTH, SIMD_U16_WIDTH](q[], matrix))
 
     var writer = DelimWriter(
         BufferedWriter(open(output_file, "w")),
@@ -252,14 +272,17 @@ fn main() raises:
     print("Using", matrix_name, file=stderr)
     print("Gap open penalty:", gap_open_score, file=stderr)
     print("Gap ext penalty:", gap_extension_score, file=stderr)
+    print("U8 SIMD Width:", SIMD_U8_WIDTH, file=stderr)
+    print("U16 SIMD Width:", SIMD_U16_WIDTH, file=stderr)
     var start = perf_counter()
     var work: UInt64 = 0
     for i in range(0, len(queries)):
+        # TODO: if query construction was done here, we could dispatch to 512 sometimes, which might be cheating for bench purposes.
         var query = Pointer.address_of(queries[i])
         var profiles = Pointer.address_of(profiles[i])
         for j in range(0, len(targets)):
             var target = Pointer.address_of(targets[j])
-            var result = ssw_align(
+            var result = ssw_align[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
                 profile=profiles[].fwd,
                 matrix=matrix,
                 reference=target[].seq,

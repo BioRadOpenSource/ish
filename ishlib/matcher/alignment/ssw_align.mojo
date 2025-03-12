@@ -5,12 +5,8 @@ from collections import InlineArray
 from math import sqrt
 from memory import pack_bits, memset_zero
 from sys.intrinsics import likely, unlikely, assume, prefetch
-from sys.info import simdwidthof
 
 from ishlib.matcher.alignment.scoring_matrix import ScoringMatrix
-
-alias SIMD_U8_WIDTH = simdwidthof[UInt8]()
-alias SIMD_U16_WIDTH = simdwidthof[UInt16]()
 
 
 @value
@@ -118,7 +114,7 @@ struct ProfileVectors[dt: DType, width: Int]:
 
 
 @value
-struct Profile:
+struct Profile[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
     alias ByteVProfile = List[SIMD[DType.uint8, SIMD_U8_WIDTH]]
     alias WordVProfile = List[SIMD[DType.uint16, SIMD_U16_WIDTH]]
 
@@ -186,7 +182,7 @@ struct Profile:
 
     @staticmethod
     fn generate_query_profile[
-        T: DType, size: Int = simdwidthof[T]()
+        T: DType, size: Int
     ](
         query: Span[UInt8], read score_matrix: ScoringMatrix, bias: UInt8
     ) -> List[SIMD[T, size]]:
@@ -283,12 +279,14 @@ fn saturating_add[
     return resp
 
 
-fn ssw_align(
-    mut profile: Profile,
+fn ssw_align[
+    SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int
+](
+    mut profile: Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH],
     read matrix: ScoringMatrix,
     reference: Span[UInt8],
     query: Span[UInt8],
-    mut reverse_profile: Profile,
+    mut reverse_profile: Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH],
     *,
     gap_open_penalty: UInt8 = 3,
     gap_extension_penalty: UInt8 = 1,
