@@ -1,3 +1,4 @@
+from math import iota, sqrt
 from memory import Span
 from sys.info import simdwidthof
 from testing import assert_equal, assert_true
@@ -6,13 +7,13 @@ from ishlib.matcher.alignment.ssw_align import (
     Profile,
     ScoringMatrix,
     ScoreSize,
-    SIMD_U8_WIDTH,
-    SIMD_U16_WIDTH,
     sw,
     ssw_align,
     ReferenceDirection,
-    nt_to_num,
 )
+
+alias SIMD_U8_WIDTH = simdwidthof[UInt8]() // 2
+alias SIMD_U16_WIDTH = simdwidthof[UInt16]() // 2
 
 
 fn test_profile() raises:
@@ -21,9 +22,17 @@ fn test_profile() raises:
     var query = List[UInt8]()
     for i in range(0, alphabet_size):
         query.append(i)
-    var matrix = ScoringMatrix.default_matrix(alphabet_size)
+    var values = ScoringMatrix._default_matrix(alphabet_size)
+    var a = List[UInt8](capacity=alphabet_size)
+    var b = List[UInt8](capacity=alphabet_size)
+    for i in range(0, alphabet_size):
+        a.append(i)
+        b.append(i)
+    var matrix = ScoringMatrix(values, sqrt(len(values)), a, b)
 
-    var profile = Profile(Span(query), matrix, ScoreSize.Adaptive)
+    var profile = Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
+        Span(query), matrix, ScoreSize.Adaptive
+    )
 
     # Verify basic properties
     assert_equal(profile.bias, 1)
@@ -156,10 +165,12 @@ fn test_sw_byte() raises:
     # var reference = List[UInt8](1)
 
     # Create scoring matrix (match=2, mismatch=-1)
-    var matrix = ScoringMatrix.default_matrix(4)
+    var matrix = ScoringMatrix.actgn_matrix()
 
     # Create query profile
-    var profile = Profile(Span(query), matrix, ScoreSize.Adaptive)
+    var profile = Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
+        Span(query), matrix, ScoreSize.Adaptive
+    )
 
     # Set gap penalties
     var gap_open = UInt8(3)  # Gap open penalty
@@ -292,7 +303,7 @@ fn test_sw_byte_comprehensive() raises:
     var ref3 = List[UInt8](0, 1, 2, 3, 0, 1, 2, 3)
 
     # Create scoring matrix
-    var matrix = ScoringMatrix.default_matrix(4)
+    var matrix = ScoringMatrix.actgn_matrix()
 
     # Set gap penalties
     var gap_open = UInt8(3)
@@ -302,7 +313,9 @@ fn test_sw_byte_comprehensive() raises:
     print("=== Comprehensive Smith-Waterman Tests ===")
 
     # Test 1: Perfect alignment
-    var profile1 = Profile(Span(query1), matrix, ScoreSize.Adaptive)
+    var profile1 = Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
+        Span(query1), matrix, ScoreSize.Adaptive
+    )
 
     var alignments1 = sw[DType.uint8, SIMD_U8_WIDTH](
         Span(ref1),
@@ -312,7 +325,7 @@ fn test_sw_byte_comprehensive() raises:
         gap_extend,
         profile1.profile_byte.value(),
         profile1.byte_vectors,
-        0,
+        -1,
         profile1.bias,
         4,
     )
@@ -327,7 +340,9 @@ fn test_sw_byte_comprehensive() raises:
     )
 
     # Test 2: Gap in query
-    var profile2 = Profile(Span(query2), matrix, ScoreSize.Adaptive)
+    var profile2 = Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
+        Span(query2), matrix, ScoreSize.Adaptive
+    )
 
     var alignments2 = sw[DType.uint8, SIMD_U8_WIDTH](
         Span(ref2),
@@ -337,7 +352,7 @@ fn test_sw_byte_comprehensive() raises:
         gap_extend,
         profile2.profile_byte.value(),
         profile2.byte_vectors,
-        0,
+        -1,
         profile2.bias,
         4,
     )
@@ -348,7 +363,9 @@ fn test_sw_byte_comprehensive() raises:
     print("Query end:", alignments2.best.query)
 
     # Test 3: Gap in reference
-    var profile3 = Profile(Span(query3), matrix, ScoreSize.Adaptive)
+    var profile3 = Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
+        Span(query3), matrix, ScoreSize.Adaptive
+    )
 
     var alignments3 = sw[DType.uint8, SIMD_U8_WIDTH](
         Span(ref3),
@@ -358,7 +375,7 @@ fn test_sw_byte_comprehensive() raises:
         gap_extend,
         profile3.profile_byte.value(),
         profile3.byte_vectors,
-        0,
+        -1,
         profile3.bias,
         4,
     )
@@ -372,15 +389,16 @@ fn test_sw_byte_comprehensive() raises:
 
 
 fn test_compare_vs_c() raises:
+    var matrix = ScoringMatrix.actgn_matrix()
     var reference = List("CAGCCTTTCTGACCCGGAAATCAAAATAGGCACAACAAA".as_bytes())
-    var ref_seq = nt_to_num(reference)
+    var ref_seq = matrix.convert_ascii_to_encoding(reference)
     var read = List("CTGAGCCGGTAAATC".as_bytes())
-    var read_seq = nt_to_num(read)
+    var read_seq = matrix.convert_ascii_to_encoding(read)
 
-    var matrix = ScoringMatrix.default_matrix(5, matched=2, mismatched=-2)
-    matrix.set_last_row_to_value(0)
     # Create query profile
-    var profile = Profile(Span(read_seq), matrix, ScoreSize.Adaptive)
+    var profile = Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
+        Span(read_seq), matrix, ScoreSize.Adaptive
+    )
 
     # Set gap penalties
     var gap_open = UInt8(3)  # Gap open penalty
@@ -395,7 +413,7 @@ fn test_compare_vs_c() raises:
         gap_extend,
         profile.profile_byte.value(),
         profile.byte_vectors,
-        0,  # No early termination
+        -1,  # No early termination
         profile.bias,
         15,  # Small mask length
     )
@@ -403,25 +421,24 @@ fn test_compare_vs_c() raises:
     assert_equal(alignments.best.reference, 21)
     assert_equal(alignments.best.query, 14)
 
-    assert_equal(alignments.second_best.score, 8)
-    assert_equal(alignments.second_best.reference, 4)
-    assert_equal(alignments.second_best.query, 0)
-
 
 fn test_compare_vs_c_ssw_align() raises:
+    var matrix = ScoringMatrix.actgn_matrix()
     var reference = List("CAGCCTTTCTGACCCGGAAATCAAAATAGGCACAACAAA".as_bytes())
-    var ref_seq = nt_to_num(reference)
+    var ref_seq = matrix.convert_ascii_to_encoding(reference)
     var read = List("CTGAGCCGGTAAATC".as_bytes())
-    var read_seq = nt_to_num(read)
+    var read_seq = matrix.convert_ascii_to_encoding(read)
 
-    var matrix = ScoringMatrix.default_matrix(5, matched=2, mismatched=-2)
-    matrix.set_last_row_to_value(0)
     # Create query profile
-    var profile = Profile(Span(read_seq), matrix, ScoreSize.Adaptive)
+    var profile = Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
+        Span(read_seq), matrix, ScoreSize.Adaptive
+    )
     var rev_pattern = List[UInt8](capacity=len(read_seq))
     for char in reversed(read_seq):
         rev_pattern.append(char[])
-    var rev_profile = Profile(Span(rev_pattern), matrix, ScoreSize.Adaptive)
+    var rev_profile = Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
+        Span(rev_pattern), matrix, ScoreSize.Adaptive
+    )
 
     # Set gap penalties
     var gap_open = UInt8(3)  # Gap open penalty
@@ -442,7 +459,6 @@ fn test_compare_vs_c_ssw_align() raises:
     ).value()
 
     assert_equal(alignment.score1, 21)
-    assert_equal(alignment.score2, 8)
     # Note, subtracted 1 from ssw C because they add 1
     assert_equal(alignment.ref_begin1, 8)
     assert_equal(alignment.ref_end1, 21)
@@ -452,25 +468,28 @@ fn test_compare_vs_c_ssw_align() raises:
 
 
 fn test_compare_vs_c_ssw_align2() raises:
+    var matrix = ScoringMatrix.actgn_matrix()
     var reference = List(
         "CAGCCTTTCTGACCCGGAAATCAAAATAGGCACAACAAACAGCCTTTCTGACCCGGAAATCAAAATAGGCACAACAAA"
         .as_bytes()
     )
-    var ref_seq = nt_to_num(reference)
+    var ref_seq = matrix.convert_ascii_to_encoding(reference)
     var read = List(
         "CTGAGCCGGTAAATCCTGAGCCGGTAAATCCTGAGCCGGTAAATCCTGAGCCGGTAAATCCTGAGCCGGTAAATCCTGAGCCGGTAAATCCTGAGCCGGTAAATC"
         .as_bytes()
     )
-    var read_seq = nt_to_num(read)
+    var read_seq = matrix.convert_ascii_to_encoding(read)
 
-    var matrix = ScoringMatrix.default_matrix(5, matched=2, mismatched=-2)
-    matrix.set_last_row_to_value(0)
     # Create query profile
-    var profile = Profile(Span(read_seq), matrix, ScoreSize.Adaptive)
+    var profile = Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
+        Span(read_seq), matrix, ScoreSize.Adaptive
+    )
     var rev_pattern = List[UInt8](capacity=len(read_seq))
     for char in reversed(read_seq):
         rev_pattern.append(char[])
-    var rev_profile = Profile(Span(rev_pattern), matrix, ScoreSize.Adaptive)
+    var rev_profile = Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
+        Span(rev_pattern), matrix, ScoreSize.Adaptive
+    )
 
     # Set gap penalties
     var gap_open = UInt8(3)  # Gap open penalty
@@ -490,7 +509,6 @@ fn test_compare_vs_c_ssw_align2() raises:
         mask_length=15,
     ).value()
     assert_equal(alignment.score1, 32)
-    assert_equal(alignment.score2, 26)
     # Note, subtracted 1 from ssw C because they add 1
     assert_equal(alignment.ref_begin1, 1)
     assert_equal(alignment.ref_end1, 60)
@@ -500,25 +518,28 @@ fn test_compare_vs_c_ssw_align2() raises:
 
 
 fn test_compare_vs_c_ssw_align3() raises:
+    var matrix = ScoringMatrix.actgn_matrix()
     var reference = List(
         "CAGCCTTTCTGACCCGGAAATCAAAATAGGCACAACAAACAGCCTTTCTGACCCGGAAATCAAAATAGGCACAACAAA"
         .as_bytes()
     )
-    var ref_seq = nt_to_num(reference)
+    var ref_seq = matrix.convert_ascii_to_encoding(reference)
     var read = List(
         "CTGAGCCGGTAAATCCTGAGCCGGTAAATCCTGAGCCGGTAAATCCTGAGCCGGTAAATCCTGAGCCGGTAAATCCTGAGCCGGTAAATCCTGAGCCGGTAAATC"
         .as_bytes()
     )
-    var read_seq = nt_to_num(read)
+    var read_seq = matrix.convert_ascii_to_encoding(read)
 
-    var matrix = ScoringMatrix.default_matrix(5, matched=2, mismatched=-2)
-    matrix.set_last_row_to_value(0)
     # Create query profile
-    var profile = Profile(Span(read_seq), matrix, ScoreSize.Adaptive)
+    var profile = Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
+        Span(read_seq), matrix, ScoreSize.Adaptive
+    )
     var rev_pattern = List[UInt8](capacity=len(read_seq))
     for char in reversed(read_seq):
         rev_pattern.append(char[])
-    var rev_profile = Profile(Span(rev_pattern), matrix, ScoreSize.Adaptive)
+    var rev_profile = Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
+        Span(rev_pattern), matrix, ScoreSize.Adaptive
+    )
 
     # Set gap penalties
     var gap_open = UInt8(3)  # Gap open penalty
@@ -539,7 +560,6 @@ fn test_compare_vs_c_ssw_align3() raises:
     ).value()
 
     assert_equal(alignment.score1, 32)
-    assert_equal(alignment.score2, 26)
     # Note, subtracted 1 from ssw C because they add 1
     assert_equal(alignment.ref_begin1, 1)
     assert_equal(alignment.ref_end1, 60)

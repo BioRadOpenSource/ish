@@ -80,19 +80,16 @@ struct ScoreSize:
 @register_passable("trivial")
 struct Alignment:
     var score1: UInt16
-    var score2: UInt16
     var ref_begin1: Int32
     var ref_end1: Int32
     var read_begin1: Int32
     var read_end1: Int32
-    var ref_end2: Int32
 
 
 @value
 @register_passable("trivial")
 struct AlignmentResult:
     var best: AlignmentEnd
-    var second_best: AlignmentEnd
 
 
 @value
@@ -328,7 +325,6 @@ fn ssw_align[
                 mask_length,
             )
             bests.best.score -= profile.bias.cast[DType.uint16]()
-            bests.second_best.score -= profile.bias.cast[DType.uint16]()
             used_word = True
         elif bests.best.score == 255:
             print(
@@ -351,7 +347,6 @@ fn ssw_align[
             mask_length,
         )
         bests.best.score -= profile.bias.cast[DType.uint16]()
-        bests.second_best.score -= profile.bias.cast[DType.uint16]()
 
         used_word = True
     else:
@@ -368,19 +363,13 @@ fn ssw_align[
     var score2: UInt16 = 0
     var ref_end2: Int32 = -1
 
-    if mask_length >= 15:
-        score2 = bests.second_best.score
-        ref_end2 = bests.second_best.reference
-
     if return_only_alignment_end or ref_end1 <= 0 or read_end1 <= 0:
         return Alignment(
             score1=score1,
-            score2=score2,
             ref_begin1=-1,
             ref_end1=ref_end1,
             read_begin1=-1,
             read_end1=read_end1,
-            ref_end2=ref_end2,
         )
 
     # Get the start position
@@ -419,12 +408,10 @@ fn ssw_align[
     # Skipping CIGAR for now
     return Alignment(
         score1=score1,
-        score2=score2,
         ref_begin1=ref_begin1,
         ref_end1=ref_end1,
         read_begin1=read_begin1,
         read_end1=read_end1,
-        ref_end2=ref_end2,
     )
 
 
@@ -509,7 +496,9 @@ fn sw[
     var i = begin
     while likely(i != end):
         assume(i >= 0)
-        # print("Outer loop:", i, "-", chr(Int(NUM_TO_AA[Int(reference[i])])))
+        # print(
+        #     "Outer loop:", i, "-"
+        # )  # , chr(Int(NUM_TO_AA[Int(reference[i])])))
         # Initialize to 0, any errors in vH will be corrected in lazy_f
         var e = zero
         # Represents scores for alignments that end with gaps in the reference seq
@@ -548,12 +537,12 @@ fn sw[
 
         # print("max_column State:", end="")
         # for i in range(0, len(reference)):
-        #     print(max_column[i], ", ", end="")
+        #     print(p_vecs.max_column[i], ", ", end="")
         # print()
 
         # print("end_read_column State:", end="")
         # for i in range(0, len(reference)):
-        #     print(end_query_column[i], ", ", end="")
+        #     print(p_vecs.end_query_column[i], ", ", end="")
         # print()
 
         # Inner loop to process the query sequence
@@ -606,14 +595,16 @@ fn sw[
         # k += 1
         var break_out = False
 
-        @parameter
         for _k in range(0, width):
             v_f = v_f.shift_right[1]()
             # print("\tLeft Shift vF:", v_f)
             # print("\tWalking Segments")
             for j in range(0, segment_length):
+                # print("\t\tvF:               ", v_f)
                 v_h = p_vecs.pv_h_store[j]
+                # print("\t\tvH from store:    ", v_h)
                 v_h = max(v_h, v_f)
+                # print("\t\tvH post max store:", v_h)
                 # print("\t\tvH after left shift and max vF", v_h)
                 v_max_column = max(v_max_column, v_h)
                 # print("\t\t vMaxColumn State:", v_max_column)
@@ -626,6 +617,7 @@ fn sw[
 
                 # Early termination check
                 var v_temp = saturating_sub(v_f, v_h)
+                # print("\t\tnew v_temp: ", v_temp)
                 var packed = v_temp == zero
                 if unlikely(packed.reduce_and()):
                     # print("\t\tCan terminate early")
@@ -678,52 +670,43 @@ fn sw[
 
     # print("max_column State:", end="")
     # for i in range(0, len(reference)):
-    #     print(max_column[i], ", ", end="")
+    #     print(p_vecs.max_column[i], ", ", end="")
     # print()
 
     # print("end_read_column State:", end="")
     # for i in range(0, len(reference)):
-    #     print(end_query_column[i], ", ", end="")
+    #     print(p_vecs.end_query_column[i], ", ", end="")
     # print()
     # Find the most possible 2nd alignment
     var score_0 = max_score + bias if max_score + bias >= 255 else max_score
     var bests = AlignmentResult(
         AlignmentEnd(score_0.cast[DType.uint16](), end_reference, end_query),
-        AlignmentEnd(0, 0, 0),
     )
 
     # Candidate for SIMD?
-    edge = (end_reference - mask_length) if (
-        end_reference - mask_length
-    ) > 0 else 0
-    for i in range(0, edge):
-        if p_vecs.max_column[i] > bests.second_best.score.cast[dt]():
-            bests.second_best.score = p_vecs.max_column[i].cast[DType.uint16]()
-            bests.second_best.reference = i
+    # edge = (end_reference - mask_length) if (
+    #     end_reference - mask_length
+    # ) > 0 else 0
+    # for i in range(0, edge):
+    #     if p_vecs.max_column[i] > bests.second_best.score.cast[dt]():
+    #         bests.second_best.score = p_vecs.max_column[i].cast[DType.uint16]()
+    #         bests.second_best.reference = i
 
-    edge = (
-        len(reference) if (end_reference + mask_length)
-        > len(reference) else end_reference + mask_length
-    )
-    for i in range(edge + 1, len(reference)):
-        if p_vecs.max_column[i] > bests.second_best.score.cast[dt]():
-            bests.second_best.score = p_vecs.max_column[i].cast[DType.uint16]()
-            bests.second_best.reference = i
+    # edge = (
+    #     len(reference) if (end_reference + mask_length)
+    #     > len(reference) else end_reference + mask_length
+    # )
+    # for i in range(edge + 1, len(reference)):
+    #     if p_vecs.max_column[i] > bests.second_best.score.cast[dt]():
+    #         bests.second_best.score = p_vecs.max_column[i].cast[DType.uint16]()
+    #         bests.second_best.reference = i
 
     # print(
-    #     "score:",
+    #     "BEST: score:",
     #     bests.best.score,
     #     "ref:",
     #     bests.best.reference,
     #     "read:",
     #     bests.best.query,
-    # )
-    # print(
-    #     "score:",
-    #     bests.second_best.score,
-    #     "ref:",
-    #     bests.second_best.reference,
-    #     "read:",
-    #     bests.second_best.query,
     # )
     return bests
