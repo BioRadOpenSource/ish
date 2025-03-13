@@ -1,7 +1,8 @@
+from collections import Optional
 from utils import StringSlice
 
 from ExtraMojo.io.buffered import BufferedReader
-from ExtraMojo.bstr.memchr import memchr_wide
+from ExtraMojo.bstr.memchr import memchr
 from ExtraMojo.bstr.bstr import to_ascii_uppercase
 
 
@@ -20,7 +21,7 @@ struct FastaRecord:
         return out
 
     fn seq_contains_n(read self) -> Bool:
-        return memchr_wide(self.seq.as_bytes(), ord("N")) != -1
+        return memchr(self.seq.as_bytes(), ord("N")) != -1
 
     fn uppercase_seq(mut self):
         to_ascii_uppercase(self.seq._buffer)
@@ -47,7 +48,7 @@ struct FastaRecord:
                 break
 
             # Find the first newline in the buffer
-            var header_line_end = memchr_wide(buffer, ord("\n"))
+            var header_line_end = memchr(buffer, ord("\n"))
             if header_line_end == -1:
                 print(StringSlice(unsafe_from_utf8=buffer))
                 raise "No newline found for FASTA record header"
@@ -58,11 +59,96 @@ struct FastaRecord:
             var seq = String()
             # Now copy in the seq bytes, removing newlines
             var start = header_line_end + 1
-            var end = memchr_wide(buffer, ord("\n"), start)
+            var end = memchr(buffer, ord("\n"), start)
             while end != -1:
                 seq.write_bytes(buffer[start:end])
                 start = end + 1
-                end = memchr_wide(buffer, ord("\n"), start)
+                end = memchr(buffer, ord("\n"), start)
             records.append(FastaRecord(name, seq))
 
         return records
+
+
+@value
+struct BorrowedFastaRecord[
+    mut: Bool, //,
+    name_origin: Origin[mut],
+    seq_origin: Origin[mut],
+    original_origin: Origin[mut],
+]:
+    var name: Span[UInt8, name_origin]
+    var seq: Span[UInt8, seq_origin]
+    var original_seq: Span[UInt8, original_origin]
+    var original_seq_start: Int
+
+
+struct FastaReader:
+    var reader: BufferedReader
+    var buffer: List[UInt8]
+    var header_buffer: List[UInt8]
+    var seq_buffer: List[UInt8]
+
+    fn __init__(out self, owned reader: BufferedReader) raises:
+        self.reader = reader^
+        self.buffer = List[UInt8]()
+        self.header_buffer = List[UInt8]()
+        self.seq_buffer = List[UInt8]()
+
+        # get the first header delim out of the way
+        var bytes_read = self.reader.read_until(self.buffer, ord(">"))
+        if bytes_read != 1:
+            raise String.write("File should start with '>': ", len(self.buffer))
+
+    fn __moveinit__(out self, owned existing: Self):
+        self.reader = existing.reader^
+        self.buffer = existing.buffer^
+        self.seq_buffer = existing.seq_buffer^
+        self.header_buffer = existing.header_buffer^
+
+    fn read_borrowed(
+        mut self,
+    ) raises -> Optional[
+        BorrowedFastaRecord[
+            __origin_of(self.header_buffer),
+            __origin_of(self.seq_buffer),
+            __origin_of(self.buffer),
+        ]
+    ]:
+        self.buffer.clear()
+        self.header_buffer.clear()
+        self.seq_buffer.clear()
+        while self.reader.read_until(self.buffer, ord(">")) > 0:
+            # If the next char isn't a newline, this isn't actually the end of the header
+            if self.buffer[-1] != ord("\n"):
+                continue
+            else:
+                break
+
+        if len(self.buffer) == 0:
+            return None
+
+        # Find the first newline in the buffer
+        var header_line_end = memchr(self.buffer, ord("\n"))
+        if header_line_end == -1:
+            raise "No newline found for FASTA record header"
+
+        # Should be able to retrurn a slice of self.buffer, but that isn't working for some reason
+        for i in range(0, header_line_end):
+            self.header_buffer.append(self.buffer[i])
+
+        # Now copy in the seq bytes, removing newlines
+        var start = header_line_end + 1
+        var end = memchr(self.buffer, ord("\n"), start)
+        while end != -1:
+            # TODO: switch to memcpy
+            for i in range(start, end):
+                self.seq_buffer.append(self.buffer[i])
+            start = end + 1
+            end = memchr(self.buffer, ord("\n"), start)
+
+        return BorrowedFastaRecord(
+            Span(self.header_buffer),
+            Span(self.seq_buffer),
+            Span(self.buffer),
+            header_line_end + 1,
+        )

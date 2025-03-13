@@ -15,6 +15,7 @@ struct SearcherSettings:
     """The minimum score needed to return a match."""
 
     var match_algo: String
+    var record_type: String
 
     @staticmethod
     fn from_args() raises -> Optional[Self]:
@@ -42,7 +43,18 @@ struct SearcherSettings:
                 "match_algo",
                 OptKind.StringLike,
                 default_value=String("naive_exact"),
-                description="The algorithm to use for matching.",
+                description=(
+                    "The algorithm to use for matching: [naive_exact, ssw,"
+                    " sw_local]"
+                ),
+            )
+        )
+        parser.add_opt(
+            OptConfig(
+                "record_type",
+                OptKind.StringLike,
+                default_value=String("line"),
+                description="The input record type: [line, fasta]",
             )
         )
 
@@ -55,12 +67,13 @@ struct SearcherSettings:
             var pattern = List(opts.get_string("pattern").as_bytes())
             var min_score = opts.get_int("min_score")
             var match_algo = opts.get_string("match_algo")
+            var record_type = opts.get_string("record_type")
             var files = opts.args
             if len(files) == 0:
                 print("missing files")
                 raise "Expected files, found none."
 
-            return Self(files, pattern, min_score, match_algo)
+            return Self(files, pattern, min_score, match_algo, record_type)
         except e:
             print(parser.help_msg())
             print(e)

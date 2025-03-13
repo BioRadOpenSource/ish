@@ -115,6 +115,25 @@ fn parse_args() raises -> ParsedOpts:
             description="File to write the output CSV to.",
         )
     )
+    parser.add_opt(
+        OptConfig(
+            "metrics-file",
+            OptKind.StringLike,
+            default_value=String("-"),
+            description=(
+                "File to write the output metrics CSV to. These are the"
+                " benchmark results. Writing to - will write to stderr."
+            ),
+        )
+    )
+    parser.add_opt(
+        OptConfig(
+            "iterations",
+            OptKind.IntLike,
+            default_value=String("1"),
+            description="Number of iterations to benchmark.",
+        )
+    )
     return parser.parse_sys_args()
 
 
@@ -208,6 +227,91 @@ struct BasicAlignmentOutput(ToDelimited):
         )
 
 
+@value
+struct BenchmarkResults(ToDelimited):
+    var total_query_seqs: Int
+    var total_target_seqs: Int
+    var matrix: String
+    var gap_open: Int
+    var gap_extend: Int
+    var u8_width: Int
+    var u16_width: Int
+    var runtime_secs: Float64
+    var cells_updated: UInt64
+    var gcups: Float64
+
+    @staticmethod
+    fn average(results: List[Self]) raises -> Self:
+        var total_query_seqs = 0
+        var total_target_seqs = 0
+        var matrix = results[0].matrix
+        var gap_open = results[0].gap_open
+        var gap_extend = results[0].gap_extend
+        var u8_width = results[0].u8_width
+        var u16_width = results[0].u16_width
+        var runtime_secs = 0.0
+        var cells_updated: UInt64 = 0
+        var gcups = 0.0
+
+        for result in results:
+            total_query_seqs += result[].total_query_seqs
+            total_target_seqs += result[].total_target_seqs
+            runtime_secs += result[].runtime_secs
+            cells_updated += result[].cells_updated
+            gcups += result[].gcups
+
+            if matrix != result[].matrix:
+                raise "Mismatching matrix"
+            if gap_open != result[].gap_open:
+                raise "Mismatching gap open"
+            if gap_extend != result[].gap_extend:
+                raise "Mismatching gap extend"
+            if u8_width != result[].u8_width:
+                raise "Mismatching u8 width"
+            if u16_width != result[].u16_width:
+                raise "Mismatching u16 width"
+        return Self(
+            total_query_seqs // len(results),
+            total_target_seqs // len(results),
+            matrix,
+            gap_open,
+            gap_extend,
+            u8_width,
+            u16_width,
+            runtime_secs / len(results),
+            cells_updated // len(results),
+            gcups / len(results),
+        )
+
+    fn write_to_delimited(read self, mut writer: DelimWriter) raises:
+        writer.write_record(
+            self.total_query_seqs,
+            self.total_target_seqs,
+            self.matrix,
+            self.gap_open,
+            self.gap_extend,
+            self.u8_width,
+            self.u16_width,
+            self.runtime_secs,
+            self.cells_updated,
+            self.gcups,
+        )
+
+    fn write_header(read self, mut writer: DelimWriter) raises:
+        writer.write_record(
+            "total_query_seqs",
+            "total_target_seqs",
+            "matrix",
+            "gap_open",
+            "gap_extend",
+            "u8_width",
+            "u16_width",
+            "runtime_secs",
+            "cells_updated",
+            "gcups",
+        )
+
+
 fn main() raises:
     var opts = parse_args()
     if opts.get_bool("help"):
@@ -219,6 +323,8 @@ fn main() raises:
     var gap_open_score = opts.get_int("gap-open-score")
     var gap_extension_score = opts.get_int("gap-ext-score")
     var output_file = opts.get_string("output-file")
+    var metrics_file = opts.get_string("metrics-file")
+    var iterations = opts.get_int("iterations")
 
     # Create the score matrix
     var matrix_name = opts.get_string("scoring-matrix")
@@ -261,57 +367,83 @@ fn main() raises:
     for q in queries:
         profiles.append(Profiles[SIMD_U8_WIDTH, SIMD_U16_WIDTH](q[], matrix))
 
-    var writer = DelimWriter(
-        BufferedWriter(open(output_file, "w")),
-        write_header=True,
-        delim=",",
-    )
-    # Align
-    print("Total query seqs:", len(queries), file=stderr)
-    print("Total target seqs:", len(targets), file=stderr)
-    print("Using", matrix_name, file=stderr)
-    print("Gap open penalty:", gap_open_score, file=stderr)
-    print("Gap ext penalty:", gap_extension_score, file=stderr)
-    print("U8 SIMD Width:", SIMD_U8_WIDTH, file=stderr)
-    print("U16 SIMD Width:", SIMD_U16_WIDTH, file=stderr)
-    var start = perf_counter()
-    var work: UInt64 = 0
-    for i in range(0, len(queries)):
-        # TODO: if query construction was done here, we could dispatch to 512 sometimes, which might be cheating for bench purposes.
-        var query = Pointer.address_of(queries[i])
-        var profiles = Pointer.address_of(profiles[i])
-        for j in range(0, len(targets)):
-            var target = Pointer.address_of(targets[j])
-            var result = ssw_align[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
-                profile=profiles[].fwd,
-                matrix=matrix,
-                reference=target[].seq,
-                query=query[].seq,
-                reverse_profile=profiles[].rev,
-                gap_open_penalty=gap_open_score,
-                gap_extension_penalty=gap_extension_score,
-                return_only_alignment_end=True,
-                mask_length=15,
-            )
-            if result:
-                writer.serialize(
-                    BasicAlignmentOutput(
-                        i,
-                        j,
-                        len(query[].seq),
-                        len(target[].seq),
-                        result.value(),
-                    )
+    var results = List[BenchmarkResults]()
+    for _ in range(0, iterations):
+        var writer = DelimWriter(
+            BufferedWriter(open(output_file, "w")),
+            write_header=True,
+            delim=",",
+        )
+        # Align
+        print("Total query seqs:", len(queries), file=stderr)
+        print("Total target seqs:", len(targets), file=stderr)
+        print("Using", matrix_name, file=stderr)
+        print("Gap open penalty:", gap_open_score, file=stderr)
+        print("Gap ext penalty:", gap_extension_score, file=stderr)
+        print("U8 SIMD Width:", SIMD_U8_WIDTH, file=stderr)
+        print("U16 SIMD Width:", SIMD_U16_WIDTH, file=stderr)
+        var start = perf_counter()
+        var work: UInt64 = 0
+        for i in range(0, len(queries)):
+            # TODO: if query construction was done here, we could dispatch to 512 sometimes, which might be cheating for bench purposes.
+            var query = Pointer.address_of(queries[i])
+            var profiles = Pointer.address_of(profiles[i])
+            for j in range(0, len(targets)):
+                var target = Pointer.address_of(targets[j])
+                var result = ssw_align[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
+                    profile=profiles[].fwd,
+                    matrix=matrix,
+                    reference=target[].seq,
+                    query=query[].seq,
+                    reverse_profile=profiles[].rev,
+                    gap_open_penalty=gap_open_score,
+                    gap_extension_penalty=gap_extension_score,
+                    return_only_alignment_end=True,
+                    mask_length=15,
                 )
-            else:
-                print("no resultj")
-            work += len(target[].seq) * len(query[].seq)
-    var end = perf_counter()
+                if result:
+                    writer.serialize(
+                        BasicAlignmentOutput(
+                            i,
+                            j,
+                            len(query[].seq),
+                            len(target[].seq),
+                            result.value(),
+                        )
+                    )
+                else:
+                    print("no resultj")
+                work += len(target[].seq) * len(query[].seq)
+        var end = perf_counter()
 
-    var elapsed = end - start
-    var cells_per_second = work.cast[DType.float64]() / elapsed
-    writer.flush()
-    print("Ran in", elapsed, "seconds", file=stderr)
-    print("Total cells updated :", work)
-    print("Cells per second:", cells_per_second, file=stderr)
-    print("GCUPs:", cells_per_second / 1000000000, file=stderr)
+        var elapsed = end - start
+        var cells_per_second = work.cast[DType.float64]() / elapsed
+        writer.flush()
+        print("Ran in", elapsed, "seconds", file=stderr)
+        print("Total cells updated :", work)
+        print("Cells per second:", cells_per_second, file=stderr)
+        print("GCUPs:", cells_per_second / 1000000000, file=stderr)
+        results.append(
+            BenchmarkResults(
+                len(queries),
+                len(targets),
+                matrix_name,
+                gap_open_score,
+                gap_extension_score,
+                SIMD_U8_WIDTH,
+                SIMD_U16_WIDTH,
+                elapsed,
+                work,
+                cells_per_second / 1000000000,
+            )
+        )
+
+    var result = BenchmarkResults.average(results)
+    var metric_writer = DelimWriter(
+        BufferedWriter(open(metrics_file, "w")),
+        delim=",",
+        write_header=True,
+    )
+    print(result.gcups, file=stderr)
+    metric_writer.serialize(result)
+    metric_writer.flush()
