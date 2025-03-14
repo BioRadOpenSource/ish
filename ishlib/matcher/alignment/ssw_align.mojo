@@ -75,6 +75,14 @@ struct ScoreSize:
     fn __eq__(read self, read other: Self) -> Bool:
         return self.value == other.value
 
+    fn __str__(read self) -> String:
+        if self.value == Self.Byte.value:
+            return "byte"
+        elif self.value == self.Word.value:
+            return "word"
+        else:
+            return "adaptive"
+
 
 @value
 @register_passable("trivial")

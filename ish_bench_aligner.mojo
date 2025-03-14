@@ -1,6 +1,7 @@
 """Test program for SSW."""
 from sys import stdout, stderr
 from sys.info import simdwidthof, has_avx512f
+from sys.param_env import env_get_int
 from time.time import perf_counter
 
 from ExtraMojo.cli.parser import OptParser, OptConfig, OptKind, ParsedOpts
@@ -16,17 +17,21 @@ from ishlib.matcher.alignment.scoring_matrix import ScoringMatrix
 from ishlib.formats.fasta import FastaRecord
 
 # Force half width vectors in the case of avx512 since avx 2 seems faster up to around 700len queries.
-alias SIMD_U8_WIDTH = simdwidthof[
-    UInt8
-]() if not has_avx512f() else simdwidthof[UInt8]() // 2
-alias SIMD_U16_WIDTH = simdwidthof[
-    UInt16
-]() if not has_avx512f() else simdwidthof[UInt16]() // 2
+# alias SIMD_U8_WIDTH = simdwidthof[
+#     UInt8
+# ]() if not has_avx512f() else simdwidthof[UInt8]() // 2
+# alias SIMD_U16_WIDTH = simdwidthof[
+#     UInt16
+# ]() if not has_avx512f() else simdwidthof[UInt16]() // 2
+
+alias SIMD_MOD = env_get_int["SIMD_MOD", 1]()
+"""Modify the SIMD width based on a CLI argument."""
 
 alias FULL_SIMD_U8_WIDTH = simdwidthof[UInt8]()
 alias FULL_SIMD_U16_WIDTH = simdwidthof[UInt16]()
-# alias SIMD_U8_WIDTH = simdwidthof[UInt8]()
-# alias SIMD_U16_WIDTH = simdwidthof[UInt16]()
+
+alias SIMD_U8_WIDTH = simdwidthof[UInt8]() // SIMD_MOD
+alias SIMD_U16_WIDTH = simdwidthof[UInt16]() // SIMD_MOD
 
 
 fn parse_args() raises -> ParsedOpts:
@@ -111,7 +116,6 @@ fn parse_args() raises -> ParsedOpts:
         OptConfig(
             "output-file",
             OptKind.StringLike,
-            default_value=String("-"),
             description="File to write the output CSV to.",
         )
     )
@@ -122,7 +126,7 @@ fn parse_args() raises -> ParsedOpts:
             default_value=String("-"),
             description=(
                 "File to write the output metrics CSV to. These are the"
-                " benchmark results. Writing to - will write to stderr."
+                " benchmark results. Writing to - will write to stdout."
             ),
         )
     )
@@ -132,6 +136,18 @@ fn parse_args() raises -> ParsedOpts:
             OptKind.IntLike,
             default_value=String("1"),
             description="Number of iterations to benchmark.",
+        )
+    )
+    parser.add_opt(
+        OptConfig(
+            "score-size",
+            OptKind.StringLike,
+            default_value=String("adaptive"),
+            description=(
+                "The size to use for scoring:\n\tadaptive: use byte size first"
+                " and fall back to word size if it overflows.\n\tbyte:"
+                " u8\n\5word: u16"
+            ),
         )
     )
     return parser.parse_sys_args()
@@ -167,13 +183,16 @@ struct Profiles[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
     var rev: Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH]
 
     fn __init__(
-        out self, read record: ByteFastaRecord, read matrix: ScoringMatrix
+        out self,
+        read record: ByteFastaRecord,
+        read matrix: ScoringMatrix,
+        score_size: ScoreSize,
     ):
         self.fwd = Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
-            record.seq, matrix, ScoreSize.Adaptive
+            record.seq, matrix, score_size
         )
         self.rev = Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
-            record.rev, matrix, ScoreSize.Adaptive
+            record.rev, matrix, score_size
         )
 
 
@@ -231,11 +250,13 @@ struct BasicAlignmentOutput(ToDelimited):
 struct BenchmarkResults(ToDelimited):
     var total_query_seqs: Int
     var total_target_seqs: Int
+    var query_len: Int
     var matrix: String
     var gap_open: Int
     var gap_extend: Int
     var u8_width: Int
     var u16_width: Int
+    var score_size: String
     var runtime_secs: Float64
     var cells_updated: UInt64
     var gcups: Float64
@@ -244,11 +265,13 @@ struct BenchmarkResults(ToDelimited):
     fn average(results: List[Self]) raises -> Self:
         var total_query_seqs = 0
         var total_target_seqs = 0
+        var query_len = results[0].query_len
         var matrix = results[0].matrix
         var gap_open = results[0].gap_open
         var gap_extend = results[0].gap_extend
         var u8_width = results[0].u8_width
         var u16_width = results[0].u16_width
+        var score_size = results[0].score_size
         var runtime_secs = 0.0
         var cells_updated: UInt64 = 0
         var gcups = 0.0
@@ -260,6 +283,9 @@ struct BenchmarkResults(ToDelimited):
             cells_updated += result[].cells_updated
             gcups += result[].gcups
 
+            if query_len != result[].query_len:
+                # TODO: may want to change this if we want to process multiple queries in one go.
+                raise "Mismatching query len"
             if matrix != result[].matrix:
                 raise "Mismatching matrix"
             if gap_open != result[].gap_open:
@@ -270,14 +296,19 @@ struct BenchmarkResults(ToDelimited):
                 raise "Mismatching u8 width"
             if u16_width != result[].u16_width:
                 raise "Mismatching u16 width"
+            if score_size != result[].score_size:
+                raise "Mismatching score size"
+
         return Self(
             total_query_seqs // len(results),
             total_target_seqs // len(results),
+            query_len,
             matrix,
             gap_open,
             gap_extend,
             u8_width,
             u16_width,
+            score_size,
             runtime_secs / len(results),
             cells_updated // len(results),
             gcups / len(results),
@@ -287,11 +318,13 @@ struct BenchmarkResults(ToDelimited):
         writer.write_record(
             self.total_query_seqs,
             self.total_target_seqs,
+            self.query_len,
             self.matrix,
             self.gap_open,
             self.gap_extend,
             self.u8_width,
             self.u16_width,
+            self.score_size,
             self.runtime_secs,
             self.cells_updated,
             self.gcups,
@@ -301,11 +334,13 @@ struct BenchmarkResults(ToDelimited):
         writer.write_record(
             "total_query_seqs",
             "total_target_seqs",
+            "query_len",
             "matrix",
             "gap_open",
             "gap_extend",
             "u8_width",
             "u16_width",
+            "score_size",
             "runtime_secs",
             "cells_updated",
             "gcups",
@@ -325,6 +360,18 @@ fn main() raises:
     var output_file = opts.get_string("output-file")
     var metrics_file = opts.get_string("metrics-file")
     var iterations = opts.get_int("iterations")
+
+    # Get the score size
+    var score_size_name = opts.get_string("score-size")
+    var score_size: ScoreSize
+    if score_size_name == "adaptive":
+        score_size = ScoreSize.Adaptive
+    elif score_size_name == "byte":
+        score_size = ScoreSize.Byte
+    elif score_size_name == "word":
+        score_size = ScoreSize.Word
+    else:
+        raise "Unkown score size " + score_size_name
 
     # Create the score matrix
     var matrix_name = opts.get_string("scoring-matrix")
@@ -365,7 +412,9 @@ fn main() raises:
         capacity=len(queries)
     )
     for q in queries:
-        profiles.append(Profiles[SIMD_U8_WIDTH, SIMD_U16_WIDTH](q[], matrix))
+        profiles.append(
+            Profiles[SIMD_U8_WIDTH, SIMD_U16_WIDTH](q[], matrix, score_size)
+        )
 
     var results = List[BenchmarkResults]()
     for _ in range(0, iterations):
@@ -420,18 +469,20 @@ fn main() raises:
         var cells_per_second = work.cast[DType.float64]() / elapsed
         writer.flush()
         print("Ran in", elapsed, "seconds", file=stderr)
-        print("Total cells updated :", work)
+        print("Total cells updated :", work, file=stderr)
         print("Cells per second:", cells_per_second, file=stderr)
         print("GCUPs:", cells_per_second / 1000000000, file=stderr)
         results.append(
             BenchmarkResults(
                 len(queries),
                 len(targets),
+                len(queries[0].seq),
                 matrix_name,
                 gap_open_score,
                 gap_extension_score,
                 SIMD_U8_WIDTH,
                 SIMD_U16_WIDTH,
+                String(score_size),
                 elapsed,
                 work,
                 cells_per_second / 1000000000,
@@ -440,10 +491,11 @@ fn main() raises:
 
     var result = BenchmarkResults.average(results)
     var metric_writer = DelimWriter(
-        BufferedWriter(open(metrics_file, "w")),
+        BufferedWriter(
+            open(metrics_file, "w") if metrics_file != "-" else stdout
+        ),
         delim=",",
         write_header=True,
     )
-    print(result.gcups, file=stderr)
     metric_writer.serialize(result)
     metric_writer.flush()

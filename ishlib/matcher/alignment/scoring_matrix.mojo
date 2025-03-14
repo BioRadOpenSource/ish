@@ -225,6 +225,22 @@ struct ScoringMatrix:
             self.values[i] = value
 
     @always_inline
+    fn convert_ascii_to_encoding[
+        origin: MutableOrigin
+    ](read self, mut seq: Span[UInt8, origin]):
+        for i in range(0, len(seq)):
+            seq[i] = self.ascii_to_encoding[Int(seq[i])]
+
+    @always_inline
+    fn convert_ascii_to_encoding(
+        read self, owned seq: Span[UInt8]
+    ) -> List[UInt8]:
+        var out = List[UInt8](capacity=len(seq))
+        for value in seq:
+            out.append(self.ascii_to_encoding[Int(value[])])
+        return out
+
+    @always_inline
     fn convert_ascii_to_encoding(
         read self, owned seq: List[Int8]
     ) -> List[UInt8]:
