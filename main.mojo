@@ -7,21 +7,39 @@ from ishlib.matcher.ssw_matcher import SSWMatcher
 
 
 fn main() raises:
+    # TODO: buble up the scoring matrix
+
     var searcher_settings = SearcherSettings.from_args()
     if not searcher_settings:
         return
     var settings = searcher_settings.value()
 
     if settings.match_algo == "naive_exact":
-        var runner = LineSearchRunner[NaiveExactMatcher](
-            settings, NaiveExactMatcher()
-        )
-        runner.run_search()
+        if settings.record_type == "line":
+            var runner = LineSearchRunner[NaiveExactMatcher](
+                settings, NaiveExactMatcher()
+            )
+            runner.run_search()
+        elif settings.record_type == "fasta":
+            var runner = FastaSearchRunner[NaiveExactMatcher](
+                settings, NaiveExactMatcher()
+            )
+            runner.run_search()
+        else:
+            raise "Invalid record type: {}".format(settings.record_type)
     elif settings.match_algo == "sw_local":
-        var runner = LineSearchRunner[SWLocalMatcher](
-            settings, SWLocalMatcher()
-        )
-        runner.run_search()
+        if settings.record_type == "line":
+            var runner = LineSearchRunner[SWLocalMatcher](
+                settings, SWLocalMatcher()
+            )
+            runner.run_search()
+        elif settings.record_type == "fasta":
+            var runner = FastaSearchRunner[SWLocalMatcher](
+                settings, SWLocalMatcher()
+            )
+            runner.run_search()
+        else:
+            raise "Invalid record type: {}".format(settings.record_type)
     elif settings.match_algo == "ssw":
         if settings.record_type == "line":
             var runner = LineSearchRunner[
@@ -35,6 +53,5 @@ fn main() raises:
             runner.run_search()
         else:
             raise "Invalid record type: {}".format(settings.record_type)
-
     else:
         raise "Unsupported match algo: {}".format(settings.match_algo)

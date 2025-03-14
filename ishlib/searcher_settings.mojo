@@ -32,7 +32,7 @@ struct SearcherSettings:
         )
         parser.add_opt(
             OptConfig(
-                "min_score",
+                "min-score",
                 OptKind.IntLike,
                 default_value=String("1"),
                 description="The min score needed to return a match.",
@@ -40,9 +40,9 @@ struct SearcherSettings:
         )
         parser.add_opt(
             OptConfig(
-                "match_algo",
+                "match-algo",
                 OptKind.StringLike,
-                default_value=String("naive_exact"),
+                default_value=String("ssw"),
                 description=(
                     "The algorithm to use for matching: [naive_exact, ssw,"
                     " sw_local]"
@@ -51,11 +51,14 @@ struct SearcherSettings:
         )
         parser.add_opt(
             OptConfig(
-                "record_type",
+                "record-type",
                 OptKind.StringLike,
                 default_value=String("line"),
                 description="The input record type: [line, fasta]",
             )
+        )
+        parser.expect_at_least_n_args(
+            1, "Files to search for the given pattern."
         )
 
         try:
@@ -65,9 +68,9 @@ struct SearcherSettings:
                 return None
 
             var pattern = List(opts.get_string("pattern").as_bytes())
-            var min_score = opts.get_int("min_score")
-            var match_algo = opts.get_string("match_algo")
-            var record_type = opts.get_string("record_type")
+            var min_score = opts.get_int("min-score")
+            var match_algo = opts.get_string("match-algo")
+            var record_type = opts.get_string("record-type")
             var files = opts.args
             if len(files) == 0:
                 print("missing files")

@@ -12,8 +12,8 @@ from ishlib.matcher.alignment.ssw_align import (
 
 @value
 struct SSWMatcher[mut: Bool, //, origin: Origin[mut]](Matcher):
-    alias SIMD_U8_WIDTH = simdwidthof[UInt8]()
-    alias SIMD_U16_WIDTH = simdwidthof[UInt8]()
+    alias SIMD_U8_WIDTH = simdwidthof[UInt8]() // 2
+    alias SIMD_U16_WIDTH = simdwidthof[UInt16]() // 2
     var pattern: Span[UInt8, origin]
     var rev_pattern: List[UInt8]
     var profile: Profile[Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH]
