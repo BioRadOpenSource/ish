@@ -270,6 +270,9 @@ def run_ish_aligner(
         out = sp.run(
             " ".join(args), shell=True, check=True, text=True, capture_output=True
         )
+        if "overflow" in out.stdout:
+            print("Overflow, no result for: ", " ".join(args), file=sys.stderr)
+            return None
         result = BenchmarkResults.from_ish_csv_str(out.stdout, aligner="ish-aligner")[
             0
         ]  # Only take the first item since we're running this in such a way that only one will be there anyways
@@ -288,7 +291,7 @@ def main():
     for ish in [ISH_128, ISH_256, ISH_512]:
         for score_size in score_sizes:
             for query in QUERY_SEQS.keys():
-                print(f"Running {ish} on {query}", file=sys.stderr)
+                print(f"Running {ish} on {query} with {score_size}", file=sys.stderr)
                 r = run_ish_aligner(
                     ish,
                     query,

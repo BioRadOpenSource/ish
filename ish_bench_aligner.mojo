@@ -461,7 +461,7 @@ fn main() raises:
                         )
                     )
                 else:
-                    print("no resultj")
+                    print("no result")
                 work += len(target[].seq) * len(query[].seq)
         var end = perf_counter()
 
