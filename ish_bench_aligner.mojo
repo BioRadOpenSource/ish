@@ -441,7 +441,6 @@ fn main() raises:
                 var target = Pointer.address_of(targets[j])
                 var result = ssw_align[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
                     profile=profiles[].fwd,
-                    matrix=matrix,
                     reference=target[].seq,
                     query=query[].seq,
                     reverse_profile=profiles[].rev,

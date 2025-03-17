@@ -120,7 +120,7 @@ struct ProfileVectors[dt: DType, width: Int]:
     var segment_length: Int32
     var query_len: Int32
 
-    fn __init__(out self, query_len: Int32):
+    fn __init__(out self, query_len: Int32, *, ref_len: Optional[Int] = None):
         var segment_length = (query_len + width - 1) // width
 
         var zero = SIMD[dt, width](0)
@@ -151,6 +151,10 @@ struct ProfileVectors[dt: DType, width: Int]:
         var max_column = List[SIMD[dt, 1]]()
         # List to record the alignment query ending position of the largest score of each reference position
         var end_query_column = List[Int32]()
+        if ref_len:
+            for _ in range(0, ref_len.value()):
+                max_column.append(0)
+                end_query_column.append(0)
 
         self.pv_h_store = pv_h_store
         self.pv_h_load = pv_h_load
@@ -290,7 +294,6 @@ fn ssw_align[
     SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int
 ](
     mut profile: Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH],
-    read matrix: ScoringMatrix,
     reference: Span[UInt8],
     query: Span[UInt8],
     mut reverse_profile: Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH],
@@ -423,16 +426,19 @@ fn ssw_align[
     )
 
 
+from gpu.memory import AddressSpace
+
+
 @export
 fn sw[
-    dt: DType, width: Int
+    dt: DType, width: Int, address_space: AddressSpace = AddressSpace(0)
 ](
     reference: Span[UInt8],
     reference_direction: ReferenceDirection,
     query_len: Int32,
     gap_open_penalty: SIMD[dt, 1],
     gap_extension_penalty: SIMD[dt, 1],
-    profile: Span[SIMD[dt, width]],
+    profile: Span[SIMD[dt, width], address_space=address_space],
     mut p_vecs: ProfileVectors[dt, width],
     terminate: SIMD[dt, 1],
     bias: SIMD[dt, 1],
@@ -446,6 +452,7 @@ fn sw[
     """
     p_vecs.zero_out()
     p_vecs.init_columns(len(reference))
+    # print("zeroed pvec cols")
     var max_score = UInt8(0).cast[dt]()
     var end_query: Int32 = query_len - 1
     var end_reference: Int32 = -1  # 0 based best alignment ending point; initialized as isn't aligned -1
@@ -543,6 +550,7 @@ fn sw[
         #     print(p_vecs.pv_h_max[i], ", ", end="")
         # print()
 
+        # print("len max_column state:", len(p_vecs.max_column))
         # print("max_column State:", end="")
         # for i in range(0, len(reference)):
         #     print(p_vecs.max_column[i], ", ", end="")
