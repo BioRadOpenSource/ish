@@ -287,6 +287,9 @@ def main():
     score_sizes = ["byte", "word", "adaptive"]
     # score_sizes = ["adaptive"]
 
+    writer = csv.DictWriter(sys.stdout, fieldnames=BenchmarkResults.HEADERS)
+    writer.writeheader()
+
     results: List[BenchmarkResults] = []
     for ish in [ISH_128, ISH_256, ISH_512]:
         for score_size in score_sizes:
@@ -299,9 +302,26 @@ def main():
                     score_size=score_size,
                     scoring_matrix="Blosum62",
                     output_file="/home/ubuntu/outputs/ish-aligner.csv",
-                    iterations=1,
+                    iterations=3,
                 )
                 if r:
+                    writer.writerow(
+                        {
+                            "aligner": r.aligner,
+                            "total_query_seqs": r.total_query_seqs,
+                            "total_target_seqs": r.total_target_seqs,
+                            "query_len": r.query_len,
+                            "matrix": r.matrix,
+                            "gap_open": r.gap_open,
+                            "gap_extend": r.gap_extend,
+                            "u8_width": r.u8_width,
+                            "u16_width": r.u16_width,
+                            "score_size": r.score_size,
+                            "runtime_secs": r.runtime_secs,
+                            "cells_updated": r.cells_updated,
+                            "gcups": r.gcups,
+                        }
+                    )
                     results.append(r)
 
     for inst in ["sse41_128", "avx2_256"]:
@@ -319,9 +339,26 @@ def main():
                     output_file="/home/ubuntu/outputs/parasail-aligner.csv",
                 )
                 if r:
+                    writer.writerow(
+                        {
+                            "aligner": r.aligner,
+                            "total_query_seqs": r.total_query_seqs,
+                            "total_target_seqs": r.total_target_seqs,
+                            "query_len": r.query_len,
+                            "matrix": r.matrix,
+                            "gap_open": r.gap_open,
+                            "gap_extend": r.gap_extend,
+                            "u8_width": r.u8_width,
+                            "u16_width": r.u16_width,
+                            "score_size": r.score_size,
+                            "runtime_secs": r.runtime_secs,
+                            "cells_updated": r.cells_updated,
+                            "gcups": r.gcups,
+                        }
+                    )
                     results.append(r)
 
-    BenchmarkResults.to_csv(results)
+    #BenchmarkResults.to_csv(results)
 
 
 if __name__ == "__main__":

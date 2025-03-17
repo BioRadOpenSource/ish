@@ -603,6 +603,7 @@ fn sw[
         # k += 1
         var break_out = False
 
+        @parameter
         for _k in range(0, width):
             v_f = v_f.shift_right[1]()
             # print("\tLeft Shift vF:", v_f)
