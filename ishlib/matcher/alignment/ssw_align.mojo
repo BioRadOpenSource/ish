@@ -115,8 +115,7 @@ struct ProfileVectors[dt: DType, width: Int]:
     var pv_e: List[SIMD[dt, width]]
     var pv_h_max: List[SIMD[dt, width]]
     var zero: SIMD[dt, width]
-    var max_column: List[SIMD[dt, 1]]
-    var end_query_column: List[Int32]
+    # var max_column: List[SIMD[dt, 1]]
     var segment_length: Int32
     var query_len: Int32
 
@@ -148,13 +147,11 @@ struct ProfileVectors[dt: DType, width: Int]:
         memset_zero(pv_h_max.unsafe_ptr(), Int(segment_length))
 
         # List to record the largest score of each reference position
-        var max_column = List[SIMD[dt, 1]]()
-        # List to record the alignment query ending position of the largest score of each reference position
-        var end_query_column = List[Int32]()
-        if ref_len:
-            for _ in range(0, ref_len.value()):
-                max_column.append(0)
-                end_query_column.append(0)
+        # var max_column = List[SIMD[dt, 1]]()
+        # # List to record the alignment query ending position of the largest score of each reference position
+        # if ref_len:
+        #     for _ in range(0, ref_len.value()):
+        #         max_column.append(0)
 
         self.pv_h_store = pv_h_store
         self.pv_h_load = pv_h_load
@@ -163,8 +160,7 @@ struct ProfileVectors[dt: DType, width: Int]:
         self.zero = zero
         self.segment_length = segment_length
         self.query_len = query_len
-        self.max_column = max_column
-        self.end_query_column = end_query_column
+        # self.max_column = max_column
 
     fn zero_out(mut self):
         memset_zero(self.pv_h_store.unsafe_ptr(), Int(self.segment_length))
@@ -172,11 +168,9 @@ struct ProfileVectors[dt: DType, width: Int]:
         memset_zero(self.pv_e.unsafe_ptr(), Int(self.segment_length))
         memset_zero(self.pv_h_max.unsafe_ptr(), Int(self.segment_length))
 
-    fn init_columns(mut self, ref_len: Int):
-        self.max_column.resize(ref_len, 0)
-        self.end_query_column.resize(ref_len, 0)
-        memset_zero(self.max_column.unsafe_ptr(), ref_len)
-        memset_zero(self.end_query_column.unsafe_ptr(), ref_len)
+    # fn init_columns(mut self, ref_len: Int):
+    #     self.max_column.resize(ref_len, 0)
+    #     memset_zero(self.max_column.unsafe_ptr(), ref_len)
 
 
 @value
@@ -427,18 +421,22 @@ fn ssw_align[
 
 
 from gpu.memory import AddressSpace
+from memory import stack_allocation
 
 
 @export
 fn sw[
-    dt: DType, width: Int, address_space: AddressSpace = AddressSpace(0)
+    dt: DType,
+    width: Int,
+    profile_address_space: AddressSpace = AddressSpace(0),
+    allocations_address_space: AddressSpace = AddressSpace(0),
 ](
     reference: Span[UInt8],
     reference_direction: ReferenceDirection,
     query_len: Int32,
     gap_open_penalty: SIMD[dt, 1],
     gap_extension_penalty: SIMD[dt, 1],
-    profile: Span[SIMD[dt, width], address_space=address_space],
+    read profile: Span[SIMD[dt, width], address_space=profile_address_space],
     mut p_vecs: ProfileVectors[dt, width],
     terminate: SIMD[dt, 1],
     bias: SIMD[dt, 1],
@@ -451,7 +449,7 @@ fn sw[
 
     """
     p_vecs.zero_out()
-    p_vecs.init_columns(len(reference))
+    # p_vecs.init_columns(len(reference))
     # print("zeroed pvec cols")
     var max_score = UInt8(0).cast[dt]()
     var end_query: Int32 = query_len - 1
@@ -471,9 +469,9 @@ fn sw[
     # print("SIMD WIDTH", width)
     # print("bias", bias)
     # for i in range(
-    #     0, ScoringMatrix.blosm50().size
+    #     0, ScoringMatrix.blosum62().size
     # ):  # TODO: hardcoded, should be length alphabet
-    #     print(chr(Int(NUM_TO_AA[i])), ": ", sep="", end="")
+    #     # print(chr(Int(NUM_TO_AA[i])), ": ", sep="", end="")
     #     for j in range(0, segment_length):
     #         print(profile[i * segment_length + j], ", ", end="")
     #     print()
@@ -481,12 +479,18 @@ fn sw[
 
     # List to record the largest score of each reference position
     # var max_column = List[SIMD[dt, 1]](capacity=len(reference))
-    # List to record the alignment query ending position of the largest score of each reference position
-    # var end_query_column = List[Int32](capacity=len(reference))
+    var max_column_ptr = stack_allocation[
+        1024, SIMD[dt, 1], address_space=allocations_address_space
+    ]()
+    memset_zero(max_column_ptr, 1024 * 3)
+    var max_column = Span[
+        SIMD[dt, 1],
+        __origin_of(max_column_ptr),
+        address_space=allocations_address_space,
+    ](ptr=max_column_ptr, length=len(reference))
 
     # for _ in range(0, len(reference)):
-    #     p_vecs.max_column.append(UInt8(0).cast[dt]())
-    #     p_vecs.end_query_column.append(0)
+    #     max_column.append(UInt8(0).cast[dt]())
 
     var zero = SIMD[dt, width](0)
 
@@ -663,8 +667,10 @@ fn sw[
                     p_vecs.pv_h_max[j] = p_vecs.pv_h_store[j]
 
         # Record the max score of current column
-        p_vecs.max_column[i] = v_max_column.reduce_max()
-        if unlikely(p_vecs.max_column[i] == terminate):
+        max_column[i] = v_max_column.reduce_max()
+        # p_vecs.max_column[i] = v_max_column.reduce_max()
+        if unlikely(max_column[i] == terminate):
+            # if unlikely(p_vecs.max_column[i] == terminate):
             break
 
         # Increment the while loop

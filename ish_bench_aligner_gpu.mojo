@@ -404,12 +404,190 @@ struct LineCoords:
         return Self(start.cast[DType.uint32](), end.cast[DType.uint32]())
 
 
-fn gpu_align(
+# fn gpu_align(
+#     query: DeviceBuffer[DType.uint8],
+#     ref_buffer: DeviceBuffer[DType.uint8],
+#     ref_coords: DeviceBuffer[DType.uint64],
+#     fwd_profile: DeviceBuffer[DType.uint16],  # let's just do word for now
+#     # rev_profile: DeviceBuffer[DType.uint8],  # lets just do word for now
+#     score_result_buffer: DeviceBuffer[DType.uint16],
+#     query_end_result_buffer: DeviceBuffer[DType.int32],
+#     ref_end_result_buffer: DeviceBuffer[DType.int32],
+#     query_len: Int,
+#     ref_coords_len: Int,
+#     profile_len: Int,
+#     profile_bias: UInt16,
+# ):
+#     alias DT = DType.uint16
+#     alias WIDTH = SIMD_U16_WIDTH
+#     # Shared memory for the block, holding the profile.
+#     # only supports queries of len 1,000 using u16s width 8 (I think)
+#     var shared_profile = stack_allocation[
+#         600,
+#         SIMD[DT, WIDTH],
+#         address_space = AddressSpace.SHARED
+#         # address_space = AddressSpace.SHARED
+#     ]()
+#     var profile_span = Span[
+#         SIMD[DT, WIDTH],
+#         __origin_of(shared_profile),
+#         address_space = AddressSpace.SHARED,
+#     ](ptr=shared_profile, length=profile_len)
+#     var profile_ptr = fwd_profile.unsafe_ptr()
+#     var profile_idx = 0
+#     for s in range(0, profile_len, WIDTH):
+#         var v = profile_ptr.load[width=WIDTH](s)
+#         profile_span[profile_idx] = v
+#         profile_idx += 1
+
+#     # print(profile_span[0])
+#     barrier()
+
+#     var idx = (block_idx.x * block_dim.x) + thread_idx.x
+
+#     if idx > 0 and idx < 3600:
+#         pass
+#     else:
+#         return
+
+#     if idx >= ref_coords_len:
+#         return
+
+#     # print(
+#     #     "ref cords len:",
+#     #     ref_coords_len,
+#     #     "idx",
+#     #     idx,
+#     # )
+#     # Hard coded for now:
+#     var gap_open_penalty = 3
+#     var gap_ext_penalty = 1
+
+#     # Get the start/end coords for this ref seq
+#     var coord = LineCoords.from_u64(ref_coords[idx])
+#     # print("Loading ref:", coord.start, coord.end)
+#     var ref_seq = Span[UInt8, __origin_of(ref_buffer)](
+#         ptr=ref_buffer.unsafe_ptr().offset(coord.start),
+#         length=Int(coord.end - coord.start),
+#     )
+
+#     # Get the query as a span
+#     var query_seq = Span[UInt8, __origin_of(query)](
+#         ptr=query.unsafe_ptr(), length=query_len
+#     )
+#     # print(idx, "qlen", query_len, "rlen", len(ref_seq))
+
+#     # Get the profile vectors
+#     # TODO: could be reused across a batch that uses the same query?
+#     var p_vecs = ProfileVectors[DT, WIDTH](len(query_seq))
+
+#     # print("Processing ref seq:", idx)
+#     var result = sw[
+#         DT,
+#         WIDTH,
+#         profile_address_space = AddressSpace(3),
+#         allocations_address_space = AddressSpace(5),
+#     ](
+#         ref_seq,
+#         ReferenceDirection.Forward,
+#         len(query_seq),
+#         gap_open_penalty,
+#         gap_ext_penalty,
+#         profile_span,
+#         p_vecs,
+#         -1,
+#         profile_bias,
+#         15,
+#     )
+
+#     print(
+#         "index",
+#         idx,
+#         "Score:",
+#         result.best.score,
+#         "query_end:",
+#         result.best.query,
+#         "ref_end:",
+#         result.best.reference,
+#     )
+#     score_result_buffer[idx] = result.best.score - profile_bias
+#     query_end_result_buffer[idx] = result.best.query
+#     ref_end_result_buffer[idx] = result.best.reference
+
+
+# Add this function to process references in batches
+fn process_in_batches(
+    ctx: DeviceContext,
+    dev_query: DeviceBuffer[DType.uint8],
+    dev_ref_buffer: DeviceBuffer[DType.uint8],
+    dev_coords: DeviceBuffer[DType.uint64],
+    dev_fwd_profile: DeviceBuffer[DType.uint16],
+    dev_score_result_buffer: DeviceBuffer[DType.uint16],
+    dev_query_end_result_buffer: DeviceBuffer[DType.int32],
+    dev_ref_end_result_buffer: DeviceBuffer[DType.int32],
+    query_len: Int,
+    ref_coords_len: Int,
+    profile_words: Int,
+    profile_bias: UInt16,
+    batch_size: Int = 3000,
+) raises:
+    alias BLOCK_SIZE = 32  # Align with warp size
+
+    var num_batches = ceildiv(ref_coords_len, batch_size)
+    print(
+        "Processing",
+        ref_coords_len,
+        "references in",
+        num_batches,
+        "batches of size",
+        batch_size,
+    )
+
+    for batch in range(num_batches):
+        var start_idx = batch * batch_size
+        var end_idx = min(start_idx + batch_size, ref_coords_len)
+        var batch_size_actual = end_idx - start_idx
+
+        print(
+            "Processing batch",
+            batch + 1,
+            "of",
+            num_batches,
+            "- indices",
+            start_idx,
+            "to",
+            end_idx - 1,
+        )
+
+        # Launch kernel for this batch only
+        ctx.enqueue_function[gpu_align_batched](
+            dev_query,
+            dev_ref_buffer,
+            dev_coords,
+            dev_fwd_profile,
+            dev_score_result_buffer,
+            dev_query_end_result_buffer,
+            dev_ref_end_result_buffer,
+            query_len,
+            ref_coords_len,
+            profile_words,
+            profile_bias,
+            start_idx,  # Pass the start index
+            batch_size_actual,  # Pass the actual batch size
+            grid_dim=ceildiv(batch_size_actual, BLOCK_SIZE),
+            block_dim=BLOCK_SIZE,
+        )
+
+        # Synchronize after each batch to ensure it completes
+        ctx.synchronize()
+
+
+# Modified kernel that processes only indices within a specific batch
+fn gpu_align_batched(
     query: DeviceBuffer[DType.uint8],
     ref_buffer: DeviceBuffer[DType.uint8],
     ref_coords: DeviceBuffer[DType.uint64],
-    fwd_profile: DeviceBuffer[DType.uint16],  # let's just do word for now
-    # rev_profile: DeviceBuffer[DType.uint8],  # lets just do word for now
+    fwd_profile: DeviceBuffer[DType.uint16],
     score_result_buffer: DeviceBuffer[DType.uint16],
     query_end_result_buffer: DeviceBuffer[DType.int32],
     ref_end_result_buffer: DeviceBuffer[DType.int32],
@@ -417,33 +595,57 @@ fn gpu_align(
     ref_coords_len: Int,
     profile_len: Int,
     profile_bias: UInt16,
+    batch_start_idx: Int,  # Start index for this batch
+    batch_size: Int,  # Size of this batch
 ):
     alias DT = DType.uint16
-    alias WIDTH = simdwidthof[DType.uint16]()
+    alias WIDTH = SIMD_U16_WIDTH
     # Shared memory for the block, holding the profile.
     # only supports queries of len 1,000 using u16s width 8 (I think)
-    var shared_profile = stack_allocation[
-        1024, SIMD[DT, WIDTH], address_space = AddressSpace.SHARED
-    ]()
+    # var shared_profile = stack_allocation[
+    #     600,
+    #     SIMD[DT, WIDTH],
+    #     address_space = AddressSpace.SHARED
+    #     # address_space = AddressSpace.SHARED
+    # ]()
+    # var profile_span = Span[
+    #     SIMD[DT, WIDTH],
+    #     __origin_of(shared_profile),
+    #     address_space = AddressSpace.SHARED,
+    # ](ptr=shared_profile, length=profile_len)
+    # var profile_ptr = fwd_profile.unsafe_ptr()
+    # var profile_idx = 0
+    # for s in range(0, profile_len, WIDTH):
+    #     var v = profile_ptr.load[width=WIDTH](s)
+    #     profile_span[profile_idx] = v
+    #     profile_idx += 1
+    # barrier()
+
+    # Calculate global thread index
+    var local_idx = (block_idx.x * block_dim.x) + thread_idx.x
+
+    # Convert to global index
+    var idx = batch_start_idx + local_idx
+
+    # Skip if this thread is outside the batch range
+    if local_idx >= batch_size or idx >= ref_coords_len:
+        return
+
+    # # Use fixed-size thread-local memory for profile instead of dynamic List
+    var profile_data = stack_allocation[
+        576, SIMD[DT, WIDTH]
+    ]()  # Adjust size based on your needs
     var profile_span = Span[
         SIMD[DT, WIDTH],
-        __origin_of(shared_profile),
-        address_space = AddressSpace.SHARED,
-    ](ptr=shared_profile, length=profile_len)
+        __origin_of(profile_data),
+    ](ptr=profile_data, length=profile_len // WIDTH)
+
+    # Load profile data
     var profile_ptr = fwd_profile.unsafe_ptr()
-    var profile_idx = 0
     for s in range(0, profile_len, WIDTH):
+        # if s // WIDTH < len(profile_span):  # Safety check
         var v = profile_ptr.load[width=WIDTH](s)
-        profile_span[profile_idx] = v
-        profile_idx += 1
-
-    # print(profile_span[0])
-    barrier()
-
-    var idx = (block_idx.x * block_dim.x) + thread_idx.x
-
-    if idx >= ref_coords_len:
-        return
+        profile_span[s // WIDTH] = v
 
     # Hard coded for now:
     var gap_open_penalty = 3
@@ -462,29 +664,23 @@ fn gpu_align(
     )
 
     # Get the profile vectors
-    # TODO: could be reused across a batch that uses the same query?
-    var p_vecs = ProfileVectors[DT, WIDTH](len(query_seq), ref_len=len(ref_seq))
+    var p_vecs = ProfileVectors[DT, WIDTH](len(query_seq))
 
-    # print("SPAN POST BARRIER:", profile_span[0])
-    var result = sw[DT, WIDTH, address_space = AddressSpace(3)](
+    # Call the sw alignment function
+    var result = sw[DT, WIDTH](
         ref_seq,
         ReferenceDirection.Forward,
         len(query_seq),
         gap_open_penalty,
         gap_ext_penalty,
-        profile_span,
+        profile_span,  # Use the fixed-size span instead of List
         p_vecs,
         -1,
         profile_bias,
         15,
     )
-    print(  #     "Score:",
-        result.best.score,
-        "query_end:",
-        result.best.query,
-        "ref_end:",
-        result.best.reference,
-    )
+
+    # Store results
     score_result_buffer[idx] = result.best.score - profile_bias
     query_end_result_buffer[idx] = result.best.query
     ref_end_result_buffer[idx] = result.best.reference
@@ -535,11 +731,18 @@ fn main() raises:
     # Read the fastas and encode the sequences
     var target_file = opts.get_string("target-fasta")
     var target_seqs = FastaRecord.slurp_fasta(target_file)
+
+    fn cmp_lens(lhs: FastaRecord, rhs: FastaRecord) capturing -> Bool:
+        return len(lhs.seq) > len(rhs.seq)
+
+    sort[cmp_lens](target_seqs)
     var targets = List[ByteFastaRecord](capacity=len(target_seqs))
     var ref_total_bytes = 0
     var ref_coords = List[LineCoords]()
     while len(target_seqs) > 0:
         var t = target_seqs.pop()
+        if len(t.seq) > 1024 * 3:
+            continue
         # I should be able to pass with ^ here, not sure why I can't
         var r = ByteFastaRecord(t.name, t.seq, matrix)
         var start = ref_total_bytes
@@ -547,8 +750,8 @@ fn main() raises:
         var end = ref_total_bytes
         ref_coords.append(LineCoords(start, end))
         targets.append(r^)
-        print("Remove break here")
-        break
+        # print("Remove break here")
+        # break
     targets.reverse()
 
     var query_file = opts.get_string("query-fasta")
@@ -567,92 +770,6 @@ fn main() raises:
         profiles.append(
             Profiles[SIMD_U8_WIDTH, SIMD_U16_WIDTH](q[], matrix, score_size)
         )
-
-    # var results = List[BenchmarkResults]()
-    # for _ in range(0, iterations):
-    #     var writer = DelimWriter(
-    #         BufferedWriter(open(output_file, "w")),
-    #         write_header=True,
-    #         delim=",",
-    #     )
-    #     # Align
-    #     print("Total query seqs:", len(queries), file=stderr)
-    #     print("Total target seqs:", len(targets), file=stderr)
-    #     print("Using", matrix_name, file=stderr)
-    #     print("Gap open penalty:", gap_open_score, file=stderr)
-    #     print("Gap ext penalty:", gap_extension_score, file=stderr)
-    #     print("U8 SIMD Width:", SIMD_U8_WIDTH, file=stderr)
-    #     print("U16 SIMD Width:", SIMD_U16_WIDTH, file=stderr)
-    #     var start = perf_counter()
-    #     var work: UInt64 = 0
-    #     for i in range(0, len(queries)):
-    #         # TODO: if query construction was done here, we could dispatch to 512 sometimes, which might be cheating for bench purposes.
-    #         var query = Pointer.address_of(queries[i])
-    #         var profiles = Pointer.address_of(profiles[i])
-    #         for j in range(0, len(targets)):
-    #             var target = Pointer.address_of(targets[j])
-    #             var result = ssw_align[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
-    #                 profile=profiles[].fwd,
-    #                 reference=target[].seq,
-    #                 query=query[].seq,
-    #                 reverse_profile=profiles[].rev,
-    #                 gap_open_penalty=gap_open_score,
-    #                 gap_extension_penalty=gap_extension_score,
-    #                 return_only_alignment_end=True,
-    #                 mask_length=15,
-    #             )
-    #             if result:
-    #                 writer.serialize(
-    #                     BasicAlignmentOutput(
-    #                         i,
-    #                         j,
-    #                         len(query[].seq),
-    #                         len(target[].seq),
-    #                         result.value(),
-    #                     )
-    #                 )
-    #             else:
-    #                 print("no result")
-    #             work += len(target[].seq) * len(query[].seq)
-    #     var end = perf_counter()
-
-    #     var elapsed = end - start
-    #     var cells_per_second = work.cast[DType.float64]() / elapsed
-    #     writer.flush()
-    #     print("Ran in", elapsed, "seconds", file=stderr)
-    #     print("Total cells updated :", work, file=stderr)
-    #     print("Cells per second:", cells_per_second, file=stderr)
-    #     print("GCUPs:", cells_per_second / 1000000000, file=stderr)
-    #     results.append(
-    #         BenchmarkResults(
-    #             len(queries),
-    #             len(targets),
-    #             len(queries[0].seq),
-    #             matrix_name,
-    #             gap_open_score,
-    #             gap_extension_score,
-    #             SIMD_U8_WIDTH,
-    #             SIMD_U16_WIDTH,
-    #             String(score_size),
-    #             elapsed,
-    #             work,
-    #             cells_per_second / 1000000000,
-    #         )
-    #     )
-
-    # var result = BenchmarkResults.average(results)
-    # var metric_writer = DelimWriter(
-    #     BufferedWriter(
-    #         open(metrics_file, "w") if metrics_file != "-" else stdout
-    #     ),
-    #     delim=",",
-    #     write_header=True,
-    # )
-    # metric_writer.serialize(result)
-    # metric_writer.flush()
-
-    ##############################################
-    # Now on the GPU
 
     var writer = DelimWriter(
         BufferedWriter(open("./gpu_results.csv", "w")),
@@ -690,11 +807,12 @@ fn main() raises:
     ctx.synchronize()
 
     # Create the host buffers
+
+    # Create the host buffers
     for i in range(0, len(queries)):
         var query = Pointer.address_of(queries[i])
         var profile = Pointer.address_of(profiles[i])
 
-        print("Zeroth elem:", profile[].fwd.profile_word.value()[0])
         var host_query = ctx.enqueue_create_host_buffer[DType.uint8](
             len(query[].seq)
         )
@@ -741,18 +859,20 @@ fn main() raises:
         memcpy(
             query[].seq.unsafe_ptr(), host_query.unsafe_ptr(), len(query[].seq)
         )
-        # TODO: there must be a better way
-        var segment_idx = 0
+
+        # Copy profile data
+        var profile_words = 0
         for segment in profile[].fwd.profile_word.value():
             for i in range(0, len(segment[])):
-                host_fwd_profile_span[segment_idx] = segment[][i]
-                segment_idx += 1
+                host_fwd_profile_span[profile_words] = segment[][i]
+                profile_words += 1
 
         host_query.enqueue_copy_to(dev_query)
         host_fwd_profile.enqueue_copy_to(dev_fwd_profile)
 
-        alias BLOCK_SIZE = 16
-        ctx.enqueue_function[gpu_align](
+        # Use batched processing instead of single kernel launch
+        process_in_batches(
+            ctx,
             dev_query,
             dev_ref_buffer,
             dev_coords,
@@ -762,20 +882,19 @@ fn main() raises:
             dev_ref_end_result_buffer,
             len(query[].seq),
             len(ref_coords),
-            len(profile[].fwd.profile_word.value()),
+            profile_words,
             profile[].fwd.bias.cast[DType.uint16](),
-            # grid_dim=ceildiv(len(ref_coords), BLOCK_SIZE),
-            # block_dim=BLOCK_SIZE,
-            grid_dim=1,
-            block_dim=1,
+            batch_size=3000,
         )
 
+        # Copy results back to host
         dev_score_result_buffer.enqueue_copy_to(host_score_result_buffer)
         dev_query_end_result_buffer.enqueue_copy_to(
             host_query_end_result_buffer
         )
         dev_ref_end_result_buffer.enqueue_copy_to(host_ref_end_result_buffer)
 
+        # Write results
         for j in range(0, len(ref_coords)):
             writer.serialize(
                 BasicAlignmentOutput(

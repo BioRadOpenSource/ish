@@ -392,9 +392,16 @@ fn main() raises:
     # Read the fastas and encode the sequences
     var target_file = opts.get_string("target-fasta")
     var target_seqs = FastaRecord.slurp_fasta(target_file)
+
+    fn cmp_lens(lhs: FastaRecord, rhs: FastaRecord) capturing -> Bool:
+        return len(lhs.seq) > len(rhs.seq)
+
+    sort[cmp_lens](target_seqs)
     var targets = List[ByteFastaRecord](capacity=len(target_seqs))
     while len(target_seqs) > 0:
         var t = target_seqs.pop()
+        if len(t.seq) > 1024 * 3:
+            continue
         # I should be able to pass with ^ here, not sure why I can't
         targets.append(ByteFastaRecord(t.name, t.seq, matrix))
     targets.reverse()

@@ -27,6 +27,10 @@ struct FastaRecord:
         to_ascii_uppercase(self.seq._buffer)
 
     @staticmethod
+    fn cmp_seq_len(read lhs: Self, read rhs: Self) capturing -> Bool:
+        return len(lhs.seq) > len(rhs.seq)
+
+    @staticmethod
     fn slurp_fasta(file: String) raises -> List[FastaRecord]:
         var reader = BufferedReader(open(file, "r"))
         var records = List[FastaRecord]()
