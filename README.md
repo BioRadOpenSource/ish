@@ -27,6 +27,49 @@ git checkout feat/check_cli_arg_len
 
 Mojo packages are hosted in a conda repo, once this tool is baked it can be published to the Modular channel and then installed via conda anywhere.
 
+## Usage
+
+```bash
+❯ ./ish --help
+ish
+Search for inexact patterns in files.
+
+ARGS:
+        <ARGS (>=1)>...
+                Files to search for the given pattern.
+FLAGS:
+        --help <Bool> [Default: False]
+                Show help message
+
+OPTIONS:
+        --pattern <String> [Required]
+                The pattern to search for.
+
+        --min-score <Int> [Default: 1]
+                The min score needed to return a match.
+
+        --match-algo <String> [Default: ssw]
+                The algorithm to use for matching: [naive_exact, ssw, sw_local]
+
+        --record-type <String> [Default: line]
+                The input record type: [line, fasta]
+```
+
+```bash
+# Some actual usage.
+❯ ./ish --pattern "blosum62" ---match-algo ssw ./ish_bench_aligner.mojo 
+./ish_bench_aligner.mojo:94             default_value=String("Blosum50"),
+./ish_bench_aligner.mojo:96                 "Scoring matrix to use. Currently supports: [Blosum50,"
+./ish_bench_aligner.mojo:97                 " Blosum62, ACTGN]"
+./ish_bench_aligner.mojo:379     if matrix_name == "Blosum50":
+./ish_bench_aligner.mojo:380         matrix = ScoringMatrix.blosum50()
+./ish_bench_aligner.mojo:381     elif matrix_name == "Blosum62":
+./ish_bench_aligner.mojo:382         matrix = ScoringMatrix.blosum62()
+./ish_bench_aligner.mojo:390     ## Assuming we are using Blosum50 AA matrix for everything below this for now.
+```
+
+**note** the `filepath:linenumber` in the match allows you to `cmd-click` on the match and have vscode open the file at that location.
+
 ## Match Methods
 
 - `ssw`: Striped Smith Waterman, SIMD accelerated, supports affine gaps and scoring matrices. TODO: non-ascii scoring matrix
@@ -58,6 +101,7 @@ Next Steps:
 - Add ability to set scoring matrix type (ascii, actgn, bl50, bl62)
 - Add tty detection
 - Turn colorization on and off based on tty
+- Switch to turn on/off the `filepath:linenumber` output
 
 Idea attribution:
 - SSW lib / parasail
