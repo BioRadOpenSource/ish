@@ -2,9 +2,9 @@
 
 Accelerated alignment on the CLI.
 
-:::warning
-`ish` is under active development.
-::::
+> ⚠️ **Warning**
+> 
+> `ish` is under active development.
 
 
 `ish` is a CLI tool for searching for matches against records using different alignment methods.
@@ -68,7 +68,9 @@ OPTIONS:
 ./ish_bench_aligner.mojo:390     ## Assuming we are using Blosum50 AA matrix for everything below this for now.
 ```
 
-**note** the `filepath:linenumber` in the match allows you to `cmd-click` on the match and have vscode open the file at that location.
+> 🔥 **Note**
+>
+> The `filepath:linenumber` in the match allows you to `cmd-click` on the match and have vscode open the file at that location.
 
 ## Match Methods
 
@@ -86,8 +88,9 @@ OPTIONS:
 
 This is a benchmarking tool based on `parasail_aligner`.
 
-:::Work in progress
-:::
+> ⚠️ **Warning**
+> 
+> `ish-aligner` is under active development.
 
 ## Future Work
 
