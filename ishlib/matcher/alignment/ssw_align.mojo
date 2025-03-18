@@ -2,210 +2,39 @@
 
 from builtin.math import max
 from collections import InlineArray
+from math import sqrt
 from memory import pack_bits, memset_zero
-from sys.intrinsics import likely, unlikely
-from sys.info import simdwidthof
+from sys.intrinsics import likely, unlikely, assume, prefetch
 
-alias SIMD_U8_WIDTH = simdwidthof[UInt8]()
-alias SIMD_U16_WIDTH = simdwidthof[UInt16]()
-
-alias NUM_TO_NT = InlineArray[UInt8, 5](
-    ord("A"), ord("C"), ord("G"), ord("T"), ord("N")
-)
-"""Table to convert an Int8 to the ascii value of a nucleotide"""
-# This table is used to transform nucleotide letters into numbers.
-alias NT_TO_NUM = InlineArray[UInt8, 128](
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    0,
-    4,
-    1,
-    4,
-    4,
-    4,
-    2,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    3,
-    0,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    0,
-    4,
-    1,
-    4,
-    4,
-    4,
-    2,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    3,
-    0,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-    4,
-)
-"""Table used to transform nucleotide letters into numbers."""
+from ishlib.matcher.alignment.scoring_matrix import ScoringMatrix
 
 
 @always_inline
-fn nt_to_num(owned seq: List[Int8]) -> List[UInt8]:
-    var out = List[UInt8](capacity=len(seq))
-    for value in seq:
-        out.append(NT_TO_NUM[Int(value[])])
-    return out
+fn saturating_sub[
+    data: DType, width: Int
+](lhs: SIMD[data, width], rhs: SIMD[data, width]) -> SIMD[data, width]:
+    """Saturating SIMD subtraction.
 
-
-fn nt_to_num(owned seq: List[UInt8]) -> List[UInt8]:
-    for value in seq:
-        value[] = NT_TO_NUM[Int(value[])]
-    return seq
+    https://stackoverflow.com/questions/33481295/saturating-subtract-add-for-unsigned-bytes
+    """
+    constrained[data.is_unsigned()]()
+    var resp = lhs - rhs
+    resp &= -(resp <= lhs).cast[data]()
+    return resp
 
 
 @always_inline
-fn num_to_nt(mut seq: List[UInt8]):
-    for value in seq:
-        value[] = NUM_TO_NT[Int(value[])]
+fn saturating_add[
+    data: DType, width: Int
+](lhs: SIMD[data, width], rhs: SIMD[data, width]) -> SIMD[data, width]:
+    """Saturating SIMD subtraction.
 
-
-@value
-struct ScoringMatrix:
-    # TODO: force this to be an inline list that can be copied onto the profile?
-    var values: List[Int8]
-    var size: UInt32  # The number of values represented (which is the length of an edge of the square matrix)
-
-    fn set_last_row_to_value(mut self, value: Int8 = 2):
-        for i in range((self.size - 1) * self.size, len(self.values)):
-            self.values[i] = value
-
-    @staticmethod
-    fn default_matrix(
-        size: UInt32, matched: Int8 = 2, mismatched: Int8 = -2
-    ) -> Self:
-        var values = List[Int8](capacity=Int(size * size))
-        for _ in range(0, Int(size * size)):
-            values.append(0)
-        for i in range(0, size):
-            for j in range(0, size):
-                if i == j:
-                    values[i * size + j] = matched  # match
-                else:
-                    values[i * size + j] = mismatched  # Mismatch
-        return Self(values, size)
-
-    @staticmethod
-    fn actg_default_matrix() -> Self:
-        return Self.default_matrix(4)
-
-    @staticmethod
-    fn actgn_default_matrix() -> Self:
-        return Self.default_matrix(5)
-
-    @staticmethod
-    fn all_ascii_default_matrix() -> Self:
-        return Self.default_matrix(256)
-
-    fn get(read self, i: Int, j: Int) -> Int8:
-        return self.values[i * self.size + j]
+    https://stackoverflow.com/questions/33481295/saturating-subtract-add-for-unsigned-bytes
+    """
+    constrained[data.is_unsigned()]()
+    var resp = lhs + rhs
+    resp |= -(resp < lhs).cast[data]()
+    return resp
 
 
 @value
@@ -214,6 +43,7 @@ struct Cigar:
 
 
 @value
+@register_passable
 struct ReferenceDirection:
     """Direction of the reference sequence."""
 
@@ -226,6 +56,7 @@ struct ReferenceDirection:
 
 
 @value
+@register_passable
 struct ScoreSize:
     """Controls the precision used for alignment scores.
 
@@ -244,6 +75,38 @@ struct ScoreSize:
     fn __eq__(read self, read other: Self) -> Bool:
         return self.value == other.value
 
+    fn __str__(read self) -> String:
+        if self.value == Self.Byte.value:
+            return "byte"
+        elif self.value == self.Word.value:
+            return "word"
+        else:
+            return "adaptive"
+
+
+@value
+@register_passable("trivial")
+struct Alignment:
+    var score1: UInt16
+    var ref_begin1: Int32
+    var ref_end1: Int32
+    var read_begin1: Int32
+    var read_end1: Int32
+
+
+@value
+@register_passable("trivial")
+struct AlignmentResult:
+    var best: AlignmentEnd
+
+
+@value
+@register_passable("trivial")
+struct AlignmentEnd:
+    var score: UInt16
+    var reference: Int32  # 0-based
+    var query: Int32  # alignment ending position on query, 0-based
+
 
 @value
 struct ProfileVectors[dt: DType, width: Int]:
@@ -252,6 +115,8 @@ struct ProfileVectors[dt: DType, width: Int]:
     var pv_e: List[SIMD[dt, width]]
     var pv_h_max: List[SIMD[dt, width]]
     var zero: SIMD[dt, width]
+    var max_column: List[SIMD[dt, 1]]
+    var end_query_column: List[Int32]
     var segment_length: Int32
     var query_len: Int32
 
@@ -282,6 +147,11 @@ struct ProfileVectors[dt: DType, width: Int]:
         memset_zero(pv_e.unsafe_ptr(), Int(segment_length))
         memset_zero(pv_h_max.unsafe_ptr(), Int(segment_length))
 
+        # List to record the largest score of each reference position
+        var max_column = List[SIMD[dt, 1]]()
+        # List to record the alignment query ending position of the largest score of each reference position
+        var end_query_column = List[Int32]()
+
         self.pv_h_store = pv_h_store
         self.pv_h_load = pv_h_load
         self.pv_e = pv_e
@@ -289,6 +159,8 @@ struct ProfileVectors[dt: DType, width: Int]:
         self.zero = zero
         self.segment_length = segment_length
         self.query_len = query_len
+        self.max_column = max_column
+        self.end_query_column = end_query_column
 
     fn zero_out(mut self):
         memset_zero(self.pv_h_store.unsafe_ptr(), Int(self.segment_length))
@@ -296,9 +168,15 @@ struct ProfileVectors[dt: DType, width: Int]:
         memset_zero(self.pv_e.unsafe_ptr(), Int(self.segment_length))
         memset_zero(self.pv_h_max.unsafe_ptr(), Int(self.segment_length))
 
+    fn init_columns(mut self, ref_len: Int):
+        self.max_column.resize(ref_len, 0)
+        self.end_query_column.resize(ref_len, 0)
+        memset_zero(self.max_column.unsafe_ptr(), ref_len)
+        memset_zero(self.end_query_column.unsafe_ptr(), ref_len)
+
 
 @value
-struct Profile:
+struct Profile[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
     alias ByteVProfile = List[SIMD[DType.uint8, SIMD_U8_WIDTH]]
     alias WordVProfile = List[SIMD[DType.uint16, SIMD_U16_WIDTH]]
 
@@ -366,7 +244,7 @@ struct Profile:
 
     @staticmethod
     fn generate_query_profile[
-        T: DType, size: Int = simdwidthof[T]()
+        T: DType, size: Int
     ](
         query: Span[UInt8], read score_matrix: ScoringMatrix, bias: UInt8
     ) -> List[SIMD[T, size]]:
@@ -408,67 +286,14 @@ struct Profile:
         return profile
 
 
-@value
-@register_passable("trivial")
-struct Alignment:
-    var score1: UInt16
-    var score2: UInt16
-    var ref_begin1: Int32
-    var ref_end1: Int32
-    var read_begin1: Int32
-    var read_end1: Int32
-    var ref_end2: Int32
-
-
-@value
-@register_passable("trivial")
-struct AlignmentResult:
-    var best: AlignmentEnd
-    var second_best: AlignmentEnd
-
-
-@value
-@register_passable("trivial")
-struct AlignmentEnd:
-    var score: UInt16
-    var reference: Int32  # 0-based
-    var query: Int32  # alignment ending position on query, 0-based
-
-
-@always_inline
-fn saturating_sub[
-    data: DType, width: Int
-](lhs: SIMD[data, width], rhs: SIMD[data, width]) -> SIMD[data, width]:
-    """Saturating SIMD subtraction.
-
-    https://stackoverflow.com/questions/33481295/saturating-subtract-add-for-unsigned-bytes
-    """
-    constrained[data.is_unsigned()]()
-    var resp = lhs - rhs
-    resp &= -(resp <= lhs).cast[data]()
-    return resp
-
-
-@always_inline
-fn saturating_add[
-    data: DType, width: Int
-](lhs: SIMD[data, width], rhs: SIMD[data, width]) -> SIMD[data, width]:
-    """Saturating SIMD subtraction.
-
-    https://stackoverflow.com/questions/33481295/saturating-subtract-add-for-unsigned-bytes
-    """
-    constrained[data.is_unsigned()]()
-    var resp = lhs + rhs
-    resp |= -(resp < lhs).cast[data]()
-    return resp
-
-
-fn ssw_align(
-    mut profile: Profile,
+fn ssw_align[
+    SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int
+](
+    mut profile: Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH],
     read matrix: ScoringMatrix,
     reference: Span[UInt8],
     query: Span[UInt8],
-    mut reverse_profile: Profile,
+    mut reverse_profile: Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH],
     *,
     gap_open_penalty: UInt8 = 3,
     gap_extension_penalty: UInt8 = 1,
@@ -495,7 +320,6 @@ fn ssw_align(
             mask_length,
         )
         if profile.profile_word and bests.best.score == 255:
-            # print("Doing Word SW")
             bests = sw[DType.uint16, SIMD_U16_WIDTH](
                 reference,
                 ReferenceDirection.Forward,
@@ -508,6 +332,7 @@ fn ssw_align(
                 profile.bias.cast[DType.uint16](),
                 mask_length,
             )
+            bests.best.score -= profile.bias.cast[DType.uint16]()
             used_word = True
         elif bests.best.score == 255:
             print(
@@ -529,6 +354,8 @@ fn ssw_align(
             profile.bias.cast[DType.uint16](),
             mask_length,
         )
+        bests.best.score -= profile.bias.cast[DType.uint16]()
+
         used_word = True
     else:
         print("Failed to provide a valid query profile")
@@ -544,65 +371,17 @@ fn ssw_align(
     var score2: UInt16 = 0
     var ref_end2: Int32 = -1
 
-    if mask_length >= 15:
-        score2 = bests.second_best.score
-        ref_end2 = bests.second_best.reference
-
     if return_only_alignment_end or ref_end1 <= 0 or read_end1 <= 0:
         return Alignment(
             score1=score1,
-            score2=score2,
             ref_begin1=-1,
             ref_end1=ref_end1,
             read_begin1=-1,
             read_end1=read_end1,
-            ref_end2=ref_end2,
         )
 
     # Get the start position
     var bests_rev: AlignmentResult
-    # Reverse the query sequence and truncate it
-    # print("read_end1", read_end1)
-    # print("Reverse and truncate query")
-    # print("was len", len(profile.query))
-    # var query_reverse = List[UInt8](capacity=Int(read_end1 + 1))
-    # var count = 0
-    # for nt in query.__reversed__():
-    #     if count == Int(read_end1 + 1):
-    #         break
-    #     query_reverse.append(nt[])
-    #     count += 1
-    # # print("now ", len(query_reverse))
-    # # print("reflen: ", len(reference[: Int(ref_end1 + 1)]))
-
-    # # var query_reverse_truncated = query_reverse[0: Int(read_end1)+1]
-    # if not used_word:
-    #     var profile = Profile(query_reverse, matrix, ScoreSize.Byte)
-    #     # print("Running rev align")
-    #     bests_rev = sw[DType.uint8, SIMD_U8_WIDTH](
-    #         reference[: Int(ref_end1 + 1)],
-    #         ReferenceDirection.Reverse,
-    #         len(query_reverse),
-    #         gap_open_penalty,
-    #         gap_extension_penalty,
-    #         profile.profile_byte.value(),
-    #         -1,
-    #         profile.bias,
-    #         mask_length,
-    #     )
-    # else:
-    #     var profile = Profile(query_reverse, matrix, ScoreSize.Word)
-    #     bests_rev = sw[DType.uint16, SIMD_U16_WIDTH](
-    #         reference[: Int(ref_end1 + 1)],
-    #         ReferenceDirection.Reverse,
-    #         len(query_reverse),
-    #         gap_open_penalty.cast[DType.uint16](),
-    #         gap_extension_penalty.cast[DType.uint16](),
-    #         profile.profile_word.value(),
-    #         -1,
-    #         profile.bias.cast[DType.uint16](),
-    #         mask_length,
-    #     )
     if not used_word:
         # print("Running rev align")
         bests_rev = sw[DType.uint8, SIMD_U8_WIDTH](
@@ -637,25 +416,14 @@ fn ssw_align(
     # Skipping CIGAR for now
     return Alignment(
         score1=score1,
-        score2=score2,
         ref_begin1=ref_begin1,
         ref_end1=ref_end1,
         read_begin1=read_begin1,
         read_end1=read_end1,
-        ref_end2=ref_end2,
     )
 
-    # return Alignment(
-    #     score1=score1,
-    #     score2=score2,
-    #     ref_begin1=-1,
-    #     ref_end1=ref_end1,
-    #     read_begin1=-1,
-    #     read_end1=read_end1,
-    #     ref_end2=ref_end2,
-    # )
 
-
+@export
 fn sw[
     dt: DType, width: Int
 ](
@@ -677,11 +445,13 @@ fn sw[
 
     """
     p_vecs.zero_out()
+    p_vecs.init_columns(len(reference))
     var max_score = UInt8(0).cast[dt]()
     var end_query: Int32 = query_len - 1
     var end_reference: Int32 = -1  # 0 based best alignment ending point; initialized as isn't aligned -1
     # var segment_length = (query_len + width - 1) // width
     var segment_length = p_vecs.segment_length
+    assume(segment_length > 0)
 
     # Note:
     # H - Score for match / mismatch (diagonal move)
@@ -692,20 +462,24 @@ fn sw[
     # print("querylen: ", query_len)
     # print("SIMD DType", dt)
     # print("SIMD WIDTH", width)
-    # for i in range(0, 256):  # TODO: hardcoded, should be length alphabet
-    #     print(chr(Int(i)), ": ", sep="", end="")
+    # print("bias", bias)
+    # for i in range(
+    #     0, ScoringMatrix.blosm50().size
+    # ):  # TODO: hardcoded, should be length alphabet
+    #     print(chr(Int(NUM_TO_AA[i])), ": ", sep="", end="")
     #     for j in range(0, segment_length):
     #         print(profile[i * segment_length + j], ", ", end="")
     #     print()
     # print("Initializing")
 
     # List to record the largest score of each reference position
-    var max_column = List[SIMD[dt, 1]](capacity=len(reference))
+    # var max_column = List[SIMD[dt, 1]](capacity=len(reference))
     # List to record the alignment query ending position of the largest score of each reference position
-    var end_query_column = List[Int32](capacity=len(reference))
-    for _ in range(0, len(reference)):
-        max_column.append(UInt8(0).cast[dt]())
-        end_query_column.append(0)
+    # var end_query_column = List[Int32](capacity=len(reference))
+
+    # for _ in range(0, len(reference)):
+    #     p_vecs.max_column.append(UInt8(0).cast[dt]())
+    #     p_vecs.end_query_column.append(0)
 
     var zero = SIMD[dt, width](0)
 
@@ -717,7 +491,6 @@ fn sw[
     # Trace the highest score till the previous column
     var v_max_mark = zero  # aka: vMaxMark
 
-    var edge: Int32 = 0
     var begin: Int32 = 0
     var end: Int32 = len(reference)
     var step: Int32 = 1
@@ -730,7 +503,10 @@ fn sw[
     # print("Done with init")
     var i = begin
     while likely(i != end):
-        # print("Outer loop:", i, "-", chr(Int(reference[i])))
+        assume(i >= 0)
+        # print(
+        #     "Outer loop:", i, "-"
+        # )  # , chr(Int(NUM_TO_AA[Int(reference[i])])))
         # Initialize to 0, any errors in vH will be corrected in lazy_f
         var e = zero
         # Represents scores for alignments that end with gaps in the reference seq
@@ -749,32 +525,32 @@ fn sw[
         # print("vH State:", v_h)
         # print("pvHLoad State:", end="")
         # for i in range(0, segment_length):
-        #     print(pv_h_load[i], ", ", end="")
+        #     print(p_vecs.pv_h_load[i], ", ", end="")
         # print()
 
         # print("pvHStore State:", end="")
         # for i in range(0, segment_length):
-        #     print(pv_h_store[i], ", ", end="")
+        #     print(p_vecs.pv_h_store[i], ", ", end="")
         # print()
 
         # print("pvE State:", end="")
         # for i in range(0, segment_length):
-        #     print(pv_e[i], ", ", end="")
+        #     print(p_vecs.pv_e[i], ", ", end="")
         # print()
 
         # print("pvHMax State:", end="")
         # for i in range(0, segment_length):
-        #     print(pv_h_max[i], ", ", end="")
+        #     print(p_vecs.pv_h_max[i], ", ", end="")
         # print()
 
         # print("max_column State:", end="")
         # for i in range(0, len(reference)):
-        #     print(max_column[i], ", ", end="")
+        #     print(p_vecs.max_column[i], ", ", end="")
         # print()
 
         # print("end_read_column State:", end="")
         # for i in range(0, len(reference)):
-        #     print(end_query_column[i], ", ", end="")
+        #     print(p_vecs.end_query_column[i], ", ", end="")
         # print()
 
         # Inner loop to process the query sequence
@@ -820,14 +596,24 @@ fn sw[
 
         # print("\tStarting LazyF")
         # Lazy_F loop, disallows adjacent insertion and then deletion from SWPS3
+        # Possible speedup - check if v_f has any updates to start with
+        # var break_out = (v_f == zero).reduce_and()
+        # var k = 0
+        # while not break_out and k < width:
+        # k += 1
         var break_out = False
-        for k in range(0, width):
+
+        @parameter
+        for _k in range(0, width):
             v_f = v_f.shift_right[1]()
             # print("\tLeft Shift vF:", v_f)
             # print("\tWalking Segments")
             for j in range(0, segment_length):
+                # print("\t\tvF:               ", v_f)
                 v_h = p_vecs.pv_h_store[j]
+                # print("\t\tvH from store:    ", v_h)
                 v_h = max(v_h, v_f)
+                # print("\t\tvH post max store:", v_h)
                 # print("\t\tvH after left shift and max vF", v_h)
                 v_max_column = max(v_max_column, v_h)
                 # print("\t\t vMaxColumn State:", v_max_column)
@@ -840,6 +626,7 @@ fn sw[
 
                 # Early termination check
                 var v_temp = saturating_sub(v_f, v_h)
+                # print("\t\tnew v_temp: ", v_temp)
                 var packed = v_temp == zero
                 if unlikely(packed.reduce_and()):
                     # print("\t\tCan terminate early")
@@ -869,10 +656,8 @@ fn sw[
                     p_vecs.pv_h_max[j] = p_vecs.pv_h_store[j]
 
         # Record the max score of current column
-        max_column[i] = v_max_column.reduce_max()
-        if max_column[i] == terminate:
-            # TODO: What's this doing?
-            # print("terminate early")
+        p_vecs.max_column[i] = v_max_column.reduce_max()
+        if unlikely(p_vecs.max_column[i] == terminate):
             break
 
         # Increment the while loop
@@ -887,64 +672,50 @@ fn sw[
                 if temp < Int(end_query):
                     end_query = temp
 
-        # if pv_h_max[i / SIMD_U8_WIDTH][i % SIMD_U8_WIDTH] == max_score:
-        #     var temp = i // SIMD_U8_WIDTH + (i % 16) * segment_length
-        #     if temp < end_query:
-        #         end_query = temp
-
     # print("pvHMax State:", end="")
     # for i in range(0, segment_length):
-    #     print(pv_h_max[i], ", ", end="")
+    #     print(p_vecs.pv_h_max[i], ", ", end="")
     # print()
 
     # print("max_column State:", end="")
     # for i in range(0, len(reference)):
-    #     print(max_column[i], ", ", end="")
+    #     print(p_vecs.max_column[i], ", ", end="")
     # print()
 
     # print("end_read_column State:", end="")
     # for i in range(0, len(reference)):
-    #     print(end_query_column[i], ", ", end="")
+    #     print(p_vecs.end_query_column[i], ", ", end="")
     # print()
     # Find the most possible 2nd alignment
     var score_0 = max_score + bias if max_score + bias >= 255 else max_score
     var bests = AlignmentResult(
         AlignmentEnd(score_0.cast[DType.uint16](), end_reference, end_query),
-        AlignmentEnd(0, 0, 0),
     )
 
     # Candidate for SIMD?
-    edge = (end_reference - mask_length) if (
-        end_reference - mask_length
-    ) > 0 else 0
-    for i in range(0, edge):
-        if max_column[i] > bests.second_best.score.cast[dt]():
-            bests.second_best.score = max_column[i].cast[DType.uint16]()
-            bests.second_best.reference = i
+    # edge = (end_reference - mask_length) if (
+    #     end_reference - mask_length
+    # ) > 0 else 0
+    # for i in range(0, edge):
+    #     if p_vecs.max_column[i] > bests.second_best.score.cast[dt]():
+    #         bests.second_best.score = p_vecs.max_column[i].cast[DType.uint16]()
+    #         bests.second_best.reference = i
 
-    edge = (
-        len(reference) if (end_reference + mask_length)
-        > len(reference) else end_reference + mask_length
-    )
-    for i in range(edge + 1, len(reference)):
-        if max_column[i] > bests.second_best.score.cast[dt]():
-            bests.second_best.score = max_column[i].cast[DType.uint16]()
-            bests.second_best.reference = i
-
-    # print(
-    #     "score:",
-    #     bests[0].score,
-    #     "ref:",
-    #     bests[0].reference,
-    #     "read:",
-    #     bests[0].query,
+    # edge = (
+    #     len(reference) if (end_reference + mask_length)
+    #     > len(reference) else end_reference + mask_length
     # )
+    # for i in range(edge + 1, len(reference)):
+    #     if p_vecs.max_column[i] > bests.second_best.score.cast[dt]():
+    #         bests.second_best.score = p_vecs.max_column[i].cast[DType.uint16]()
+    #         bests.second_best.reference = i
+
     # print(
-    #     "score:",
-    #     bests[1].score,
+    #     "BEST: score:",
+    #     bests.best.score,
     #     "ref:",
-    #     bests[1].reference,
+    #     bests.best.reference,
     #     "read:",
-    #     bests[1].query,
+    #     bests.best.query,
     # )
     return bests

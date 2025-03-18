@@ -9,7 +9,7 @@ from sys import stdout
 
 
 @value
-struct SearchRunner[M: Matcher]:
+struct LineSearchRunner[M: Matcher]:
     var settings: SearcherSettings
     var matcher: M
 
@@ -27,6 +27,7 @@ struct SearchRunner[M: Matcher]:
 
         var line_number = 1
         while True:
+            buffer.clear()
             if reader.read_until(buffer) == 0:
                 break
             var m = self.matcher.first_match(buffer, self.settings.pattern)

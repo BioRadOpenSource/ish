@@ -1,4 +1,6 @@
 """Smith-Waterman local alignment."""
+from sys.info import simdwidthof
+
 from ishlib.matcher import Matcher, MatchResult
 from ishlib.matcher.alignment.ssw_align import (
     ssw_align,
@@ -10,22 +12,26 @@ from ishlib.matcher.alignment.ssw_align import (
 
 @value
 struct SSWMatcher[mut: Bool, //, origin: Origin[mut]](Matcher):
+    alias SIMD_U8_WIDTH = simdwidthof[UInt8]() // 2
+    alias SIMD_U16_WIDTH = simdwidthof[UInt16]() // 2
     var pattern: Span[UInt8, origin]
     var rev_pattern: List[UInt8]
-    var profile: Profile
-    var reverse_profile: Profile
+    var profile: Profile[Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH]
+    var reverse_profile: Profile[Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH]
     var matrix: ScoringMatrix
 
     fn __init__(out self, pattern: Span[UInt8, origin]):
-        var matrix = ScoringMatrix.default_matrix(256, matched=2, mismatched=-2)
+        var matrix = ScoringMatrix.all_ascii_default_matrix()
         self.matrix = matrix
         self.pattern = pattern
         self.rev_pattern = List[UInt8](capacity=len(pattern))
         for char in reversed(pattern):
             self.rev_pattern.append(char[])
-        var profile = Profile(self.pattern, self.matrix, ScoreSize.Adaptive)
+        var profile = Profile[Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH](
+            self.pattern, self.matrix, ScoreSize.Adaptive
+        )
         self.profile = profile
-        var reverse_profile = Profile(
+        var reverse_profile = Profile[Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH](
             self.rev_pattern, self.matrix, ScoreSize.Adaptive
         )
         self.reverse_profile = reverse_profile

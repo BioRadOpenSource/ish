@@ -15,6 +15,7 @@ struct SearcherSettings:
     """The minimum score needed to return a match."""
 
     var match_algo: String
+    var record_type: String
 
     @staticmethod
     fn from_args() raises -> Optional[Self]:
@@ -31,7 +32,7 @@ struct SearcherSettings:
         )
         parser.add_opt(
             OptConfig(
-                "min_score",
+                "min-score",
                 OptKind.IntLike,
                 default_value=String("1"),
                 description="The min score needed to return a match.",
@@ -39,11 +40,25 @@ struct SearcherSettings:
         )
         parser.add_opt(
             OptConfig(
-                "match_algo",
+                "match-algo",
                 OptKind.StringLike,
-                default_value=String("naive_exact"),
-                description="The algorithm to use for matching.",
+                default_value=String("ssw"),
+                description=(
+                    "The algorithm to use for matching: [naive_exact, ssw,"
+                    " sw_local]"
+                ),
             )
+        )
+        parser.add_opt(
+            OptConfig(
+                "record-type",
+                OptKind.StringLike,
+                default_value=String("line"),
+                description="The input record type: [line, fasta]",
+            )
+        )
+        parser.expect_at_least_n_args(
+            1, "Files to search for the given pattern."
         )
 
         try:
@@ -53,14 +68,15 @@ struct SearcherSettings:
                 return None
 
             var pattern = List(opts.get_string("pattern").as_bytes())
-            var min_score = opts.get_int("min_score")
-            var match_algo = opts.get_string("match_algo")
+            var min_score = opts.get_int("min-score")
+            var match_algo = opts.get_string("match-algo")
+            var record_type = opts.get_string("record-type")
             var files = opts.args
             if len(files) == 0:
                 print("missing files")
                 raise "Expected files, found none."
 
-            return Self(files, pattern, min_score, match_algo)
+            return Self(files, pattern, min_score, match_algo, record_type)
         except e:
             print(parser.help_msg())
             print(e)
