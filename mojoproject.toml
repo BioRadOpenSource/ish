@@ -5,22 +5,22 @@ channels = [
     "https://conda.modular.com/max",
     "https://repo.prefix.dev/modular-community",
     "conda-forge",
-    "bioconda"
+    "bioconda",
 ]
 name = "ish"
-platforms = ["linux-64"]
+platforms = ["osx-arm64", "linux-64"]
 version = "0.1.0"
 
 [tasks]
-build-bench = "magic run mojo build -D SIMD_MOD=1 --march native -I /home/ubuntu/dev/ExtraMojo -I ./ishlib -o ish-aligner ./ish_bench_aligner.mojo"
-build-bench-128 = "magic run mojo build -D SIMD_MOD=4 --march native -I /home/ubuntu/dev/ExtraMojo -I ./ishlib -o ish-aligner-128 ./ish_bench_aligner.mojo"
-build-bench-256 = "magic run mojo build -D SIMD_MOD=2 --march native -I /home/ubuntu/dev/ExtraMojo -I ./ishlib -o ish-aligner-256 ./ish_bench_aligner.mojo"
-build-bench-512 = "magic run mojo build -D SIMD_MOD=1 --march native -I /home/ubuntu/dev/ExtraMojo -I ./ishlib -o ish-aligner-512 ./ish_bench_aligner.mojo"
-build = "magic run mojo build -I /home/ubuntu/dev/ExtraMojo -o ish main.mojo"
-pkglib = "magic run mojo package -I /home/ubuntu/dev/ExtraMojo ./ishlib"
+build-bench = "magic run mojo build -D SIMD_MOD=1 --march native -I /Users/u103330/dev/ExtraMojo -I ./ishlib -o ish-aligner ./ish_bench_aligner.mojo"
+build-bench-128 = "magic run mojo build -D SIMD_MOD=4 --march native -I /Users/u103330/dev/ExtraMojo -I ./ishlib -o ish-aligner-128 ./ish_bench_aligner.mojo"
+build-bench-256 = "magic run mojo build -D SIMD_MOD=2 --march native -I /Users/u103330/dev/ExtraMojo -I ./ishlib -o ish-aligner-256 ./ish_bench_aligner.mojo"
+build-bench-512 = "magic run mojo build -D SIMD_MOD=1 --march native -I /Users/u103330/dev/ExtraMojo -I ./ishlib -o ish-aligner-512 ./ish_bench_aligner.mojo"
+build = "magic run mojo build -I /Users/u103330/dev/ExtraMojo -o ish main.mojo"
+pkglib = "magic run mojo package -I /Users/u103330/dev/ExtraMojo ./ishlib"
 testlib = "magic run mojo test -I ./ishlib ./tests"
 
 [dependencies]
 max = "=25.1.0"
-fasta3 = { version = ">=36.3.8,<37", channel = "bioconda" }
+#fasta3 = { version = ">=36.3.8,<37", channel = "bioconda" }
 # extramojo = ">=0.9.0,<0.10"
