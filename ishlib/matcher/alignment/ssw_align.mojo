@@ -4,7 +4,6 @@ from builtin.math import max
 from collections import InlineArray
 from math import sqrt
 from memory import pack_bits, memset_zero
-from sys.intrinsics import likely, unlikely, assume, prefetch
 
 from ishlib.matcher.alignment.scoring_matrix import ScoringMatrix
 
@@ -451,7 +450,6 @@ fn sw[
     var end_reference: Int32 = -1  # 0 based best alignment ending point; initialized as isn't aligned -1
     # var segment_length = (query_len + width - 1) // width
     var segment_length = p_vecs.segment_length
-    assume(segment_length > 0)
 
     # Note:
     # H - Score for match / mismatch (diagonal move)
@@ -502,8 +500,7 @@ fn sw[
         step = -1
     # print("Done with init")
     var i = begin
-    while likely(i != end):
-        assume(i >= 0)
+    while i != end:
         # print(
         #     "Outer loop:", i, "-"
         # )  # , chr(Int(NUM_TO_AA[Int(reference[i])])))
@@ -628,7 +625,7 @@ fn sw[
                 var v_temp = saturating_sub(v_f, v_h)
                 # print("\t\tnew v_temp: ", v_temp)
                 var packed = v_temp == zero
-                if unlikely(packed.reduce_and()):
+                if packed.reduce_and():
                     # print("\t\tCan terminate early")
                     break_out = True
                     break
@@ -644,7 +641,7 @@ fn sw[
             var temp = v_max_score.reduce_max()
             v_max_mark = v_max_score
 
-            if likely(temp > max_score):
+            if temp > max_score:
                 max_score = temp
                 if (max_score + bias) >= SIMD[dt, 1].MAX:
                     # print("OVERFLOW")
@@ -657,7 +654,7 @@ fn sw[
 
         # Record the max score of current column
         p_vecs.max_column[i] = v_max_column.reduce_max()
-        if unlikely(p_vecs.max_column[i] == terminate):
+        if p_vecs.max_column[i] == terminate:
             break
 
         # Increment the while loop
