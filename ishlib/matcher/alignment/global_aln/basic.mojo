@@ -10,8 +10,8 @@ from ishlib.matcher.alignment.scoring_matrix import ScoringMatrix
 fn needleman_wunsch_full_naive[
     DT: DType = DType.int32
 ](
-    seq1: Span[UInt8],
-    seq2: Span[UInt8],
+    target: Span[UInt8],
+    query: Span[UInt8],
     scoring_matrix: ScoringMatrix,
     *,
     match_score: Scalar[DT] = 1,
@@ -31,17 +31,27 @@ fn needleman_wunsch_full_naive[
     from ishlib.matcher.alignment.scoring_matrix import ScoringMatrix
 
     var score_matrix = ScoringMatrix.actgn_matrix()
-    var result = needleman_wunsch_full_naive( "ATGC".as_bytes(), "ATTGCC".as_bytes(), score_matrix)
+    var result = needleman_wunsch_full_naive(
+        score_matrix.convert_ascii_to_encoding("ATGC".as_bytes()),
+        score_matrix.convert_ascii_to_encoding("ATTGCC".as_bytes()),
+        score_matrix
+    )
     assert_equal(result.score, 2)
-    result = needleman_wunsch_full_naive("AAAA".as_bytes(), "ATTGCC".as_bytes(), score_matrix)
+    result = needleman_wunsch_full_naive(
+        score_matrix.convert_ascii_to_encoding("AAAA".as_bytes()),
+        score_matrix.convert_ascii_to_encoding("ATTGCC".as_bytes()),
+        score_matrix
+    )
     assert_equal(result.score, -8)
-    result = needleman_wunsch_full_naive("GATTACA".as_bytes(), "GCATGCN".as_bytes(), score_matrix)
+    result = needleman_wunsch_full_naive(
+        score_matrix.convert_ascii_to_encoding("GATTACA".as_bytes()),
+        score_matrix.convert_ascii_to_encoding("GCATGCN".as_bytes()),
+        score_matrix
+    )
     assert_equal(result.score, 2)
     ```
     """
     alias NUM = Scalar[DT]
-    var query = scoring_matrix.convert_ascii_to_encoding(seq1)
-    var target = scoring_matrix.convert_ascii_to_encoding(seq2)
 
     # Init the sizes
     var rows = len(query) + 1
@@ -150,9 +160,9 @@ fn needleman_wunsch_full_naive[
 fn needleman_wunsch_parasail[
     DT: DType = DType.int32
 ](
-    seq1: Span[UInt8],
-    seq2: Span[UInt8],
-    scoring_matrix: ScoringMatrix,
+    query: Span[UInt8],
+    target: Span[UInt8],
+    read scoring_matrix: ScoringMatrix,
     *,
     match_score: Scalar[DT] = 1,
     mismatch_score: Scalar[DT] = -1,
@@ -160,6 +170,8 @@ fn needleman_wunsch_parasail[
     gap_extension_penalty: Scalar[DT] = -1,
 ) -> AlignmentResult:
     """Needleman-Wunsch algorithm for global sequence alignment with affine gap penalties.
+
+    Note: query and target need to have already been encoded by the matrix.
 
     - H: Main scoring matrix (match/mismatc)
     - E: Gap in vertical direction (gap in seq2, (target))
@@ -171,17 +183,27 @@ fn needleman_wunsch_parasail[
     from ishlib.matcher.alignment.scoring_matrix import ScoringMatrix
 
     var score_matrix = ScoringMatrix.actgn_matrix()
-    var result = needleman_wunsch_parasail( "ATGC".as_bytes(), "ATTGCC".as_bytes(), score_matrix)
+    var result = needleman_wunsch_parasail(
+        score_matrix.convert_ascii_to_encoding("ATGC".as_bytes()),
+        score_matrix.convert_ascii_to_encoding("ATTGCC".as_bytes()),
+        score_matrix
+    )
     assert_equal(result.score, 2)
-    result = needleman_wunsch_parasail("AAAA".as_bytes(), "ATTGCC".as_bytes(), score_matrix)
+    result = needleman_wunsch_parasail(
+        score_matrix.convert_ascii_to_encoding("AAAA".as_bytes()),
+        score_matrix.convert_ascii_to_encoding("ATTGCC".as_bytes()),
+        score_matrix
+    )
     assert_equal(result.score, -8)
-    result = needleman_wunsch_parasail("GATTACA".as_bytes(), "GCATGCN".as_bytes(), score_matrix)
+    result = needleman_wunsch_parasail(
+        score_matrix.convert_ascii_to_encoding("GATTACA".as_bytes()),
+        score_matrix.convert_ascii_to_encoding("GCATGCN".as_bytes()),
+        score_matrix
+    )
     assert_equal(result.score, 2)
     ```
     """
     alias NUM = Scalar[DT]
-    var query = scoring_matrix.convert_ascii_to_encoding(seq1)
-    var target = scoring_matrix.convert_ascii_to_encoding(seq2)
 
     # Init the sizes
     var rows = len(query) + 1
@@ -219,6 +241,7 @@ fn needleman_wunsch_parasail[
             var E_open = WH + gap_open_penalty
             var E_ext = E + gap_extension_penalty
             E = max(E_open, E_ext)
+
             var H_dag = NWH + scoring_matrix.get(
                 Int(query[i - 1]), Int(target[j - 1])
             ).cast[DT]()
@@ -227,5 +250,5 @@ fn needleman_wunsch_parasail[
 
     var score = H[len(target)]
     return AlignmentResult(
-        score.cast[DType.int32](), None, None, coords=(0, len(seq2))
+        score.cast[DType.int32](), None, None, coords=(0, len(target))
     )
