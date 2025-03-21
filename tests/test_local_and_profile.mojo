@@ -3,7 +3,7 @@ from memory import Span
 from sys.info import simdwidthof
 from testing import assert_equal, assert_true
 
-from ishlib.matcher.alignment.ssw_align import (
+from ishlib.matcher.alignment.local_aln.striped import (
     Profile,
     ScoringMatrix,
     ScoreSize,
@@ -12,8 +12,8 @@ from ishlib.matcher.alignment.ssw_align import (
     ReferenceDirection,
 )
 
-alias SIMD_U8_WIDTH = simdwidthof[UInt8]() // 2
-alias SIMD_U16_WIDTH = simdwidthof[UInt16]() // 2
+alias SIMD_U8_WIDTH = simdwidthof[UInt8]()
+alias SIMD_U16_WIDTH = simdwidthof[UInt16]()
 
 
 fn test_profile() raises:
@@ -22,7 +22,9 @@ fn test_profile() raises:
     var query = List[UInt8]()
     for i in range(0, alphabet_size):
         query.append(i)
-    var values = ScoringMatrix._default_matrix(alphabet_size)
+    var values = ScoringMatrix._default_matrix(
+        alphabet_size, match_score=2, mismatch_score=-1
+    )
     var a = List[UInt8](capacity=alphabet_size)
     var b = List[UInt8](capacity=alphabet_size)
     for i in range(0, alphabet_size):

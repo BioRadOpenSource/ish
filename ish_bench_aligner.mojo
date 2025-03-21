@@ -7,7 +7,7 @@ from time.time import perf_counter
 from ExtraMojo.cli.parser import OptParser, OptConfig, OptKind, ParsedOpts
 from ExtraMojo.io.buffered import BufferedWriter
 from ExtraMojo.io.delimited import DelimWriter, ToDelimited
-from ishlib.matcher.alignment.ssw_align import (
+from ishlib.matcher.alignment.local_aln.striped import (
     ssw_align,
     Profile,
     ScoreSize,

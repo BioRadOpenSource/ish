@@ -29,7 +29,7 @@ Mojo packages are hosted in a conda repo, once this tool is baked it can be publ
 
 ## Usage
 
-```bash
+```sh
 ❯ ./ish --help
 ish
 Search for inexact patterns in files.
@@ -55,7 +55,7 @@ OPTIONS:
                 The input record type: [line, fasta]
 ```
 
-```bash
+```sh
 # Some actual usage.
 ❯ ./ish --pattern "blosum62" ---match-algo ssw ./ish_bench_aligner.mojo 
 ./ish_bench_aligner.mojo:94             default_value=String("Blosum50"),
@@ -74,8 +74,9 @@ OPTIONS:
 
 ## Match Methods
 
-- `ssw`: Striped Smith Waterman, SIMD accelerated, supports affine gaps and scoring matrices. TODO: non-ascii scoring matrix
-- `sw_local`: Classic full matrix dynamic programming Smith-Waterman alignment, does not support affine gaps.
+- `striped-local`: Striped Smith-Waterman, SIMD accelerated, supports affine gaps and scoring matrices. TODO: non-ascii scoring matrix
+- `basic-local`: Classic full matrix dynamic programming Smith-Waterman alignment, does not support affine gaps.
+- `basic-global`: Classic Needleman-Wunsch global alignment.
 - `naive_exact`: 
 
 ## Record Types
@@ -118,3 +119,11 @@ Novel things:
     - is this actually good? or only for my test data?
 - Dynamic selection of the simd width based on the query length
 - the ish tool itself, doing index-free alignments
+
+## TODO Tomorrow
+- intrisics may have been working? add back in the assumes?
+- add aarch64 linux support
+
+```sh
+
+```

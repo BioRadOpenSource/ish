@@ -1,9 +1,10 @@
 from ishlib.searcher_settings import SearcherSettings
 from ishlib.line_search_runner import LineSearchRunner
 from ishlib.fasta_search_runner import FastaSearchRunner
+from ishlib.matcher.basic_global_matcher import BasicGlobalMatcher
 from ishlib.matcher.naive_exact_matcher import NaiveExactMatcher
-from ishlib.matcher.sw_local_matcher import SWLocalMatcher
-from ishlib.matcher.ssw_matcher import SSWMatcher
+from ishlib.matcher.basic_local_matcher import BasicLocalMatcher
+from ishlib.matcher.striped_local_matcher import StripedLocalMatcher
 
 
 fn main() raises:
@@ -27,29 +28,38 @@ fn main() raises:
             runner.run_search()
         else:
             raise "Invalid record type: {}".format(settings.record_type)
-    elif settings.match_algo == "sw_local":
+    elif settings.match_algo == "basic-local":
         if settings.record_type == "line":
-            var runner = LineSearchRunner[SWLocalMatcher](
-                settings, SWLocalMatcher()
+            var runner = LineSearchRunner[BasicLocalMatcher](
+                settings, BasicLocalMatcher()
             )
             runner.run_search()
         elif settings.record_type == "fasta":
-            var runner = FastaSearchRunner[SWLocalMatcher](
-                settings, SWLocalMatcher()
+            var runner = FastaSearchRunner[BasicLocalMatcher](
+                settings, BasicLocalMatcher()
             )
             runner.run_search()
         else:
             raise "Invalid record type: {}".format(settings.record_type)
-    elif settings.match_algo == "ssw":
+    elif settings.match_algo == "striped-local":
         if settings.record_type == "line":
             var runner = LineSearchRunner[
-                SSWMatcher[__origin_of(settings.pattern)]
-            ](settings, SSWMatcher(settings.pattern))
+                StripedLocalMatcher[__origin_of(settings.pattern)]
+            ](settings, StripedLocalMatcher(settings.pattern))
             runner.run_search()
         elif settings.record_type == "fasta":
             var runner = FastaSearchRunner[
-                SSWMatcher[__origin_of(settings.pattern)]
-            ](settings, SSWMatcher(settings.pattern))
+                StripedLocalMatcher[__origin_of(settings.pattern)]
+            ](settings, StripedLocalMatcher(settings.pattern))
+            runner.run_search()
+        else:
+            raise "Invalid record type: {}".format(settings.record_type)
+    elif settings.match_algo == "basic-global":
+        if settings.record_type == "line":
+            var runner = LineSearchRunner(settings, BasicGlobalMatcher())
+            runner.run_search()
+        elif settings.record_type == "fasta":
+            var runner = FastaSearchRunner(settings, BasicGlobalMatcher())
             runner.run_search()
         else:
             raise "Invalid record type: {}".format(settings.record_type)
