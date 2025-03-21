@@ -205,9 +205,11 @@ fn needleman_wunsch_parasail[
     """
     alias NUM = Scalar[DT]
 
+    # TODO: can I make it so that the query is in the inner loop? then the memory usage is based on the query?
+
     # Init the sizes
-    var rows = len(query) + 1
-    var cols = len(target) + 1
+    var rows = len(target) + 1
+    var cols = len(query) + 1
 
     var H = List[NUM](capacity=cols)
     var F = List[NUM](capacity=cols)
@@ -224,7 +226,7 @@ fn needleman_wunsch_parasail[
         H[j] = gap_open_penalty + ((j - 1) * gap_extension_penalty)
         F[j] = NUM.MIN // 2
 
-    # Iterate over the query sequence
+    # Iterate over the target sequence
     for i in range(1, rows):
         # Init first column
         var NH = H[0]
@@ -243,12 +245,12 @@ fn needleman_wunsch_parasail[
             E = max(E_open, E_ext)
 
             var H_dag = NWH + scoring_matrix.get(
-                Int(query[i - 1]), Int(target[j - 1])
+                Int(query[j - 1]), Int(target[i - 1])
             ).cast[DT]()
             WH = max(max(H_dag, E), F[j])
             H[j] = WH
 
-    var score = H[len(target)]
+    var score = H[len(query)]
     return AlignmentResult(
         score.cast[DType.int32](), None, None, coords=(0, len(target))
     )
