@@ -56,10 +56,14 @@ fn main() raises:
             raise "Invalid record type: {}".format(settings.record_type)
     elif settings.match_algo == "basic-global":
         if settings.record_type == "line":
-            var runner = LineSearchRunner(settings, BasicGlobalMatcher())
+            var runner = LineSearchRunner(
+                settings, BasicGlobalMatcher(settings.pattern)
+            )
             runner.run_search()
         elif settings.record_type == "fasta":
-            var runner = FastaSearchRunner(settings, BasicGlobalMatcher())
+            var runner = FastaSearchRunner(
+                settings, BasicGlobalMatcher(settings.pattern)
+            )
             runner.run_search()
         else:
             raise "Invalid record type: {}".format(settings.record_type)
