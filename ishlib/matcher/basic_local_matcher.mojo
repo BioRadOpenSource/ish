@@ -1,10 +1,10 @@
 """Smith-Waterman local alignment."""
 from ishlib.matcher import Matcher, MatchResult
-from ishlib.matcher.alignment.local_align import smith_waterman
+from ishlib.matcher.alignment.local_aln.basic import smith_waterman
 
 
 @value
-struct SWLocalMatcher(Matcher):
+struct BasicLocalMatcher(Matcher):
     fn first_match(
         mut self, haystack: Span[UInt8], pattern: Span[UInt8]
     ) -> Optional[MatchResult]:

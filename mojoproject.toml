@@ -18,7 +18,7 @@ build-bench-256 = "magic run mojo build -D SIMD_MOD=2 --march native -I /Users/u
 build-bench-512 = "magic run mojo build -D SIMD_MOD=1 --march native -I /Users/u103330/dev/ExtraMojo -I ./ishlib -o ish-aligner-512 ./ish_bench_aligner.mojo"
 build = "magic run mojo build -I /Users/u103330/dev/ExtraMojo -o ish main.mojo"
 pkglib = "magic run mojo package -I /Users/u103330/dev/ExtraMojo ./ishlib"
-testlib = "magic run mojo test -I ./ishlib ./tests"
+testlib = "magic run mojo test -I ishlib -I ../ExtraMojo"
 
 [dependencies]
 max = "=25.1.0"

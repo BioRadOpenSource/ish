@@ -44,8 +44,8 @@ struct SearcherSettings:
                 OptKind.StringLike,
                 default_value=String("ssw"),
                 description=(
-                    "The algorithm to use for matching: [naive_exact, ssw,"
-                    " sw_local]"
+                    "The algorithm to use for matching: [naive_exact,"
+                    " striped-local, basic-local, basic-global]"
                 ),
             )
         )

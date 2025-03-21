@@ -20,7 +20,7 @@ fn smith_waterman(
 
     ```mojo
     from testing import assert_equal
-    from ishlib.matcher.alignment.local_align import smith_waterman
+    from ishlib.matcher.alignment.local_aln.basic import smith_waterman
 
     var result = smith_waterman("GATTACA".as_bytes(), "GCATGC".as_bytes())
     assert_equal(result.score, 5)

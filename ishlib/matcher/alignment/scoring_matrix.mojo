@@ -127,8 +127,18 @@ alias NT_TO_NUM = InlineArray[UInt8, 128](
 )
 """Table used to transform nucleotide letters into numbers.
 
+
 Supports ACTGN.
 """
+
+alias ACTGN = InlineArray[Int8, 25](
+   # A   C   T   G   N
+     2, -2, -2, -2,  2, # A
+    -2,  2, -2, -2,  2, # C
+    -2, -2,  2, -2,  2, # T
+    -2, -2, -2,  2,  2, # G
+     2,  2,  2,  2,  2  # N
+)
 # fmt: on
 
 
@@ -174,15 +184,11 @@ struct ScoringMatrix:
 
     @staticmethod
     fn actgn_matrix(match_score: Int8 = 2, mismatch_score: Int8 = -2) -> Self:
-        var values = Self._default_matrix(5, match_score, mismatch_score)
-        var ret = Self(
-            values,
-            sqrt(len(values)),
-            ascii_to_encoding=List(Span(NT_TO_NUM)),
-            encoding_to_ascii=List(Span(NUM_TO_NT)),
-        )
-        ret._set_last_row_to_value(match_score)  # N's match anything
-        return ret
+        var size = sqrt(len(ACTGN))
+        var values = List(Span(ACTGN))
+        var ascii_to_encoding = List(Span(NT_TO_NUM))
+        var encoding_to_ascii = List(Span(NUM_TO_NT))
+        return Self(values, size, ascii_to_encoding, encoding_to_ascii)
 
     @staticmethod
     fn all_ascii_default_matrix() -> Self:

@@ -2,7 +2,7 @@
 from sys.info import simdwidthof
 
 from ishlib.matcher import Matcher, MatchResult
-from ishlib.matcher.alignment.ssw_align import (
+from ishlib.matcher.alignment.local_aln.striped import (
     ssw_align,
     Profile,
     ScoringMatrix,
@@ -11,7 +11,7 @@ from ishlib.matcher.alignment.ssw_align import (
 
 
 @value
-struct SSWMatcher[mut: Bool, //, origin: Origin[mut]](Matcher):
+struct StripedLocalMatcher[mut: Bool, //, origin: Origin[mut]](Matcher):
     alias SIMD_U8_WIDTH = simdwidthof[UInt8]() // 2
     alias SIMD_U16_WIDTH = simdwidthof[UInt16]() // 2
     var pattern: Span[UInt8, origin]
