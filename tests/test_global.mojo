@@ -95,7 +95,18 @@ fn test_repeat_patterns() raises:
         score_matrix.convert_ascii_to_encoding("ATAT".as_bytes()),
         score_matrix,
     )
-    assert_equal(result.score, 0, "Repeated pattern alignment should score -7")
+    assert_equal(result.score, 0, "Repeated pattern alignment should score 0")
+
+
+fn test_small() raises:
+    """Test alignment with repeating pattern sequences."""
+    var score_matrix = ScoringMatrix.actgn_matrix()
+    var result = needleman_wunsch_parasail(
+        score_matrix.convert_ascii_to_encoding("AGTACGACGT".as_bytes()),
+        score_matrix.convert_ascii_to_encoding("TATCGTACGT".as_bytes()),
+        score_matrix,
+    )
+    assert_equal(result.score, 6, "Small alignment should score 6")
 
 
 fn test_n_handling() raises:

@@ -1,6 +1,6 @@
 from memory import Span
 
-from ishlib.matcher.alignment import AlignmentResult
+from ishlib.matcher.alignment import AlignmentResult, TargetSpan
 
 alias DIAG = 1
 alias UP = 2
@@ -114,5 +114,5 @@ fn smith_waterman(
         max_score.cast[DType.int32](),
         String(StringSlice(unsafe_from_utf8=final_align1)),
         String(StringSlice(unsafe_from_utf8=final_align2)),
-        (start, end),
+        TargetSpan(start, end),
     )
