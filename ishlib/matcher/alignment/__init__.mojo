@@ -33,3 +33,10 @@ struct AlignmentResult:
             ret.write("-" * (min(i + cols, len(aln1)) - i), "\n")
             i += cols
         return ret
+
+
+@always_inline
+fn create_reversed(input: Span[UInt8]) -> List[UInt8]:
+    var ret = List(input)
+    ret.reverse()
+    return ret

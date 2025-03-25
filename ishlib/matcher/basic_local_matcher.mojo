@@ -14,7 +14,7 @@ struct BasicLocalMatcher(Matcher):
         )
         if result.score == len(pattern):
             return MatchResult(
-                result.coords.value()[0], result.coords.value()[1]
+                result.coords.value().start, result.coords.value().end
             )
 
         return None

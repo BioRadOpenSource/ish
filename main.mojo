@@ -2,6 +2,7 @@ from ishlib.searcher_settings import SearcherSettings
 from ishlib.line_search_runner import LineSearchRunner
 from ishlib.fasta_search_runner import FastaSearchRunner
 from ishlib.matcher.basic_global_matcher import BasicGlobalMatcher
+from ishlib.matcher.basic_semi_global_matcher import BasicSemiGlobalMatcher
 from ishlib.matcher.naive_exact_matcher import NaiveExactMatcher
 from ishlib.matcher.basic_local_matcher import BasicLocalMatcher
 from ishlib.matcher.striped_local_matcher import StripedLocalMatcher
@@ -63,6 +64,19 @@ fn main() raises:
         elif settings.record_type == "fasta":
             var runner = FastaSearchRunner(
                 settings, BasicGlobalMatcher(settings.pattern)
+            )
+            runner.run_search()
+        else:
+            raise "Invalid record type: {}".format(settings.record_type)
+    elif settings.match_algo == "basic-semi-global":
+        if settings.record_type == "line":
+            var runner = LineSearchRunner(
+                settings, BasicSemiGlobalMatcher(settings.pattern)
+            )
+            runner.run_search()
+        elif settings.record_type == "fasta":
+            var runner = FastaSearchRunner(
+                settings, BasicSemiGlobalMatcher(settings.pattern)
             )
             runner.run_search()
         else:
