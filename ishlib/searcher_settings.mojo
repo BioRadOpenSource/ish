@@ -45,7 +45,8 @@ struct SearcherSettings:
                 default_value=String("ssw"),
                 description=(
                     "The algorithm to use for matching: [naive_exact,"
-                    " striped-local, basic-local, basic-global]"
+                    " striped-local, basic-local, basic-global,"
+                    " basic-semi-global]"
                 ),
             )
         )
