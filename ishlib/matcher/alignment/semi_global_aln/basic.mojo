@@ -10,8 +10,11 @@ from ishlib.matcher.alignment.scoring_matrix import ScoringMatrix
 @register_passable("trivial")
 struct SGResult(StringableRaising):
     var query: Int
+    """0-based inclusive index in the query."""
     var target: Int
+    """0-based inclusive index in the target."""
     var score: Int32
+    """Alignment score."""
 
     fn __str__(read self) raises -> String:
         return "query={}, target={}, score={}".format(
@@ -35,15 +38,18 @@ fn semi_global_parasail_start_end_end[
     free_target_start_gaps: Bool = False,
     free_target_end_gaps: Bool = False,
 ) -> AlignmentResult:
-    """TODO.
+    """Semi-global alignment to find the start end end points of the query on the target.
 
     Arguments:
         query: scoring_matrix encoded query sequence.
-        target: scoring_matrix encoded target sequenc.
+        target: scoring_matrix encoded target sequence.
         scoring_matrix: ScoringMatrix for match/mismatch
         gap_open_penalty: The cost (negative) of opening a gap.
         gap_extension_penalty: The cost (negative) of extending an existing gap.
-
+        free_query_start_gaps: Gaps at the start of the query are free.
+        free_query_end_gaps: Gaps at the end of the query are free.
+        free_target_start_gaps: Gaps at the start of the target are free.
+        free_target_end_gaps: Gaps at the end of the target are free.
     """
     var ends = semi_global_parasail[DT=DT](
         query,
@@ -91,7 +97,7 @@ fn semi_global_parasail[
     free_target_start_gaps: Bool = False,
     free_target_end_gaps: Bool = False,
 ) -> SGResult:
-    """TODO.
+    """Semi-global alignment to find the end points of the query and target.
 
     Arguments:
         query: scoring_matrix encoded query sequence.
@@ -99,7 +105,10 @@ fn semi_global_parasail[
         scoring_matrix: ScoringMatrix for match/mismatch
         gap_open_penalty: The cost (negative) of opening a gap.
         gap_extension_penalty: The cost (negative) of extending an existing gap.
-
+        free_query_start_gaps: Gaps at the start of the query are free.
+        free_query_end_gaps: Gaps at the end of the query are free.
+        free_target_start_gaps: Gaps at the start of the target are free.
+        free_target_end_gaps: Gaps at the end of the target are free.
     """
     alias NUM = Scalar[DT]
 
