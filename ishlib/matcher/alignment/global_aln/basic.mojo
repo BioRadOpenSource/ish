@@ -3,7 +3,7 @@ from collections import Optional
 from collections.string import StringSlice
 from memory import Span
 
-from ishlib.matcher.alignment import AlignmentResult
+from ishlib.matcher.alignment import AlignmentResult, TargetSpan
 from ishlib.matcher.alignment.scoring_matrix import ScoringMatrix
 
 
@@ -164,14 +164,14 @@ fn needleman_wunsch_parasail[
     target: Span[UInt8],
     read scoring_matrix: ScoringMatrix,
     *,
-    match_score: Scalar[DT] = 1,
-    mismatch_score: Scalar[DT] = -1,
     gap_open_penalty: Scalar[DT] = -3,
     gap_extension_penalty: Scalar[DT] = -1,
 ) -> AlignmentResult:
     """Needleman-Wunsch algorithm for global sequence alignment with affine gap penalties.
 
     Note: query and target need to have already been encoded by the matrix.
+
+    Memory scales with the length of the query.
 
     - H: Main scoring matrix (match/mismatc)
     - E: Gap in vertical direction (gap in seq2, (target))
@@ -252,5 +252,5 @@ fn needleman_wunsch_parasail[
 
     var score = H[len(query)]
     return AlignmentResult(
-        score.cast[DType.int32](), None, None, coords=(0, len(target))
+        score.cast[DType.int32](), None, None, coords=TargetSpan(0, len(target))
     )

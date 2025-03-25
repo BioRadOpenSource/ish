@@ -3,11 +3,18 @@ from collections.string import StringSlice
 
 
 @value
+@register_passable("trivial")
+struct TargetSpan:
+    var start: Int
+    var end: Int
+
+
+@value
 struct AlignmentResult:
     var score: Int32
     var alignment1: Optional[String]
     var alignment2: Optional[String]
-    var coords: Optional[(Int, Int)]
+    var coords: Optional[TargetSpan]
 
     fn display_alignments(
         read self, cols: Int = 120
