@@ -5,6 +5,12 @@ from ishlib.matcher.alignment.semi_global_aln.basic import (
     semi_global_parasail_start_end_end,
 )
 from ishlib.matcher.alignment.scoring_matrix import ScoringMatrix
+from ishlib.matcher.alignment.striped_utils import ScoreSize
+
+from ishlib.matcher.aligment.semi_global_aln.striped import (
+    semi_global_aln,
+    Profile,
+)
 
 
 @value
@@ -52,6 +58,65 @@ fn test_exact_match() raises:
             query,
             target,
             score_matrix,
+            free_query_start_gaps=config.q_start,
+            free_query_end_gaps=config.q_end,
+            free_target_start_gaps=config.t_start,
+            free_target_end_gaps=config.t_end,
+        )
+
+        assert_equal(
+            result.score,
+            config.score,
+            "Exact match with gaps (q_start="
+            + String(config.q_start)
+            + ", q_end="
+            + String(config.q_end)
+            + ", t_start="
+            + String(config.t_start)
+            + ", t_end="
+            + String(config.t_end)
+            + ") should score "
+            + String(config.score),
+        )
+
+        # For exact matches, end positions should be the last indices
+        assert_equal(result.query, 3, "Query end should be at index 3")
+        assert_equal(result.target, 3, "Target end should be at index 3")
+
+
+fn test_exact_match_striped() raises:
+    """Test exact match between sequences."""
+    var score_matrix = ScoringMatrix.actgn_matrix()
+    var query = score_matrix.convert_ascii_to_encoding("ACGT".as_bytes())
+    var target = score_matrix.convert_ascii_to_encoding("ACGT".as_bytes())
+
+    var profile = Profile(query, score_matrix, ScoreSize.Adaptive)
+
+    # Test all combinations of free gaps
+    var configs = List[FreeGapTest]()
+    # query_start, query_end, target_start, target_end, expected_score
+    configs.append(FreeGapTest(False, False, False, False, 8))  # No free gaps
+    configs.append(
+        FreeGapTest(True, False, False, False, 8)
+    )  # Free query start
+    configs.append(FreeGapTest(False, True, False, False, 8))  # Free query end
+    configs.append(
+        FreeGapTest(False, False, True, False, 8)
+    )  # Free target start
+    configs.append(FreeGapTest(False, False, False, True, 8))  # Free target end
+    configs.append(FreeGapTest(True, True, False, False, 8))  # Free query ends
+    configs.append(FreeGapTest(False, False, True, True, 8))  # Free target ends
+    configs.append(FreeGapTest(True, True, True, True, 8))  # All free
+
+    for i in range(len(configs)):
+        var config = configs[i]
+
+        var result = semi_global_aln(
+            target,
+            len(query),
+            gap_open_penalty=-3,
+            gap_extension_penalty=-1,
+            profile=profile.profile_byte.value(),
             free_query_start_gaps=config.q_start,
             free_query_end_gaps=config.q_end,
             free_target_start_gaps=config.t_start,
@@ -562,11 +627,16 @@ fn test_biological_example() raises:
     )
 
 
+fn run_striped_tests() raises:
+    test_exact_match_striped()
+
+
 fn run_all_tests() raises:
     """Run all semi-global alignment tests and report results."""
     print("Running all Semi-Global alignment tests...")
 
     test_exact_match()
+    test_exact_match_striped()
     test_query_substring()
     test_target_substring()
     test_partial_match_with_mismatch()
@@ -582,4 +652,5 @@ fn run_all_tests() raises:
 
 # Run the tests if executed directly
 fn main() raises:
-    run_all_tests()
+    # run_all_tests()
+    run_striped_tests()
