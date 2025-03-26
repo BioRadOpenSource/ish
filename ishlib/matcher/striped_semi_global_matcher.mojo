@@ -17,6 +17,7 @@ struct StripedSemiGlobalMatcher[mut: Bool, //, origin: Origin[mut]](Matcher):
     alias SIMD_U16_WIDTH = simdwidthof[UInt16]() // 2
     var pattern: Span[UInt8, origin]
     var rev_pattern: List[UInt8]
+    var rev_haystack_buffer: List[UInt8]
     var profile: Profile[Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH]
     var reverse_profile: Profile[Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH]
     var matrix: ScoringMatrix
@@ -26,6 +27,7 @@ struct StripedSemiGlobalMatcher[mut: Bool, //, origin: Origin[mut]](Matcher):
         self.matrix = matrix
         self.pattern = pattern
         self.rev_pattern = create_reversed(pattern)
+        self.rev_haystack_buffer = List[UInt8]()
         var profile = Profile[Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH](
             self.pattern, self.matrix, ScoreSize.Adaptive
         )
@@ -39,20 +41,24 @@ struct StripedSemiGlobalMatcher[mut: Bool, //, origin: Origin[mut]](Matcher):
         mut self, haystack: Span[UInt8], pattern: Span[UInt8]
     ) -> Optional[MatchResult]:
         """Find the first match in the haystack."""
-        var rev_haystack = create_reversed(haystack)
+
+        self.rev_haystack_buffer.clear()
+        self.rev_haystack_buffer.extend(haystack)
+        self.rev_haystack_buffer.reverse()
+
         var result = semi_global_aln_start_end(
             reference=haystack,
-            rev_reference=rev_haystack,
+            rev_reference=self.rev_haystack_buffer,
             query_len=len(self.pattern),
             gap_open_penalty=3,
             gap_extension_penalty=1,
             profile=self.profile.profile_small.value(),
             rev_profile=self.reverse_profile.profile_small.value(),
             bias=self.profile.bias.cast[DType.uint8](),
-            free_query_start_gaps=True,
-            free_query_end_gaps=True,
-            free_target_start_gaps=True,
-            free_target_end_gaps=True,
+            free_query_start_gaps=False,
+            free_query_end_gaps=False,
+            free_target_start_gaps=False,
+            free_target_end_gaps=False,
         )
         if result.score >= len(self.pattern):
             return MatchResult(
