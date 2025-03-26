@@ -62,6 +62,7 @@ struct ScoreSize:
 @register_passable("trivial")
 struct AlignmentStartEndResult:
     var score: Int32
+    """Alignment score."""
     var query_start: Int32
     """0-based inclusive query start."""
     var query_end: Int32
