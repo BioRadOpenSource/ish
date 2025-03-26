@@ -34,6 +34,7 @@ struct BasicSemiGlobalMatcher(Matcher):
             gap_open_penalty=-3,
             gap_extension_penalty=-1,
             # TODO: How should these be set on the CLI?
+            # Rust bio-aligner has a nice concept around clipping that might make more sense here.
             free_query_start_gaps=True,
             free_query_end_gaps=True,
             free_target_start_gaps=True,

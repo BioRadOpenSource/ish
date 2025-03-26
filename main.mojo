@@ -6,6 +6,7 @@ from ishlib.matcher.basic_semi_global_matcher import BasicSemiGlobalMatcher
 from ishlib.matcher.naive_exact_matcher import NaiveExactMatcher
 from ishlib.matcher.basic_local_matcher import BasicLocalMatcher
 from ishlib.matcher.striped_local_matcher import StripedLocalMatcher
+from ishlib.matcher.striped_semi_global_matcher import StripedSemiGlobalMatcher
 
 
 fn main() raises:
@@ -78,6 +79,19 @@ fn main() raises:
             var runner = FastaSearchRunner(
                 settings, BasicSemiGlobalMatcher(settings.pattern)
             )
+            runner.run_search()
+        else:
+            raise "Invalid record type: {}".format(settings.record_type)
+    elif settings.match_algo == "striped-semi-global":
+        if settings.record_type == "line":
+            var runner = LineSearchRunner[
+                StripedSemiGlobalMatcher[__origin_of(settings.pattern)]
+            ](settings, StripedSemiGlobalMatcher(settings.pattern))
+            runner.run_search()
+        elif settings.record_type == "fasta":
+            var runner = FastaSearchRunner[
+                StripedSemiGlobalMatcher[__origin_of(settings.pattern)]
+            ](settings, StripedSemiGlobalMatcher(settings.pattern))
             runner.run_search()
         else:
             raise "Invalid record type: {}".format(settings.record_type)
