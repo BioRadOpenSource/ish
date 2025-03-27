@@ -77,6 +77,13 @@ struct AlignmentStartEndResult:
 @register_passable("trivial")
 struct AlignmentResult:
     var best: AlignmentEnd
+    var overflow_detected: Bool
+
+    fn __init__(
+        out self, best: AlignmentEnd, *, overflow_detected: Bool = False
+    ):
+        self.best = best
+        self.overflow_detected = overflow_detected
 
 
 @value
