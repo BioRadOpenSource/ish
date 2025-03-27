@@ -118,7 +118,7 @@ class BenchmarkResults:
             fieldnames=BenchmarkResults.HEADERS[1:],  # skip "aligner"
         )
         results = []
-        next(reader)  # Skip headers
+        x = next(reader)  # Skip headers
         for row in reader:
             results.append(
                 BenchmarkResults(
@@ -191,6 +191,8 @@ def run_parasail_aligner(
     scoring_matrix="Blosum62",
     gap_open_score=3,
     gap_ext_score=1,
+    *,
+    algo="sg"
 ):
 
     scoring_matrix = scoring_matrix.lower()
@@ -204,7 +206,7 @@ def run_parasail_aligner(
         raise ValueError("Invalid score size")
 
     algorithm = (
-        f"sw_striped_" + (instruction_set if instruction_set else "") + f"_{score_size}"
+        f"{algo}_striped_" + (instruction_set if instruction_set else "") + f"_{score_size}"
     )
 
     # fmt: off
@@ -251,10 +253,13 @@ def run_ish_aligner(
     gap_open_score=3,
     gap_ext_score=1,
     iterations=3,
+    *,
+    algo="striped-local"
 ) -> Optional[BenchmarkResults]:
     # fmt: off
     args = [
         aligner_path,
+        "--algo", algo,
         "--query-fasta", query_fasta,
         "--target-fasta", target_fasta,
         "--output-file", output_file,
@@ -284,14 +289,14 @@ def run_ish_aligner(
 
 def main():
 
-    score_sizes = ["byte", "word", "adaptive"]
-    # score_sizes = ["adaptive"]
+    # score_sizes = ["byte", "word", "adaptive"]
+    score_sizes = ["word"]
 
     writer = csv.DictWriter(sys.stdout, fieldnames=BenchmarkResults.HEADERS)
     writer.writeheader()
 
     results: List[BenchmarkResults] = []
-    for ish in [ISH_128, ISH_256, ISH_512]:
+    for ish in [ISH_128]: #, ISH_256, ISH_512]:
         for score_size in score_sizes:
             for query in QUERY_SEQS.keys():
                 print(f"Running {ish} on {query} with {score_size}", file=sys.stderr)
@@ -302,7 +307,8 @@ def main():
                     score_size=score_size,
                     scoring_matrix="Blosum62",
                     output_file="/home/ubuntu/outputs/ish-aligner.csv",
-                    iterations=3,
+                    iterations=1,
+                    algo="striped-semi-global"
                 )
                 if r:
                     writer.writerow(
@@ -324,7 +330,8 @@ def main():
                     )
                     results.append(r)
 
-    for inst in ["sse41_128", "avx2_256"]:
+    # for inst in ["sse41_128", "avx2_256"]:
+    for inst in ["neon_128"]:
         for score_size in score_sizes:
             for query, query_len in QUERY_SEQS.items():
                 print(f"Running {PARASAIL_ALIGNER} on {query}", file=sys.stderr)
@@ -337,6 +344,7 @@ def main():
                     score_size=score_size,
                     scoring_matrix="Blosum62",
                     output_file="/home/ubuntu/outputs/parasail-aligner.csv",
+                    algo="sg"
                 )
                 if r:
                     writer.writerow(

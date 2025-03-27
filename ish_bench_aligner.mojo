@@ -15,6 +15,12 @@ from ishlib.matcher.alignment.local_aln.striped import (
 )
 from ishlib.matcher.alignment.scoring_matrix import ScoringMatrix
 from ishlib.formats.fasta import FastaRecord
+from ishlib.matcher.alignment.striped_utils import AlignmentResult
+from ishlib.matcher.alignment.semi_global_aln.striped import (
+    semi_global_aln,
+    semi_global_aln_with_saturation_check,
+    Profile as SemiGlobalProfile,
+)
 
 # Force half width vectors in the case of avx512 since avx 2 seems faster up to around 700len queries.
 # alias SIMD_U8_WIDTH = simdwidthof[
@@ -43,6 +49,17 @@ fn parse_args() raises -> ParsedOpts:
             " fastqs in to memory, do any needed prep, then time the alignment"
             " of query vs target."
         ),
+    )
+    parser.add_opt(
+        OptConfig(
+            "algo",
+            OptKind.StringLike,
+            default_value=String("striped-local"),
+            description=(
+                "The alignment algorithm used. [striped-local,"
+                " striped-semi-global]"
+            ),
+        )
     )
     parser.add_opt(
         OptConfig(
@@ -197,6 +214,25 @@ struct Profiles[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
 
 
 @value
+struct SemiGlobalProfiles[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
+    var fwd: SemiGlobalProfile[SIMD_U8_WIDTH, SIMD_U16_WIDTH]
+    var rev: SemiGlobalProfile[SIMD_U8_WIDTH, SIMD_U16_WIDTH]
+
+    fn __init__(
+        out self,
+        read record: ByteFastaRecord,
+        read matrix: ScoringMatrix,
+        score_size: ScoreSize,
+    ):
+        self.fwd = SemiGlobalProfile[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
+            record.seq, matrix, score_size
+        )
+        self.rev = SemiGlobalProfile[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
+            record.rev, matrix, score_size
+        )
+
+
+@value
 @register_passable("trivial")
 struct BasicAlignmentOutput(ToDelimited):
     var query_idx: Int
@@ -222,6 +258,22 @@ struct BasicAlignmentOutput(ToDelimited):
         self.alignment_score = Int(result.score1)
         self.query_end = Int(result.read_end1)
         self.target_end = Int(result.ref_end1)
+
+    fn __init__(
+        out self,
+        query_idx: Int,
+        target_idx: Int,
+        query_len: Int,
+        target_len: Int,
+        read result: AlignmentResult,
+    ):
+        self.query_idx = query_idx
+        self.target_idx = target_idx
+        self.query_len = query_len
+        self.target_len = target_len
+        self.alignment_score = Int(result.best.score)
+        self.query_end = Int(result.best.query)
+        self.target_end = Int(result.best.reference)
 
     fn write_to_delimited(read self, mut writer: DelimWriter) raises:
         writer.write_record(
@@ -361,6 +413,16 @@ fn main() raises:
     var metrics_file = opts.get_string("metrics-file")
     var iterations = opts.get_int("iterations")
 
+    # Get the algorithm to use
+    var algo = opts.get_string("algo")
+    var algorithm: String
+    if algo == "striped-local":
+        algorithm = algo
+    elif algo == "striped-semi-global":
+        algorithm = algo
+    else:
+        raise "Unknown algo " + algo
+
     # Get the score size
     var score_size_name = opts.get_string("score-size")
     var score_size: ScoreSize
@@ -387,10 +449,51 @@ fn main() raises:
     else:
         raise "Unknown matrix " + matrix_name
 
+    var target_file = opts.get_string("target-fasta")
+    var query_file = opts.get_string("query-fasta")
     ## Assuming we are using Blosum50 AA matrix for everything below this for now.
 
+    if algorithm == "striped-local":
+        bench_striped_local(
+            target_file,
+            query_file,
+            metrics_file,
+            output_file,
+            matrix,
+            score_size,
+            iterations,
+            matrix_name,
+            gap_open_score,
+            gap_extension_score,
+        )
+    elif algorithm == "striped-semi-global":
+        bench_striped_semi_global(
+            target_file,
+            query_file,
+            metrics_file,
+            output_file,
+            matrix,
+            score_size,
+            iterations,
+            matrix_name,
+            gap_open_score,
+            gap_extension_score,
+        )
+
+
+fn bench_striped_local(
+    target_file: String,
+    query_file: String,
+    metrics_file: String,
+    output_file: String,
+    matrix: ScoringMatrix,
+    score_size: ScoreSize,
+    iterations: Int,
+    matrix_name: String,
+    gap_open_score: Int,
+    gap_extension_score: Int,
+) raises:
     # Read the fastas and encode the sequences
-    var target_file = opts.get_string("target-fasta")
     var target_seqs = FastaRecord.slurp_fasta(target_file)
     var targets = List[ByteFastaRecord](capacity=len(target_seqs))
     while len(target_seqs) > 0:
@@ -399,7 +502,6 @@ fn main() raises:
         targets.append(ByteFastaRecord(t.name, t.seq, matrix))
     targets.reverse()
 
-    var query_file = opts.get_string("query-fasta")
     var query_seqs = FastaRecord.slurp_fasta(query_file)
     var queries = List[ByteFastaRecord](capacity=len(query_seqs))
     while len(query_seqs) > 0:
@@ -468,6 +570,132 @@ fn main() raises:
         var elapsed = end - start
         var cells_per_second = work.cast[DType.float64]() / elapsed
         writer.flush()
+        print("Ran in", elapsed, "seconds", file=stderr)
+        print("Total cells updated :", work, file=stderr)
+        print("Cells per second:", cells_per_second, file=stderr)
+        print("GCUPs:", cells_per_second / 1000000000, file=stderr)
+        results.append(
+            BenchmarkResults(
+                len(queries),
+                len(targets),
+                len(queries[0].seq),
+                matrix_name,
+                gap_open_score,
+                gap_extension_score,
+                SIMD_U8_WIDTH,
+                SIMD_U16_WIDTH,
+                String(score_size),
+                elapsed,
+                work,
+                cells_per_second / 1000000000,
+            )
+        )
+
+    var result = BenchmarkResults.average(results)
+    var metric_writer = DelimWriter(
+        BufferedWriter(
+            open(metrics_file, "w") if metrics_file != "-" else stdout
+        ),
+        delim=",",
+        write_header=True,
+    )
+    metric_writer.serialize(result)
+    metric_writer.flush()
+
+
+fn bench_striped_semi_global(
+    target_file: String,
+    query_file: String,
+    metrics_file: String,
+    output_file: String,
+    matrix: ScoringMatrix,
+    score_size: ScoreSize,
+    iterations: Int,
+    matrix_name: String,
+    gap_open_score: Int,
+    gap_extension_score: Int,
+) raises:
+    # Read the fastas and encode the sequences
+    var target_seqs = FastaRecord.slurp_fasta(target_file)
+    var targets = List[ByteFastaRecord](capacity=len(target_seqs))
+    while len(target_seqs) > 0:
+        var t = target_seqs.pop()
+        # I should be able to pass with ^ here, not sure why I can't
+        targets.append(ByteFastaRecord(t.name, t.seq, matrix))
+    targets.reverse()
+
+    var query_seqs = FastaRecord.slurp_fasta(query_file)
+    var queries = List[ByteFastaRecord](capacity=len(query_seqs))
+    while len(query_seqs) > 0:
+        var q = query_seqs.pop()
+        queries.append(ByteFastaRecord(q.name, q.seq, matrix))
+    queries.reverse()
+
+    # Create query profiles
+    var profiles = List[SemiGlobalProfiles[SIMD_U8_WIDTH, SIMD_U16_WIDTH]](
+        capacity=len(queries)
+    )
+    for q in queries:
+        profiles.append(
+            SemiGlobalProfiles[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
+                q[], matrix, score_size
+            )
+        )
+
+    var results = List[BenchmarkResults]()
+    for _ in range(0, iterations):
+        var writer = DelimWriter(
+            BufferedWriter(open(output_file, "w")),
+            write_header=True,
+            delim=",",
+        )
+        # Align
+        print("Total query seqs:", len(queries), file=stderr)
+        print("Total target seqs:", len(targets), file=stderr)
+        print("Using", matrix_name, file=stderr)
+        print("Gap open penalty:", gap_open_score, file=stderr)
+        print("Gap ext penalty:", gap_extension_score, file=stderr)
+        print("U8 SIMD Width:", SIMD_U8_WIDTH, file=stderr)
+        print("U16 SIMD Width:", SIMD_U16_WIDTH, file=stderr)
+        var start = perf_counter()
+        var work: UInt64 = 0
+        for i in range(0, len(queries)):
+            # TODO: if query construction was done here, we could dispatch to 512 sometimes, which might be cheating for bench purposes.
+            var query = Pointer.address_of(queries[i])
+            var profiles = Pointer.address_of(profiles[i])
+            for j in range(0, len(targets)):
+                var target = Pointer.address_of(targets[j])
+                var result = semi_global_aln_with_saturation_check[
+                    SIMD_U8_WIDTH,
+                    SIMD_U16_WIDTH,
+                ](
+                    profile=profiles[].fwd,
+                    reference=target[].seq,
+                    query_len=len(query[].seq),
+                    gap_open_penalty=gap_open_score,
+                    gap_extension_penalty=gap_extension_score,
+                    free_query_start_gaps=True,
+                    free_query_end_gaps=True,
+                    free_target_start_gaps=True,
+                    free_target_end_gaps=True,
+                    score_size=score_size,
+                )
+                writer.serialize(
+                    BasicAlignmentOutput(
+                        i,
+                        j,
+                        len(query[].seq),
+                        len(target[].seq),
+                        result,
+                    )
+                )
+                work += len(target[].seq) * len(query[].seq)
+        var end = perf_counter()
+
+        var elapsed = end - start
+        var cells_per_second = work.cast[DType.float64]() / elapsed
+        writer.flush()
+        print("Algo: striped-semi-global", file=stderr)
         print("Ran in", elapsed, "seconds", file=stderr)
         print("Total cells updated :", work, file=stderr)
         print("Cells per second:", cells_per_second, file=stderr)

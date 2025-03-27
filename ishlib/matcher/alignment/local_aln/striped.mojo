@@ -492,13 +492,16 @@ fn sw[
                 # print("\t\tnew vF: ", v_f)
 
                 # Early termination check
-                var v_temp = saturating_sub(v_f, v_h)
-                # print("\t\tnew v_temp: ", v_temp)
-                var packed = v_temp == zero
-                if packed.reduce_and():
-                    # print("\t\tCan terminate early")
+                if not (v_f > v_h).reduce_or():
                     break_out = True
                     break
+                # var v_temp = saturating_sub(v_f, v_h)
+                # # print("\t\tnew v_temp: ", v_temp)
+                # var packed = v_temp == zero
+                # if packed.reduce_and():
+                #     # print("\t\tCan terminate early")
+                #     break_out = True
+                #     break
             if break_out:
                 break
         # print("\t Done with main loops")

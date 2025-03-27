@@ -32,6 +32,8 @@ struct Profile[
     var query_len: Int32
     var alphabet_size: UInt32
     var bias: UInt8
+    var max_score: Int8
+    var min_score: Int8
 
     fn __init__(
         out self,
@@ -49,27 +51,31 @@ struct Profile[
         var profile_small: Optional[Self.smallVProfile] = None
         var profile_large: Optional[Self.largeVProfile] = None
         var bias: UInt8 = 0
-        if score_size == ScoreSize.Byte or score_size == ScoreSize.Adaptive:
-            # Find the bias to use in the substitution matrix
-            # The bias will be smallest value in the scoring matrix
-            var bias_tmp: Int8 = 0
-            for i in range(0, len(score_matrix.values)):
-                if score_matrix.values[i] < bias_tmp:
-                    bias_tmp = score_matrix.values[i]
-            bias = abs(bias_tmp).cast[DType.uint8]()
+        var max_score: Int8 = 0
+        var min_score: Int8 = 0
+        # Find the bias to use in the substitution matrix
+        # The bias will be smallest value in the scoring matrix
+        var bias_tmp: Int8 = 0
+        var min_tmp: Int8 = 0
+        var max_tmp: Int8 = 0
+        for i in range(0, len(score_matrix.values)):
+            var score = score_matrix.values[i]
+            if score < bias_tmp:
+                bias_tmp = score_matrix.values[i]
+            if score < min_tmp:
+                min_tmp = score
+            if score > max_tmp:
+                max_tmp = score
+        bias = abs(bias_tmp).cast[DType.uint8]()
+        min_score = min_tmp
+        max_score = max_tmp
 
+        if score_size == ScoreSize.Byte or score_size == ScoreSize.Adaptive:
             profile_small = Self.generate_query_profile[
                 SmallType, SIMD_SMALL_WIDTH
             ](query, score_matrix, bias)
 
         if score_size == ScoreSize.Word or score_size == ScoreSize.Adaptive:
-            # Find the bias to use in the substitution matrix
-            # The bias will be smallest value in the scoring matrix
-            var bias_tmp: Int8 = 0
-            for i in range(0, len(score_matrix.values)):
-                if score_matrix.values[i] < bias_tmp:
-                    bias_tmp = score_matrix.values[i]
-            bias = abs(bias_tmp).cast[DType.uint8]()
             profile_large = Self.generate_query_profile[
                 LargeType, SIMD_LARGE_WIDTH
             ](query, score_matrix, bias)
@@ -80,6 +86,8 @@ struct Profile[
             len(query),
             score_matrix.size,
             bias,
+            max_score,
+            min_score,
         )
 
     @staticmethod
@@ -125,12 +133,16 @@ fn semi_global_aln_start_end[
     profile: Span[SIMD[dt, width]],
     rev_profile: Span[SIMD[dt, width]],
     bias: Scalar[dt],
+    max_score: Int8,
+    min_score: Int8,
     *,
     free_query_start_gaps: Bool = False,
     free_query_end_gaps: Bool = False,
     free_target_start_gaps: Bool = False,
     free_target_end_gaps: Bool = False,
 ) -> AlignmentStartEndResult:
+    # TODO: use the version with overflow checking?
+    # Since saturation happens trivially easily at u8... maybe not.
     var forward = semi_global_aln[dt, width](
         reference,
         query_len,
@@ -138,6 +150,8 @@ fn semi_global_aln_start_end[
         gap_extension_penalty,
         profile,
         bias,
+        max_score,
+        min_score,
         free_query_start_gaps=free_query_start_gaps,
         free_query_end_gaps=free_query_end_gaps,
         free_target_start_gaps=free_target_start_gaps,
@@ -151,6 +165,8 @@ fn semi_global_aln_start_end[
         gap_extension_penalty,
         rev_profile,
         bias,
+        max_score,
+        min_score,
         # Note the swapped free gaps
         free_query_start_gaps=free_query_end_gaps,
         free_query_end_gaps=free_query_start_gaps,
@@ -167,8 +183,68 @@ fn semi_global_aln_start_end[
     )
 
 
+fn semi_global_aln_with_saturation_check[
+    SIMD_SMALL_WIDTH: Int,
+    SIMD_LARGE_WIDTH: Int,
+    SmallType: DType = DType.uint8,
+    LargeType: DType = DType.uint16,
+](
+    reference: Span[UInt8],
+    query_len: Int32,
+    gap_open_penalty: SIMD[LargeType, 1],
+    gap_extension_penalty: SIMD[LargeType, 1],
+    profile: Profile[SIMD_SMALL_WIDTH, SIMD_LARGE_WIDTH, SmallType, LargeType],
+    *,
+    free_query_start_gaps: Bool = False,
+    free_query_end_gaps: Bool = False,
+    free_target_start_gaps: Bool = False,
+    free_target_end_gaps: Bool = False,
+    score_size: ScoreSize = ScoreSize.Adaptive,
+) -> AlignmentResult:
+    var result: AlignmentResult = AlignmentResult(AlignmentEnd(0, 0, 0))
+
+    if score_size == ScoreSize.Adaptive or score_size == ScoreSize.Byte:
+        result = semi_global_aln[SmallType, SIMD_SMALL_WIDTH](
+            reference,
+            query_len,
+            gap_open_penalty.cast[SmallType](),
+            gap_extension_penalty.cast[SmallType](),
+            profile.profile_small.value(),
+            profile.bias.cast[SmallType](),
+            profile.max_score,
+            profile.min_score,
+            free_query_start_gaps=free_query_start_gaps,
+            free_query_end_gaps=free_query_end_gaps,
+            free_target_start_gaps=free_target_start_gaps,
+            free_target_end_gaps=free_target_end_gaps,
+        )
+    var overflow_detected = result.overflow_detected
+    if (
+        score_size == ScoreSize.Adaptive and overflow_detected
+    ) or score_size == ScoreSize.Word:
+        var larger = semi_global_aln[LargeType, SIMD_LARGE_WIDTH](
+            reference,
+            query_len,
+            gap_open_penalty.cast[LargeType](),
+            gap_extension_penalty.cast[LargeType](),
+            profile.profile_large.value(),
+            profile.bias.cast[LargeType](),
+            profile.max_score,
+            profile.min_score,
+            free_query_start_gaps=free_query_start_gaps,
+            free_query_end_gaps=free_query_end_gaps,
+            free_target_start_gaps=free_target_start_gaps,
+            free_target_end_gaps=free_target_end_gaps,
+        )
+        if not larger.overflow_detected and overflow_detected:
+            larger.overflow_detected = overflow_detected
+        result = larger
+
+    return result
+
+
 fn semi_global_aln[
-    dt: DType, width: Int
+    dt: DType, width: Int, *, do_saturation_check: Bool = True
 ](
     reference: Span[UInt8],
     query_len: Int32,
@@ -176,6 +252,8 @@ fn semi_global_aln[
     gap_extension_penalty: SIMD[dt, 1],
     profile: Span[SIMD[dt, width]],
     bias: Scalar[dt],
+    max_score: Int8,
+    min_score: Int8,
     *,
     free_query_start_gaps: Bool = False,
     free_query_end_gaps: Bool = False,
@@ -192,8 +270,6 @@ fn semi_global_aln[
     alias NUM = Scalar[dt]
     alias MIN = NUM.MIN_FINITE
     alias MAX = NUM.MAX_FINITE
-    alias MIN_LIMIT = MIN + 1
-    alias MAX_LIMIT = MAX - 1
     alias ZERO = MAX // 2  # we are pretending to be a signed int and just shifting up.
 
     if query_len == 0 or len(reference) == 0:
@@ -232,17 +308,17 @@ fn semi_global_aln[
         var h = zero
         var e = zero
         for seg_num in range(0, width):
-            var tmp = Int(ZERO) if free_query_start_gaps else (
-                Int(ZERO)
+            var tmp = Int32(ZERO) if free_query_start_gaps else (
+                Int32(ZERO)
                 - (
-                    Int(gap_open_penalty)
-                    + Int(gap_extension_penalty)
+                    Int32(gap_open_penalty)
+                    + Int32(gap_extension_penalty)
                     * (seg_num * segment_length + i)
                 )
-            ).cast[DType.int64]()
-            h[seg_num] = MIN if tmp < Int(MIN) else tmp.cast[dt]()
-            tmp = tmp - Int(gap_open_penalty)
-            e[seg_num] = MIN if tmp < Int(MIN) else tmp.cast[dt]()
+            ).cast[DType.int32]()
+            h[seg_num] = MIN if tmp < Int32(MIN) else tmp.cast[dt]()
+            tmp = tmp - Int32(gap_open_penalty)
+            e[seg_num] = MIN if tmp < Int32(MIN) else tmp.cast[dt]()
         pv_h_store[index] = h
         pv_e[index] = e
         index += 1
@@ -254,10 +330,11 @@ fn semi_global_aln[
     # Init upper boundary
     boundary.append(ZERO)
     for i in range(1, len(reference) + 1):
-        var tmp = Int(ZERO) if free_target_start_gaps else (
-            -(gap_open_penalty + (gap_extension_penalty * (i - 1))) + Int(ZERO)
-        ).cast[DType.int64]()
-        boundary.append(MIN if tmp < Int(MIN) else tmp.cast[dt]())
+        var tmp = Int32(ZERO) if free_target_start_gaps else (
+            -Int32(gap_open_penalty + (gap_extension_penalty * (i - 1)))
+            + Int32(ZERO)
+        )
+        boundary.append(MIN if tmp < Int32(MIN) else tmp.cast[dt]())
 
     # print("Boundary:")
     # print()
@@ -267,10 +344,22 @@ fn semi_global_aln[
 
     var v_gap_open = SIMD[dt, width](gap_open_penalty)  # aka: vGap0
     var v_gap_ext = SIMD[dt, width](gap_extension_penalty)  # aka: vGapE
-    var v_neg_limit = SIMD[dt, width](MIN_LIMIT)
-    var v_pos_limit = SIMD[dt, width](MAX_LIMIT)
+
+    # NEG_LIMIT = (-open < matrix->min ? INT8_MIN + open : INT8_MIN - matrix->min) + 1;
+    # POS_LIMIT = INT8_MAX - matrix->max - 1;
+
+    var v_neg_limit: SIMD[dt, width]
+    if -Int32(gap_open_penalty) < Int32(min_score):
+        v_neg_limit = MIN + gap_open_penalty + 1
+    else:
+        # this is a gross set of casting to allow the possibly negetive matrix min
+        v_neg_limit = (Int32(MIN) + Int32(abs(min_score)) + Int32(1)).cast[dt]()
+
+    var v_pos_limit = SIMD[dt, width](Int32(MAX) - Int32(max_score) - 1)
+
+    # var v_pos_limit = SIMD[dt, width](MAX_LIMIT)
     var v_saturation_check_min = v_neg_limit
-    var v_saturation_check_max = v_pos_limit
+    var v_saturation_check_max = v_pos_limit - (v_neg_limit)
     var v_max_h = v_neg_limit
     var v_bias = SIMD[dt, width](bias)
 
@@ -348,10 +437,17 @@ fn semi_global_aln[
 
             # Save current_cell_score
             pv_h_store[j] = v_h
-            v_saturation_check_max = max(v_saturation_check_max, v_h)
-            v_saturation_check_min = min(v_saturation_check_min, v_h)
-            v_saturation_check_max = max(v_saturation_check_max, v_e)
-            v_saturation_check_min = min(v_saturation_check_min, v_e)
+
+            @parameter
+            if do_saturation_check:
+                v_saturation_check_max = max(
+                    v_saturation_check_max, v_h - v_neg_limit
+                )
+                # v_saturation_check_min = min(v_saturation_check_min, v_h)
+                v_saturation_check_max = max(
+                    v_saturation_check_max, v_e - v_neg_limit
+                )
+            # v_saturation_check_min = min(v_saturation_check_min, v_e)
             # print("SATCHECK MAX:", v_saturation_check_max)
             # print("SATCHECK MIN:", v_saturation_check_min)
 
@@ -379,17 +475,15 @@ fn semi_global_aln[
         # while not break_out and k < width:
         # k += 1
         var break_out = False
-
-        @parameter
         for _k in range(0, width):
             var tmp = gap_open_penalty.cast[
-                DType.int64
+                DType.int32
             ]() if free_target_start_gaps else (
                 boundary[i + 1] - gap_open_penalty
             ).cast[
-                DType.int64
+                DType.int32
             ]()
-            var tmp2 = MIN if tmp < Int(MIN) else tmp.cast[dt]()
+            var tmp2 = MIN if tmp < Int32(MIN) else tmp.cast[dt]()
 
             v_f = v_f.shift_right[1]()
             v_f[0] = tmp2
@@ -403,8 +497,13 @@ fn semi_global_aln[
                 v_h = max(v_h, v_f)
 
                 pv_h_store[j] = v_h
-                v_saturation_check_max = max(v_saturation_check_max, v_h)
-                v_saturation_check_min = min(v_saturation_check_min, v_h)
+
+                @parameter
+                if do_saturation_check:
+                    v_saturation_check_max = max(
+                        v_saturation_check_max, v_h - v_neg_limit
+                    )
+                # v_saturation_check_min = min(v_saturation_check_min, v_h)
                 # print("SATCHECK MAX:", v_saturation_check_max)
                 # print("SATCHECK MIN:", v_saturation_check_min)
 
@@ -414,11 +513,7 @@ fn semi_global_aln[
                 # print("\t\tnew vF: ", v_f)
 
                 # Early termination check
-                var v_temp = saturating_sub(v_f, v_h)
-                # print("\t\tnew v_temp: ", v_temp)
-                var packed = v_temp == zero
-                if packed.reduce_and():
-                    # print("\t\tCan terminate early")
+                if not (v_f > v_h).reduce_or():
                     break_out = True
                     break
             if break_out:
@@ -481,20 +576,17 @@ fn semi_global_aln[
         end_query = query_len - 1
 
     # Saturation check
-    # print("MAX check:", v_saturation_check_max)
-    # print("MIN check:", v_saturation_check_min)
-    if (
-        (v_saturation_check_max > v_pos_limit)
-        | (v_saturation_check_min < v_neg_limit)
-    ).reduce_or():
-        # print(score)
-        # print("Saturation")
-        return AlignmentResult(
-            AlignmentEnd(0, 0, 0),
-        )
-    # print("Score:", score)
-    # print("Target end:", end_reference)
-    # print("Query end:", end_query)
+    @parameter
+    if do_saturation_check:
+        if (
+            (v_saturation_check_max > v_pos_limit)
+            # | (v_saturation_check_min < v_neg_limit)
+        ).reduce_or():
+            # print(score)
+            # print("Saturation")
+            return AlignmentResult(
+                AlignmentEnd(0, 0, 0), overflow_detected=True
+            )
 
     var bests = AlignmentResult(
         AlignmentEnd(
