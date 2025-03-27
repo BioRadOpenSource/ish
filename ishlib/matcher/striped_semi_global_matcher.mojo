@@ -13,8 +13,8 @@ from ishlib.matcher.alignment.semi_global_aln.striped import (
 
 @value
 struct StripedSemiGlobalMatcher[mut: Bool, //, origin: Origin[mut]](Matcher):
-    alias SIMD_U8_WIDTH = simdwidthof[UInt8]() // 2
-    alias SIMD_U16_WIDTH = simdwidthof[UInt16]() // 2
+    alias SIMD_U8_WIDTH = simdwidthof[UInt8]()
+    alias SIMD_U16_WIDTH = simdwidthof[UInt16]()
     var pattern: Span[UInt8, origin]
     var rev_pattern: List[UInt8]
     var rev_haystack_buffer: List[UInt8]
@@ -46,19 +46,21 @@ struct StripedSemiGlobalMatcher[mut: Bool, //, origin: Origin[mut]](Matcher):
         self.rev_haystack_buffer.extend(haystack)
         self.rev_haystack_buffer.reverse()
 
-        var result = semi_global_aln_start_end(
+        var result = semi_global_aln_start_end[do_saturation_check=False](
             reference=haystack,
-            rev_reference=self.rev_haystack_buffer,
+            rev_reference=Span(self.rev_haystack_buffer),
             query_len=len(self.pattern),
             gap_open_penalty=3,
             gap_extension_penalty=1,
-            profile=self.profile.profile_small.value(),
-            rev_profile=self.reverse_profile.profile_small.value(),
-            bias=self.profile.bias.cast[DType.uint8](),
-            free_query_start_gaps=False,
-            free_query_end_gaps=False,
-            free_target_start_gaps=False,
-            free_target_end_gaps=False,
+            profile=self.profile.profile_large.value(),
+            rev_profile=self.reverse_profile.profile_large.value(),
+            bias=self.profile.bias.cast[DType.uint16](),
+            max_score=self.profile.max_score,
+            min_score=self.profile.min_score,
+            free_query_start_gaps=True,
+            free_query_end_gaps=True,
+            free_target_start_gaps=True,
+            free_target_end_gaps=True,
         )
         if result.score >= len(self.pattern):
             return MatchResult(

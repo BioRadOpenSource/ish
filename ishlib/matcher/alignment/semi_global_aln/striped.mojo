@@ -123,7 +123,7 @@ struct Profile[
 
 
 fn semi_global_aln_start_end[
-    dt: DType, width: Int
+    dt: DType, width: Int, *, do_saturation_check: Bool = True
 ](
     reference: Span[UInt8],
     rev_reference: Span[UInt8],
@@ -143,7 +143,9 @@ fn semi_global_aln_start_end[
 ) -> AlignmentStartEndResult:
     # TODO: use the version with overflow checking?
     # Since saturation happens trivially easily at u8... maybe not.
-    var forward = semi_global_aln[dt, width](
+    var forward = semi_global_aln[
+        dt, width, do_saturation_check=do_saturation_check
+    ](
         reference,
         query_len,
         gap_open_penalty,
@@ -158,7 +160,9 @@ fn semi_global_aln_start_end[
         free_target_end_gaps=free_target_end_gaps,
     )
 
-    var reverse = semi_global_aln[dt, width](
+    var reverse = semi_global_aln[
+        dt, width, do_saturation_check=do_saturation_check
+    ](
         rev_reference,
         query_len,
         gap_open_penalty,
