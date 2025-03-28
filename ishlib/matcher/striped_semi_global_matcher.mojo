@@ -11,10 +11,17 @@ from ishlib.matcher.alignment.semi_global_aln.striped import (
 )
 
 
+# TODO: why is this a bit slower than the bench aligner, where the local on the same sequence, is much faster?
+
+
 @value
 struct StripedSemiGlobalMatcher[mut: Bool, //, origin: Origin[mut]](Matcher):
-    alias SIMD_U8_WIDTH = simdwidthof[UInt8]()
-    alias SIMD_U16_WIDTH = simdwidthof[UInt16]()
+    alias SIMD_U8_WIDTH = simdwidthof[
+        UInt8
+    ]() // 4  # TODO: needs tuning on wider machines
+    alias SIMD_U16_WIDTH = simdwidthof[
+        UInt16
+    ]() // 4  # TODO: needs tuning on wider machines
     var pattern: Span[UInt8, origin]
     var rev_pattern: List[UInt8]
     var rev_haystack_buffer: List[UInt8]
@@ -61,6 +68,7 @@ struct StripedSemiGlobalMatcher[mut: Bool, //, origin: Origin[mut]](Matcher):
             free_query_end_gaps=True,
             free_target_start_gaps=True,
             free_target_end_gaps=True,
+            score_cutoff=Int32(len(self.pattern)),
         )
         if result.score >= len(self.pattern):
             return MatchResult(

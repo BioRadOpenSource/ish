@@ -140,6 +140,7 @@ fn semi_global_aln_start_end[
     free_query_end_gaps: Bool = False,
     free_target_start_gaps: Bool = False,
     free_target_end_gaps: Bool = False,
+    score_cutoff: Int32 = 1,
 ) -> AlignmentStartEndResult:
     # TODO: use the version with overflow checking?
     # Since saturation happens trivially easily at u8... maybe not.
@@ -159,6 +160,15 @@ fn semi_global_aln_start_end[
         free_target_start_gaps=free_target_start_gaps,
         free_target_end_gaps=free_target_end_gaps,
     )
+
+    if forward.best.score < score_cutoff:
+        return AlignmentStartEndResult(
+            score=forward.best.score,
+            query_start=-1,
+            query_end=-1,
+            target_start=-1,
+            target_end=-1,
+        )
 
     var reverse = semi_global_aln[
         dt, width, do_saturation_check=do_saturation_check

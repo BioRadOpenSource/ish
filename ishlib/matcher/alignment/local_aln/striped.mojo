@@ -168,6 +168,7 @@ fn ssw_align[
     gap_extension_penalty: UInt8 = 1,
     return_only_alignment_end: Bool = False,
     mask_length: Int32 = 15,  # for second best score
+    score_cutoff: Int32 = 0,
 ) -> Optional[Alignment]:
     # Find the alignment scores and ending positions
     var bests: AlignmentResult
@@ -228,7 +229,7 @@ fn ssw_align[
         print("Failed to provide a valid query profile")
         return None
 
-    if bests.best.score <= 0:
+    if bests.best.score <= score_cutoff:
         return None
 
     var score1 = bests.best.score
