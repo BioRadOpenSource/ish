@@ -557,9 +557,10 @@ fn sw[
     #     print(p_vecs.end_query_column[i], ", ", end="")
     # print()
     # Find the most possible 2nd alignment
-    var score_0 = max_score + bias if max_score + bias >= 255 else max_score
+    # var score_0 = max_score + bias if max_score + bias >= 255 else max_score
+    # var score_0 = saturating_add(max_score, bias)
     var bests = AlignmentResult(
-        AlignmentEnd(score_0.cast[DType.int32](), end_reference, end_query),
+        AlignmentEnd(max_score.cast[DType.int32](), end_reference, end_query),
     )
 
     # Candidate for SIMD?

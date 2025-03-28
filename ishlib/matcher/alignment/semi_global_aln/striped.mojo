@@ -211,12 +211,12 @@ fn semi_global_aln_with_saturation_check[
         result = semi_global_aln[SmallType, SIMD_SMALL_WIDTH](
             reference,
             query_len,
-            gap_open_penalty.cast[SmallType](),
-            gap_extension_penalty.cast[SmallType](),
-            profile.profile_small.value(),
-            profile.bias.cast[SmallType](),
-            profile.max_score,
-            profile.min_score,
+            gap_open_penalty=gap_open_penalty.cast[SmallType](),
+            gap_extension_penalty=gap_extension_penalty.cast[SmallType](),
+            profile=profile.profile_small.value(),
+            bias=profile.bias.cast[SmallType](),
+            max_score=profile.max_score,
+            min_score=profile.min_score,
             free_query_start_gaps=free_query_start_gaps,
             free_query_end_gaps=free_query_end_gaps,
             free_target_start_gaps=free_target_start_gaps,
@@ -229,12 +229,12 @@ fn semi_global_aln_with_saturation_check[
         var larger = semi_global_aln[LargeType, SIMD_LARGE_WIDTH](
             reference,
             query_len,
-            gap_open_penalty.cast[LargeType](),
-            gap_extension_penalty.cast[LargeType](),
-            profile.profile_large.value(),
-            profile.bias.cast[LargeType](),
-            profile.max_score,
-            profile.min_score,
+            gap_open_penalty=gap_open_penalty.cast[LargeType](),
+            gap_extension_penalty=gap_extension_penalty.cast[LargeType](),
+            profile=profile.profile_large.value(),
+            bias=profile.bias.cast[LargeType](),
+            max_score=profile.max_score,
+            min_score=profile.min_score,
             free_query_start_gaps=free_query_start_gaps,
             free_query_end_gaps=free_query_end_gaps,
             free_target_start_gaps=free_target_start_gaps,
@@ -264,13 +264,8 @@ fn semi_global_aln[
     free_target_start_gaps: Bool = False,
     free_target_end_gaps: Bool = False,
 ) -> AlignmentResult:
-    """Smith-Waterman local alignment.
-
-    Arguments:
-        terminate: The best alignment score, used to terminate the matrix calc when locating the alignment beginning point. If this score is set to 0, it will not be used.
-
-    """
-    constrained[dt.is_unsigned(), "dt must be signed"]()
+    """Semi-global alignment."""
+    constrained[dt.is_unsigned(), "dt must be unsigned"]()
     alias NUM = Scalar[dt]
     alias MIN = NUM.MIN_FINITE
     alias MAX = NUM.MAX_FINITE
@@ -381,6 +376,10 @@ fn semi_global_aln[
     # print("querylen: ", query_len)
     # print("SIMD DType", dt)
     # print("SIMD WIDTH", width)
+    # print("Free Q Start", free_query_start_gaps)
+    # print("Free Q End", free_query_end_gaps)
+    # print("Free T Start", free_target_start_gaps)
+    # print("Free T End", free_target_end_gaps)
 
     for i in range(0, len(reference)):  # Not i and j are swapped
         # print("OUTER LOOP:", i)
@@ -480,7 +479,7 @@ fn semi_global_aln[
         # k += 1
         var break_out = False
         for _k in range(0, width):
-            var tmp = gap_open_penalty.cast[
+            var tmp = (ZERO - gap_open_penalty).cast[
                 DType.int32
             ]() if free_target_start_gaps else (
                 boundary[i + 1] - gap_open_penalty

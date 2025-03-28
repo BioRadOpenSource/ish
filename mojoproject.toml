@@ -13,8 +13,8 @@ version = "0.1.0"
 
 [tasks]
 build-bench = "magic run mojo build -D SIMD_MOD=1 --march native  -I ./ishlib -o ish-aligner ./ish_bench_aligner.mojo"
-build-bench-128 = "magic run mojo build -D SIMD_MOD=1 --march native  -I ./ishlib -o ish-aligner-128 ./ish_bench_aligner.mojo"
-build-bench-256 = "magic run mojo build -D SIMD_MOD=1 --march native  -I ./ishlib -o ish-aligner-256 ./ish_bench_aligner.mojo"
+build-bench-128 = "magic run mojo build -D SIMD_MOD=4 --march native  -I ./ishlib -o ish-aligner-128 ./ish_bench_aligner.mojo"
+build-bench-256 = "magic run mojo build -D SIMD_MOD=2 --march native  -I ./ishlib -o ish-aligner-256 ./ish_bench_aligner.mojo"
 build-bench-512 = "magic run mojo build -D SIMD_MOD=1 --march native  -I ./ishlib -o ish-aligner-512 ./ish_bench_aligner.mojo"
 build = "magic run mojo build  -o ish main.mojo"
 pkglib = "magic run mojo package ./ishlib"
