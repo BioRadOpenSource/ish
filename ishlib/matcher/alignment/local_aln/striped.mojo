@@ -201,7 +201,6 @@ fn ssw_align[
                 profile.bias.cast[DType.uint16](),
                 mask_length,
             )
-            bests.best.score -= profile.bias.cast[DType.int32]()
             used_word = True
         elif bests.best.score == 255:
             print(
@@ -223,7 +222,6 @@ fn ssw_align[
             profile.bias.cast[DType.uint16](),
             mask_length,
         )
-        bests.best.score -= profile.bias.cast[DType.int32]()
 
         used_word = True
     else:
