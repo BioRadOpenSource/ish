@@ -12,8 +12,8 @@ from ishlib.matcher.alignment.local_aln.striped import (
     ReferenceDirection,
 )
 
-alias SIMD_U8_WIDTH = simdwidthof[UInt8]()
-alias SIMD_U16_WIDTH = simdwidthof[UInt16]()
+alias SIMD_U8_WIDTH = 16  # simdwidthof[UInt8]()
+alias SIMD_U16_WIDTH = 8  # simdwidthof[UInt16]()
 
 
 fn test_profile() raises:
@@ -157,6 +157,8 @@ fn test_sw_byte() raises:
 
     # Create a small query and reference that will exercise all codepaths
     # For DNA-like alphabet (size 4), representing A=0, C=1, G=2, T=3
+    # TACGTACGTACG
+    #  ACGTACGT
 
     # Query: ACGTACGT
     var query = List[UInt8](0, 1, 2, 3, 0, 1, 2, 3)
@@ -187,7 +189,7 @@ fn test_sw_byte() raises:
         gap_extend,
         profile.profile_byte.value(),
         profile.byte_vectors,
-        0,  # No early termination
+        -1,  # No early termination
         profile.bias,
         4,  # Small mask length
     )
@@ -337,7 +339,7 @@ fn test_sw_byte_comprehensive() raises:
     print("Reference end:", alignments1.best.reference)
     print("Query end:", alignments1.best.query)
     assert_true(
-        alignments1.best.score == UInt16(len(query1) * 2),
+        alignments1.best.score == Int32(len(query1) * 2),
         "Perfect match should have score = 2 * length",
     )
 

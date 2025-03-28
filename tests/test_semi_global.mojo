@@ -121,6 +121,8 @@ fn test_exact_match_striped() raises:
             gap_extension_penalty=1,
             profile=profile.profile_large.value(),
             bias=profile.bias.cast[DType.uint16](),
+            max_score=profile.max_score,
+            min_score=profile.min_score,
             free_query_start_gaps=config.q_start,
             free_query_end_gaps=config.q_end,
             free_target_start_gaps=config.t_start,
@@ -226,6 +228,8 @@ fn test_query_substring_striped() raises:
         gap_extension_penalty=1,
         profile=profile.profile_large.value(),
         bias=profile.bias.cast[DType.uint16](),
+        max_score=profile.max_score,
+        min_score=profile.min_score,
         free_query_start_gaps=False,
         free_query_end_gaps=False,
         free_target_start_gaps=True,
@@ -246,6 +250,8 @@ fn test_query_substring_striped() raises:
         profile=profile.profile_large.value(),
         rev_profile=rev_profile.profile_large.value(),
         bias=profile.bias.cast[DType.uint16](),
+        max_score=profile.max_score,
+        min_score=profile.min_score,
         free_query_start_gaps=False,
         free_query_end_gaps=False,
         free_target_start_gaps=True,
@@ -293,6 +299,8 @@ fn test_target_substring() raises:
         gap_extension_penalty=1,
         profile=profile.profile_large.value(),
         bias=profile.bias.cast[DType.uint16](),
+        max_score=profile.max_score,
+        min_score=profile.min_score,
         free_query_start_gaps=True,
         free_query_end_gaps=True,
         free_target_start_gaps=False,
@@ -313,6 +321,8 @@ fn test_target_substring() raises:
         profile=profile.profile_large.value(),
         rev_profile=rev_profile.profile_large.value(),
         bias=profile.bias.cast[DType.uint16](),
+        max_score=profile.max_score,
+        min_score=profile.min_score,
         free_query_start_gaps=True,
         free_query_end_gaps=True,
         free_target_start_gaps=False,
@@ -784,6 +794,8 @@ fn test_partial_match_with_mismatch_striped() raises:
         gap_extension_penalty=1,
         profile=profile.profile_large.value(),
         bias=profile.bias.cast[DType.uint16](),
+        max_score=profile.max_score,
+        min_score=profile.min_score,
         free_query_start_gaps=False,
         free_query_end_gaps=False,
         free_target_start_gaps=False,
@@ -800,6 +812,8 @@ fn test_partial_match_with_mismatch_striped() raises:
         gap_extension_penalty=1,
         profile=profile.profile_large.value(),
         bias=profile.bias.cast[DType.uint16](),
+        max_score=profile.max_score,
+        min_score=profile.min_score,
         free_query_start_gaps=False,
         free_query_end_gaps=True,
         free_target_start_gaps=False,
@@ -811,6 +825,83 @@ fn test_partial_match_with_mismatch_striped() raises:
         4,
         "Partial match with mismatch and free query end should score 4",
     )
+
+
+fn test_alignment_striped_regression() raises:
+    """Real example.
+
+    ```
+    /home/ubuntu/dev/parasail/apps/parasail_aligner -t 1 -v -x -o 3 -e 1 -m blosum62 -a sg_trace_striped_sse41_128_16 -O SSW -f /home/ubuntu/data/first_ref.fasta -q /home/ubuntu/dev/parasail/data/P01111.fasta -g /home/ubuntu/outputs/parasail-aligner-sg.csv
+    ```
+
+    target_name: sp|Q6GZX4|001R_FRG3G
+    query_name: sp|P01111|RASN_HUMAN
+    optimal_alignment_score: 172    strand: +       target_begin: 1 target_end: 256 query_begin: 1  query_end: 171
+
+    Target:          1 MAFSAEDVLKEYDRRRRMEALLLSLYYPNDRKLLDYKEWSPPRVQVECPKAPVEWNNPPS      60
+                                                                                **
+    Query:           1 ----------------------------------------------------------MT       2
+
+    Target:         61 E-KGL-IVGHFSGIKYKGEKAQASEVDV--NKMCCWVSKF----KDAMRRYQ----GIQT     108
+                    | | | *|| **|*   | |* |*****  |*   *|***    *|**|* |    | *|
+    Query:           3 EYK-LVVVG-AGGV---G-KS-ALTIQLIQNH---FVDEYDPTIEDSYRK-QVVIDG-ET      50
+
+    Target:        109 CKIPGKVLSD-LDAKIKAYNLTVEGVEGF--VR--YSRVTKQ-HVAAFLKELRHSKQYEN     162
+                    |     *| | ||        |* |*|**  *|  |*| |** ****|  ****||****
+    Query:          51 C-----LL-DILD--------TA-GQEEYSAMRDQYMR-TGEGFLCVF--AINNSKSFAD      92
+
+    Target:        163 VNLIHY---ILTDKRV-DIQHLEKDLV--K-DFKA-LVESAHRMRQGHMINVKYILYQLL     214
+                    *||  |   |   ||| |*******||  | |*** *|**    *|*|         *|*
+    Query:          93 INL--YREQI---KRVKDSDDVPMVLVGNKCDLPTRTVDT----KQAH---------ELA     134
+
+    Target:        215 KKHGHGPDGPDILT-VKTGSKGVLYDDSFRKIYT---DL-GWKFTPL-------------     256
+                    |**|*    |*|*| *|| **||  *|*|   ||   ** ******|
+    Query:         135 KSYGI----PFIETSAKT-RQGV--EDAF---YTLVREIRQYRMKKLNSSDDGTQGCMGL     184
+
+    Target:        257 -----     256
+
+    Query:         185 PCVVM     189
+
+    """
+    var score_matrix = ScoringMatrix.blosum62()
+    var query = score_matrix.convert_ascii_to_encoding(
+        "MTEYKLVVVGAGGVGKSALTIQLIQNHFVDEYDPTIEDSYRKQVVIDGETCLLDILDTAGQEEYSAMRDQYMRTGEGFLCVFAINNSKSFADINLYREQIKRVKDSDDVPMVLVGNKCDLPTRTVDTKQAHELAKSYGIPFIETSAKTRQGVEDAFYTLVREIRQYRMKKLNSSDDGTQGCMGLPCVVM"
+        .as_bytes()
+    )
+    var target = score_matrix.convert_ascii_to_encoding(
+        "MAFSAEDVLKEYDRRRRMEALLLSLYYPNDRKLLDYKEWSPPRVQVECPKAPVEWNNPPSEKGLIVGHFSGIKYKGEKAQASEVDVNKMCCWVSKFKDAMRRYQGIQTCKIPGKVLSDLDAKIKAYNLTVEGVEGFVRYSRVTKQHVAAFLKELRHSKQYENVNLIHYILTDKRVDIQHLEKDLVKDFKALVESAHRMRQGHMINVKYILYQLLKKHGHGPDGPDILTVKTGSKGVLYDDSFRKIYTDLGWKFTPL"
+        .as_bytes()
+    )
+    var rev_query = query.copy()
+    var rev_target = target.copy()
+    rev_query.reverse()
+    rev_target.reverse()
+    var profile = Profile[
+        16, 8, SmallType = DType.uint8, LargeType = DType.uint16
+    ](query, score_matrix, ScoreSize.Adaptive)
+    var rev_profile = Profile[
+        16, 8, SmallType = DType.uint8, LargeType = DType.uint16
+    ](rev_query, score_matrix, ScoreSize.Adaptive)
+
+    # No free ends config
+    var result = semi_global_aln[DType.uint16, 8](
+        target,
+        len(query),
+        gap_open_penalty=3,
+        gap_extension_penalty=1,
+        profile=profile.profile_large.value(),
+        bias=profile.bias.cast[DType.uint16](),
+        max_score=profile.max_score,
+        min_score=profile.min_score,
+        free_query_start_gaps=True,
+        free_query_end_gaps=True,
+        free_target_start_gaps=True,
+        free_target_end_gaps=True,
+    ).best
+
+    assert_equal(result.score, 172)
+    assert_equal(result.reference, 255)
+    assert_equal(result.query, 170)
 
 
 fn test_alignment_with_gap_striped() raises:
@@ -839,6 +930,8 @@ fn test_alignment_with_gap_striped() raises:
         gap_extension_penalty=1,
         profile=profile.profile_large.value(),
         bias=profile.bias.cast[DType.uint16](),
+        max_score=profile.max_score,
+        min_score=profile.min_score,
         free_query_start_gaps=False,
         free_query_end_gaps=False,
         free_target_start_gaps=False,
@@ -857,6 +950,8 @@ fn test_alignment_with_gap_striped() raises:
         profile=profile.profile_large.value(),
         rev_profile=rev_profile.profile_large.value(),
         bias=profile.bias.cast[DType.uint16](),
+        max_score=profile.max_score,
+        min_score=profile.min_score,
         free_query_start_gaps=False,
         free_query_end_gaps=False,
         free_target_start_gaps=False,
@@ -883,6 +978,8 @@ fn test_no_match_striped() raises:
         gap_extension_penalty=1,
         profile=profile.profile_large.value(),
         bias=profile.bias.cast[DType.uint16](),
+        max_score=profile.max_score,
+        min_score=profile.min_score,
         free_query_start_gaps=True,
         free_query_end_gaps=True,
         free_target_start_gaps=True,
@@ -901,6 +998,8 @@ fn test_no_match_striped() raises:
         gap_extension_penalty=1,
         profile=profile.profile_large.value(),
         bias=profile.bias.cast[DType.uint16](),
+        max_score=profile.max_score,
+        min_score=profile.min_score,
         free_query_start_gaps=False,
         free_query_end_gaps=False,
         free_target_start_gaps=False,
@@ -928,6 +1027,8 @@ fn test_empty_sequences_striped() raises:
         gap_extension_penalty=1,
         profile=profile.profile_large.value(),
         bias=profile.bias.cast[DType.uint16](),
+        max_score=profile.max_score,
+        min_score=profile.min_score,
         free_query_start_gaps=True,
         free_query_end_gaps=True,
         free_target_start_gaps=False,
@@ -952,6 +1053,8 @@ fn test_empty_sequences_striped() raises:
         gap_extension_penalty=1,
         profile=empty_profile.profile_large.value(),
         bias=empty_profile.bias.cast[DType.uint16](),
+        max_score=profile.max_score,
+        min_score=profile.min_score,
         free_query_start_gaps=False,
         free_query_end_gaps=False,
         free_target_start_gaps=False,
@@ -1004,6 +1107,8 @@ fn test_complex_case_striped() raises:
             gap_extension_penalty=1,
             profile=profile.profile_large.value(),
             bias=profile.bias.cast[DType.uint16](),
+            max_score=profile.max_score,
+            min_score=profile.min_score,
             free_query_start_gaps=config.q_start,
             free_query_end_gaps=config.q_end,
             free_target_start_gaps=config.t_start,
@@ -1039,6 +1144,8 @@ fn test_complex_case_striped() raises:
                 gap_open_penalty=3,
                 gap_extension_penalty=1,
                 profile=profile.profile_large.value(),
+                max_score=profile.max_score,
+                min_score=profile.min_score,
                 rev_profile=rev_profile.profile_large.value(),
                 bias=profile.bias.cast[DType.uint16](),
                 free_query_start_gaps=config.q_start,
@@ -1109,6 +1216,8 @@ fn test_complex_case_striped_small() raises:
             gap_extension_penalty=1,
             profile=profile.profile_small.value(),
             bias=profile.bias.cast[DType.uint8](),
+            max_score=profile.max_score,
+            min_score=profile.min_score,
             free_query_start_gaps=config.q_start,
             free_query_end_gaps=config.q_end,
             free_target_start_gaps=config.t_start,
@@ -1146,6 +1255,8 @@ fn test_complex_case_striped_small() raises:
                 profile=profile.profile_small.value(),
                 rev_profile=rev_profile.profile_small.value(),
                 bias=profile.bias.cast[DType.uint8](),
+                max_score=profile.max_score,
+                min_score=profile.min_score,
                 free_query_start_gaps=config.q_start,
                 free_query_end_gaps=config.q_end,
                 free_target_start_gaps=config.t_start,
@@ -1197,6 +1308,8 @@ fn test_reversed_alignment_striped() raises:
         profile=profile.profile_large.value(),
         rev_profile=rev_profile.profile_large.value(),
         bias=profile.bias.cast[DType.uint16](),
+        max_score=profile.max_score,
+        min_score=profile.min_score,
         free_query_start_gaps=True,
         free_query_end_gaps=True,
         free_target_start_gaps=False,
@@ -1240,6 +1353,8 @@ fn test_biological_example_striped() raises:
         gap_extension_penalty=1,
         profile=profile.profile_large.value(),
         bias=profile.bias.cast[DType.uint16](),
+        max_score=profile.max_score,
+        min_score=profile.min_score,
         free_query_start_gaps=False,
         free_query_end_gaps=False,
         free_target_start_gaps=False,
@@ -1270,6 +1385,8 @@ fn test_biological_example_striped() raises:
         profile=mid_profile.profile_large.value(),
         rev_profile=mid_rev_profile.profile_large.value(),
         bias=mid_profile.bias.cast[DType.uint16](),
+        max_score=profile.max_score,
+        min_score=profile.min_score,
         free_query_start_gaps=False,
         free_query_end_gaps=False,
         free_target_start_gaps=True,
@@ -1303,6 +1420,8 @@ fn test_biological_example_striped() raises:
         profile=end_profile.profile_large.value(),
         rev_profile=end_rev_profile.profile_large.value(),
         bias=end_profile.bias.cast[DType.uint16](),
+        max_score=profile.max_score,
+        min_score=profile.min_score,
         free_query_start_gaps=False,
         free_query_end_gaps=False,
         free_target_start_gaps=True,

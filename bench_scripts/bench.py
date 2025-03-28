@@ -330,8 +330,9 @@ def main():
                     )
                     results.append(r)
 
+    for inst in ["sse41_128"]:
     # for inst in ["sse41_128", "avx2_256"]:
-    for inst in ["neon_128"]:
+    # for inst in ["neon_128"]:
         for score_size in score_sizes:
             for query, query_len in QUERY_SEQS.items():
                 print(f"Running {PARASAIL_ALIGNER} on {query}", file=sys.stderr)

@@ -603,6 +603,9 @@ fn bench_striped_local(
     metric_writer.flush()
 
 
+from utils import StringSlice
+
+
 fn bench_striped_semi_global(
     target_file: String,
     query_file: String,
