@@ -158,7 +158,7 @@ fn test_sw_byte() raises:
     # Create a small query and reference that will exercise all codepaths
     # For DNA-like alphabet (size 4), representing A=0, C=1, G=2, T=3
     # TACGTACGTACG
-    #  ACGTACGT
+    # ACGTACGT
 
     # Query: ACGTACGT
     var query = List[UInt8](0, 1, 2, 3, 0, 1, 2, 3)
