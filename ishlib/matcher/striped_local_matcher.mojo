@@ -12,8 +12,10 @@ from ishlib.matcher.alignment.local_aln.striped import (
 
 @value
 struct StripedLocalMatcher[mut: Bool, //, origin: Origin[mut]](Matcher):
-    alias SIMD_U8_WIDTH = simdwidthof[UInt8]()
-    alias SIMD_U16_WIDTH = simdwidthof[UInt16]()
+    alias SIMD_U8_WIDTH = simdwidthof[
+        UInt8
+    ]() // 4  # TODO: needs tuning on wider machines (avx512) for example
+    alias SIMD_U16_WIDTH = simdwidthof[UInt16]() // 4
     var pattern: Span[UInt8, origin]
     var rev_pattern: List[UInt8]
     var profile: Profile[Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH]
@@ -46,6 +48,7 @@ struct StripedLocalMatcher[mut: Bool, //, origin: Origin[mut]](Matcher):
             haystack,
             self.pattern,
             reverse_profile=self.reverse_profile,
+            score_cutoff=Int32(len(self.pattern)) - 1,
         )
         if (
             result
