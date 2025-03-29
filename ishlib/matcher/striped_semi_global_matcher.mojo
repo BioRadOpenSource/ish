@@ -70,9 +70,10 @@ struct StripedSemiGlobalMatcher[mut: Bool, //, origin: Origin[mut]](Matcher):
             free_target_end_gaps=True,
             score_cutoff=Int32(len(self.pattern)),
         )
-        if result.score >= len(self.pattern):
+        if result and result.value().score >= len(self.pattern):
             return MatchResult(
-                Int(result.target_start), Int(result.target_end + 1)
+                Int(result.value().target_start),
+                Int(result.value().target_end + 1),
             )
 
         return None

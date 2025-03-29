@@ -24,7 +24,7 @@ struct FastaSearchRunner[M: Matcher]:
         var reader = FastaReader(BufferedReader(open(file, "r")))
         var writer = BufferedWriter(stdout)
 
-        # TODO: hold onto the non-newline stripped sequence as well for outputing thmatch coller
+        # TODO: hold onto the non-newline stripped sequence as well for outputting the match color
 
         while True:
             var record = reader.read_borrowed()
