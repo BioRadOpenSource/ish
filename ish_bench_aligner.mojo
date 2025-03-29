@@ -446,6 +446,8 @@ fn main() raises:
         matrix = ScoringMatrix.actgn_matrix(
             match_score=match_score, mismatch_score=mismatch_score
         )
+    elif matrix_name == "ASCII":
+        matrix = ScoringMatrix.all_ascii_default_matrix()
     else:
         raise "Unknown matrix " + matrix_name
 
@@ -493,6 +495,7 @@ fn bench_striped_local(
     gap_open_score: Int,
     gap_extension_score: Int,
 ) raises:
+    var prep_start = perf_counter()
     # Read the fastas and encode the sequences
     var target_seqs = FastaRecord.slurp_fasta(target_file)
     var targets = List[ByteFastaRecord](capacity=len(target_seqs))
@@ -517,6 +520,8 @@ fn bench_striped_local(
         profiles.append(
             Profiles[SIMD_U8_WIDTH, SIMD_U16_WIDTH](q[], matrix, score_size)
         )
+    var prep_end = perf_counter()
+    print("Setup Time:", prep_end - prep_start, file=stderr)
 
     var results = List[BenchmarkResults]()
     for _ in range(0, iterations):
@@ -619,6 +624,7 @@ fn bench_striped_semi_global(
     gap_extension_score: Int,
 ) raises:
     # Read the fastas and encode the sequences
+    var prep_start = perf_counter()
     var target_seqs = FastaRecord.slurp_fasta(target_file)
     var targets = List[ByteFastaRecord](capacity=len(target_seqs))
     while len(target_seqs) > 0:
@@ -644,6 +650,8 @@ fn bench_striped_semi_global(
                 q[], matrix, score_size
             )
         )
+    var prep_end = perf_counter()
+    print("Setup Time:", prep_end - prep_start, file=stderr)
 
     var results = List[BenchmarkResults]()
     for _ in range(0, iterations):

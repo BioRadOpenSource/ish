@@ -39,10 +39,12 @@ struct BasicSemiGlobalMatcher(Matcher):
             free_query_end_gaps=True,
             free_target_start_gaps=True,
             free_target_end_gaps=True,
+            score_cutoff=len(pattern),
         )
-        if result.score >= len(pattern):
+        if result and result.value().score >= len(pattern):
             return MatchResult(
-                result.coords.value().start, result.coords.value().end
+                result.value().coords.value().start,
+                result.value().coords.value().end,
             )
 
         return None

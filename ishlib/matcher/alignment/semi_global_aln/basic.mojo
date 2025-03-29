@@ -37,7 +37,8 @@ fn semi_global_parasail_start_end_end[
     free_query_end_gaps: Bool = False,
     free_target_start_gaps: Bool = False,
     free_target_end_gaps: Bool = False,
-) -> AlignmentResult:
+    score_cutoff: Int = 1,
+) -> Optional[AlignmentResult]:
     """Semi-global alignment to find the start end end points of the query on the target.
 
     Arguments:
@@ -62,6 +63,9 @@ fn semi_global_parasail_start_end_end[
         free_target_start_gaps=free_target_start_gaps,
         free_target_end_gaps=free_target_end_gaps,
     )
+
+    if ends.score <= score_cutoff:
+        return None
 
     var starts = semi_global_parasail[DT=DT](
         rev_query,

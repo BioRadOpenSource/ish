@@ -141,7 +141,7 @@ fn semi_global_aln_start_end[
     free_target_start_gaps: Bool = False,
     free_target_end_gaps: Bool = False,
     score_cutoff: Int32 = 1,
-) -> AlignmentStartEndResult:
+) -> Optional[AlignmentStartEndResult]:
     # TODO: use the version with overflow checking?
     # Since saturation happens trivially easily at u8... maybe not.
     var forward = semi_global_aln[
@@ -162,13 +162,7 @@ fn semi_global_aln_start_end[
     )
 
     if forward.best.score < score_cutoff:
-        return AlignmentStartEndResult(
-            score=forward.best.score,
-            query_start=-1,
-            query_end=-1,
-            target_start=-1,
-            target_end=-1,
-        )
+        return None
 
     var reverse = semi_global_aln[
         dt, width, do_saturation_check=do_saturation_check
@@ -361,7 +355,7 @@ fn semi_global_aln[
     if -Int32(gap_open_penalty) < Int32(min_score):
         v_neg_limit = MIN + gap_open_penalty + 1
     else:
-        # this is a gross set of casting to allow the possibly negetive matrix min
+        # this is a gross set of casting to allow the possibly negative matrix min
         v_neg_limit = (Int32(MIN) + Int32(abs(min_score)) + Int32(1)).cast[dt]()
 
     var v_pos_limit = SIMD[dt, width](Int32(MAX) - Int32(max_score) - 1)
