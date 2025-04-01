@@ -1,5 +1,7 @@
 from collections import InlineArray
 from math import sqrt
+from memory import UnsafePointer, AddressSpace
+from sys.info import alignof
 
 # fmt: off
 alias AA_TO_NUM = InlineArray[UInt8, 128](
@@ -143,6 +145,49 @@ alias ACTGN = InlineArray[Int8, 25](
 
 
 @value
+struct BasicScoringMatrix[
+    mut: Bool, //,
+    *,
+    origin: Origin[mut],
+    address_space: AddressSpace = AddressSpace(0),
+    alignment: Int = alignof[Int8](),
+]:
+    """Scoring matrix that allows for easy abstraction over a sequence of bytes.
+    """
+
+    var values: UnsafePointer[
+        Int8,
+        address_space=address_space,
+        alignment=alignment,
+        mut=mut,
+        origin=origin,
+    ]
+    var len: Int
+    var size: Int
+
+    fn __init__(
+        out self,
+        ptr: UnsafePointer[
+            Int8,
+            address_space=address_space,
+            alignment=alignment,
+            mut=mut,
+            origin=origin,
+        ],
+        length: Int,
+    ):
+        self.values = ptr
+        self.len = length
+        self.size = sqrt(length)
+
+    fn get(read self, i: Int, j: Int) -> Int8:
+        return self.values[i * self.size + j]
+
+    fn __len__(read self) -> Int:
+        return self.len
+
+
+@value
 struct ScoringMatrix:
     """The scoring matrix for determining the match/mismatch score between any two values.
 
@@ -222,6 +267,9 @@ struct ScoringMatrix:
                 else:
                     values[i * size + j] = mismatch_score  # Mismatch
         return values
+
+    fn __len__(read self) -> Int:
+        return len(self.values)
 
     fn get(read self, i: Int, j: Int) -> Int8:
         return self.values[i * self.size + j]
