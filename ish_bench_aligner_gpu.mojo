@@ -956,8 +956,8 @@ fn bench_basic_semi_global(
                 var result = semi_global_parasail[DType.int16](
                     query[].seq,
                     target[].seq,
-                    # matrix,
-                    basic_matrix,
+                    matrix,
+                    # basic_matrix,
                     gap_open_penalty=-gap_open_score,
                     gap_extension_penalty=-gap_extension_score,
                     free_query_start_gaps=True,
@@ -1101,8 +1101,6 @@ fn bench_striped_semi_global_parallel(
 
             fn do_alignment(index: Int) capturing:
                 var target = Pointer.address_of(targets[index])
-                if index == 532959:
-                    print("532959 is:", targets[index].name)
                 var result = semi_global_aln_with_saturation_check[
                     SIMD_U8_WIDTH,
                     SIMD_U16_WIDTH,

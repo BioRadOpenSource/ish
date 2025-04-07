@@ -51,8 +51,8 @@ struct Profile[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
 
     var profile_byte: Optional[Self.ByteVProfile]
     var profile_word: Optional[Self.WordVProfile]
-    var byte_vectors: ProfileVectors[DType.uint8, SIMD_U8_WIDTH]
-    var word_vectors: ProfileVectors[DType.uint16, SIMD_U16_WIDTH]
+    # var byte_vectors: ProfileVectors[DType.uint8, SIMD_U8_WIDTH]
+    # var word_vectors: ProfileVectors[DType.uint16, SIMD_U16_WIDTH]
     var query_len: Int32
     var alphabet_size: UInt32
     var bias: UInt8
@@ -104,8 +104,8 @@ struct Profile[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
         return Self(
             profile_byte,
             profile_word,
-            ProfileVectors[DType.uint8, SIMD_U8_WIDTH](len(query)),
-            ProfileVectors[DType.uint16, SIMD_U16_WIDTH](len(query)),
+            # ProfileVectors[DType.uint8, SIMD_U8_WIDTH](len(query)),
+            # ProfileVectors[DType.uint16, SIMD_U16_WIDTH](len(query)),
             len(query),
             score_matrix.size,
             bias,
@@ -158,11 +158,11 @@ struct Profile[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
 fn ssw_align[
     SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int
 ](
-    mut profile: Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH],
+    read profile: Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH],
     read matrix: ScoringMatrix,
     reference: Span[UInt8],
     query: Span[UInt8],
-    mut reverse_profile: Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH],
+    read reverse_profile: Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH],
     *,
     gap_open_penalty: UInt8 = 3,
     gap_extension_penalty: UInt8 = 1,
@@ -184,7 +184,7 @@ fn ssw_align[
             gap_open_penalty,
             gap_extension_penalty,
             profile.profile_byte.value(),
-            profile.byte_vectors,
+            # profile.byte_vectors,
             -1,
             profile.bias,
             mask_length,
@@ -197,7 +197,7 @@ fn ssw_align[
                 gap_open_penalty.cast[DType.uint16](),
                 gap_extension_penalty.cast[DType.uint16](),
                 profile.profile_word.value(),
-                profile.word_vectors,
+                # profile.word_vectors,
                 -1,
                 profile.bias.cast[DType.uint16](),
                 mask_length,
@@ -218,7 +218,7 @@ fn ssw_align[
             gap_open_penalty.cast[DType.uint16](),
             gap_extension_penalty.cast[DType.uint16](),
             profile.profile_word.value(),
-            profile.word_vectors,
+            # profile.word_vectors,
             -1,
             profile.bias.cast[DType.uint16](),
             mask_length,
@@ -259,7 +259,7 @@ fn ssw_align[
             gap_open_penalty,
             gap_extension_penalty,
             reverse_profile.profile_byte.value(),
-            reverse_profile.byte_vectors,
+            # reverse_profile.byte_vectors,
             -1,
             reverse_profile.bias,
             mask_length,
@@ -272,7 +272,7 @@ fn ssw_align[
             gap_open_penalty.cast[DType.uint16](),
             gap_extension_penalty.cast[DType.uint16](),
             reverse_profile.profile_word.value(),
-            reverse_profile.word_vectors,
+            # reverse_profile.word_vectors,
             -1,
             reverse_profile.bias.cast[DType.uint16](),
             mask_length,
@@ -301,7 +301,7 @@ fn sw[
     gap_open_penalty: SIMD[dt, 1],
     gap_extension_penalty: SIMD[dt, 1],
     profile: Span[SIMD[dt, width]],
-    mut p_vecs: ProfileVectors[dt, width],
+    # mut p_vecs: ProfileVectors[dt, width],
     terminate: SIMD[dt, 1],
     bias: SIMD[dt, 1],
     mask_length: Int32,
@@ -312,7 +312,8 @@ fn sw[
         terminate: The best alignment score, used to terminate the matrix calc when locating the alignment beginning point. If this score is set to 0, it will not be used.
 
     """
-    p_vecs.zero_out()
+    var p_vecs = ProfileVectors[dt, width](query_len)
+    # p_vecs.zero_out()
     p_vecs.init_columns(len(reference))
     var max_score = UInt8(0).cast[dt]()
     var end_query: Int32 = query_len - 1

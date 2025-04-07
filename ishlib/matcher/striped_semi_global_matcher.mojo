@@ -18,13 +18,13 @@ from ishlib.matcher.alignment.semi_global_aln.striped import (
 struct StripedSemiGlobalMatcher[mut: Bool, //, origin: Origin[mut]](Matcher):
     alias SIMD_U8_WIDTH = simdwidthof[
         UInt8
-    ]() // 4  # TODO: needs tuning on wider machines
+    ]()  # // 4  # TODO: needs tuning on wider machines
     alias SIMD_U16_WIDTH = simdwidthof[
         UInt16
-    ]() // 4  # TODO: needs tuning on wider machines
+    ]()  # // 4  # TODO: needs tuning on wider machines
     var pattern: Span[UInt8, origin]
     var rev_pattern: List[UInt8]
-    var rev_haystack_buffer: List[UInt8]
+    # var rev_haystack_buffer: List[UInt8]
     var profile: Profile[Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH]
     var reverse_profile: Profile[Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH]
     var matrix: ScoringMatrix
@@ -34,7 +34,6 @@ struct StripedSemiGlobalMatcher[mut: Bool, //, origin: Origin[mut]](Matcher):
         self.matrix = matrix
         self.pattern = pattern
         self.rev_pattern = create_reversed(pattern)
-        self.rev_haystack_buffer = List[UInt8]()
         var profile = Profile[Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH](
             self.pattern, self.matrix, ScoreSize.Adaptive
         )
@@ -45,17 +44,12 @@ struct StripedSemiGlobalMatcher[mut: Bool, //, origin: Origin[mut]](Matcher):
         self.reverse_profile = reverse_profile
 
     fn first_match(
-        mut self, haystack: Span[UInt8], pattern: Span[UInt8]
+        read self, haystack: Span[UInt8], pattern: Span[UInt8]
     ) -> Optional[MatchResult]:
         """Find the first match in the haystack."""
 
-        self.rev_haystack_buffer.clear()
-        self.rev_haystack_buffer.extend(haystack)
-        self.rev_haystack_buffer.reverse()
-
         var result = semi_global_aln_start_end[do_saturation_check=False](
             reference=haystack,
-            rev_reference=Span(self.rev_haystack_buffer),
             query_len=len(self.pattern),
             gap_open_penalty=3,
             gap_extension_penalty=1,
@@ -77,3 +71,13 @@ struct StripedSemiGlobalMatcher[mut: Bool, //, origin: Origin[mut]](Matcher):
             )
 
         return None
+
+    @always_inline
+    fn convert_ascii_to_encoding(read self, value: UInt8) -> UInt8:
+        """Convert an ascii byte to an encoded byte."""
+        return self.matrix.convert_ascii_to_encoding(value)
+
+    @always_inline
+    fn convert_encoding_to_ascii(read self, value: UInt8) -> UInt8:
+        """Convert an encoded byte to an ascii byte."""
+        return self.matrix.convert_encoding_to_ascii(value)

@@ -1,9 +1,21 @@
 from collections import Optional
 from utils import StringSlice
+from sys.info import sizeof
 
 from ExtraMojo.io.buffered import BufferedReader
 from ExtraMojo.bstr.memchr import memchr
 from ExtraMojo.bstr.bstr import to_ascii_uppercase
+
+from ishlib.matcher import Matcher
+
+
+@value
+struct ByteFastaRecord:
+    var name: List[UInt8]
+    var seq: List[UInt8]
+
+    fn size_in_bytes(read self) -> UInt:
+        return sizeof[Self]() + len(self.name) + len(self.seq)
 
 
 @value
@@ -152,3 +164,46 @@ struct FastaReader:
             Span(self.buffer),
             header_line_end + 1,
         )
+
+    # TODO: move the encoding from Matcher to its own encoder trait
+
+    fn read_owned[
+        M: Matcher
+    ](mut self, read encoder: M) raises -> Optional[ByteFastaRecord]:
+        self.buffer.clear()
+
+        # TODO: reserve cap based on last seen sequence?
+        var header = List[UInt8]()
+        var seq = List[UInt8]()
+
+        while self.reader.read_until(self.buffer, ord(">")) > 0:
+            # If the next char isn't a newline, this isn't actually the end of the header
+            if self.buffer[-1] != ord("\n"):
+                continue
+            else:
+                break
+
+        if len(self.buffer) == 0:
+            return None
+
+        # Find the first newline in the buffer
+        var header_line_end = memchr(self.buffer, ord("\n"))
+        if header_line_end == -1:
+            raise "No newline found for FASTA record header"
+
+        # Should be able to retrurn a slice of self.buffer, but that isn't working for some reason
+        for i in range(0, header_line_end):
+            header.append(self.buffer[i])
+
+        # Now copy in the seq bytes, removing newlines
+        var start = header_line_end + 1
+        var end = memchr(self.buffer, ord("\n"), start)
+        while end != -1:
+            # TODO: switch to memcpy
+            for i in range(start, end):
+                seq.append(encoder.convert_ascii_to_encoding(self.buffer[i]))
+                # seq.append(self.buffer[i])
+            start = end + 1
+            end = memchr(self.buffer, ord("\n"), start)
+
+        return ByteFastaRecord(header, seq)

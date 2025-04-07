@@ -304,6 +304,10 @@ struct ScoringMatrix:
         return out
 
     @always_inline
+    fn convert_ascii_to_encoding(read self, seq: UInt8) -> UInt8:
+        return self.ascii_to_encoding[Int(seq)]
+
+    @always_inline
     fn convert_ascii_to_encoding(
         read self, owned seq: List[UInt8]
     ) -> List[UInt8]:
@@ -324,3 +328,7 @@ struct ScoringMatrix:
         for value in seq:
             out.append(self.encoding_to_ascii[Int(value[])])
         return out
+
+    @always_inline
+    fn convert_encoding_to_ascii(read self, seq: UInt8) -> UInt8:
+        return self.encoding_to_ascii[Int(seq)]

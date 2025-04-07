@@ -5,6 +5,7 @@ from collections import InlineArray
 from math import sqrt, iota
 from memory import pack_bits, memset_zero
 
+from ishlib.matcher.alignment import create_reversed
 from ishlib.matcher.alignment.scoring_matrix import ScoringMatrix
 from ishlib.matcher.alignment.striped_utils import (
     saturating_sub,
@@ -126,7 +127,6 @@ fn semi_global_aln_start_end[
     dt: DType, width: Int, *, do_saturation_check: Bool = True
 ](
     reference: Span[UInt8],
-    rev_reference: Span[UInt8],
     query_len: Int32,
     gap_open_penalty: SIMD[dt, 1],
     gap_extension_penalty: SIMD[dt, 1],
@@ -164,6 +164,7 @@ fn semi_global_aln_start_end[
     if forward.best.score < score_cutoff:
         return None
 
+    var rev_reference = create_reversed(reference)
     var reverse = semi_global_aln[
         dt, width, do_saturation_check=do_saturation_check
     ](

@@ -28,7 +28,7 @@ struct SGResult(StringableRaising):
         )
 
 
-fn semi_global_parasail_start_end_end[
+fn semi_global_parasail_start_end[
     DT: DType = DType.int32
 ](
     query: Span[UInt8],
@@ -98,8 +98,7 @@ fn semi_global_parasail[
 ](
     query: Span[UInt8],
     target: Span[UInt8],
-    # read scoring_matrix: ScoringMatrix,
-    read scoring_matrix: BasicScoringMatrix,
+    read scoring_matrix: ScoringMatrix,
     *,
     gap_open_penalty: Scalar[DT] = -3,
     gap_extension_penalty: Scalar[DT] = -1,
@@ -322,7 +321,6 @@ fn semi_global_parasail_gpu[
         if not free_target_start_gaps:
             WH = gap_open_penalty + ((i - 1) * gap_extension_penalty)
 
-        # var WH = 0 if free_target_start_gaps else
         var E = HALF_MIN
         H[0] = WH
 
