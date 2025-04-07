@@ -39,7 +39,7 @@ struct StripedLocalMatcher[mut: Bool, //, origin: Origin[mut]](Matcher):
         self.reverse_profile = reverse_profile
 
     fn first_match(
-        mut self, haystack: Span[UInt8], pattern: Span[UInt8]
+        read self, haystack: Span[UInt8], pattern: Span[UInt8]
     ) -> Optional[MatchResult]:
         """Find the first match in the haystack."""
         var result = ssw_align(
@@ -63,3 +63,13 @@ struct StripedLocalMatcher[mut: Bool, //, origin: Origin[mut]](Matcher):
             )
 
         return None
+
+    @always_inline
+    fn convert_ascii_to_encoding(read self, value: UInt8) -> UInt8:
+        """Convert an ascii byte to an encoded byte."""
+        return self.matrix.convert_ascii_to_encoding(value)
+
+    @always_inline
+    fn convert_encoding_to_ascii(read self, value: UInt8) -> UInt8:
+        """Convert an encoded byte to an ascii byte."""
+        return self.matrix.convert_encoding_to_ascii(value)

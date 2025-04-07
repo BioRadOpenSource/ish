@@ -17,7 +17,7 @@ struct BasicGlobalMatcher(Matcher):
         self.scoring_matrix = ScoringMatrix.all_ascii_default_matrix()
 
     fn first_match(
-        mut self, haystack: Span[UInt8], pattern: Span[UInt8]
+        read self, haystack: Span[UInt8], pattern: Span[UInt8]
     ) -> Optional[MatchResult]:
         """Find the first match in the haystack."""
         var result = needleman_wunsch_parasail[DType.int16](
@@ -33,3 +33,14 @@ struct BasicGlobalMatcher(Matcher):
             )
 
         return None
+
+    @always_inline
+    fn convert_ascii_to_encoding(read self, value: UInt8) -> UInt8:
+        """Convert an ascii byte to an encoded byte."""
+        return self.scoring_matrix.convert_ascii_to_encoding(value)
+
+    @always_inline
+    fn convert_encoding_to_ascii(read self, value: UInt8) -> UInt8:
+        """Convert an encoded byte to an ascii byte."""
+
+        return self.scoring_matrix.convert_encoding_to_ascii(value)

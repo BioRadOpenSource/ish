@@ -1,4 +1,5 @@
 from collections import Optional
+from sys.info import num_physical_cores
 
 from ExtraMojo.cli.parser import OptParser, OptConfig, OptKind
 
@@ -16,6 +17,8 @@ struct SearcherSettings:
 
     var match_algo: String
     var record_type: String
+    var threads: UInt
+    var batch_size: UInt
 
     @staticmethod
     fn from_args() raises -> Optional[Self]:
@@ -58,6 +61,32 @@ struct SearcherSettings:
                 description="The input record type: [line, fasta]",
             )
         )
+        parser.add_opt(
+            OptConfig(
+                "threads",
+                OptKind.IntLike,
+                default_value=String(num_physical_cores()),
+                description=(
+                    "The number of threads to use. Defaults to the number of"
+                    " physical cores."
+                ),
+            )
+        )
+        parser.add_opt(
+            OptConfig(
+                "batch-size",
+                OptKind.IntLike,
+                default_value=String("10737418240"),
+                # TODO: elaborate on this for GPU batch sizing, with multiple devices.
+                description=(
+                    "The number of bytes in a parallel processing batch. Note"
+                    " that this may use 2-3x this amount to account for"
+                    " intermediate transfer buffers. Default is 10GiB. Note"
+                    " that this allows for overflow when parsing, records may"
+                    " 'hang over' the end of this buffer amount if needed."
+                ),
+            )
+        )
         parser.expect_at_least_n_args(
             1, "Files to search for the given pattern."
         )
@@ -72,12 +101,26 @@ struct SearcherSettings:
             var min_score = opts.get_int("min-score")
             var match_algo = opts.get_string("match-algo")
             var record_type = opts.get_string("record-type")
+            var threads = opts.get_int("threads")
+            if threads <= 0:
+                raise "Threads must be >= 1."
+            var batch_size = opts.get_int("batch-size")
+            if batch_size < 1024 * 10:
+                raise "Batch size too small"
             var files = opts.args
             if len(files) == 0:
                 print("missing files")
                 raise "Expected files, found none."
 
-            return Self(files, pattern, min_score, match_algo, record_type)
+            return Self(
+                files,
+                pattern,
+                min_score,
+                match_algo,
+                record_type,
+                threads,
+                batch_size,
+            )
         except e:
             print(parser.help_msg())
             print(e)
