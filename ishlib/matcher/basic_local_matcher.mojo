@@ -1,4 +1,6 @@
 """Smith-Waterman local alignment."""
+from gpu.host import DeviceContext
+
 from ishlib.matcher import Matcher, MatchResult
 from ishlib.matcher.alignment.scoring_matrix import ScoringMatrix
 from ishlib.matcher.alignment.local_aln.basic import smith_waterman

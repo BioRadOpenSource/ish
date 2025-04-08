@@ -151,6 +151,9 @@ struct BasicScoringMatrix[
     origin: Origin[mut],
     address_space: AddressSpace = AddressSpace(0),
     alignment: Int = alignof[Int8](),
+    no_lookup: Bool = False,
+    default_match: Int8 = 2,
+    default_mismatch: Int8 = -2,
 ]:
     """Scoring matrix that allows for easy abstraction over a sequence of bytes.
     """
@@ -181,7 +184,11 @@ struct BasicScoringMatrix[
         self.size = sqrt(length)
 
     fn get(read self, i: Int, j: Int) -> Int8:
-        return self.values[i * self.size + j]
+        @parameter
+        if no_lookup:
+            return default_match if i == j else default_mismatch
+        else:
+            return self.values[i * self.size + j]
 
     fn __len__(read self) -> Int:
         return self.len

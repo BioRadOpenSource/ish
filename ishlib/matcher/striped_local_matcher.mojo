@@ -1,4 +1,5 @@
 """Smith-Waterman local alignment."""
+from gpu.host import DeviceContext
 from sys.info import simdwidthof
 
 from ishlib.matcher import Matcher, MatchResult

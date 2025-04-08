@@ -1,5 +1,6 @@
 from collections import Optional
-from memory import Span
+from gpu.host import DeviceBuffer
+from memory import Span, UnsafePointer
 
 
 @value
@@ -31,3 +32,78 @@ trait Matcher(Copyable, Movable):
     fn convert_encoding_to_ascii(read self, value: UInt8) -> UInt8:
         """Convert an encoded byte to an ascii byte."""
         ...
+
+
+trait GpuMatcher(Matcher):
+    fn matrix_bytes(read self) -> UnsafePointer[Int8]:
+        ...
+
+    fn matrix_len(read self) -> UInt:
+        ...
+
+    fn find_start(
+        read self, haystack: Span[UInt8], pattern: Span[UInt8]
+    ) -> Int:
+        """Find the start position of the match for the haystack. Assumes this is a match.
+        """
+        ...
+
+    @staticmethod
+    fn batch_match_coarse[
+        max_matrix_length: UInt, max_query_length: UInt, max_target_length: UInt
+    ](
+        query: DeviceBuffer[DType.uint8],
+        ref_buffer: DeviceBuffer[DType.uint8],
+        target_ends: DeviceBuffer[DType.uint32],
+        score_result_buffer: DeviceBuffer[DType.int32],
+        query_end_result_buffer: DeviceBuffer[DType.int32],
+        ref_end_result_buffer: DeviceBuffer[DType.int32],
+        basic_matrix_values: DeviceBuffer[DType.int8],
+        basic_matrix_len: Int,
+        query_len: Int,
+        target_ends_len: Int,
+        thread_count: Int,
+    ):
+        """A coarse grain mono-directional match function to be used as a GPU kernel.
+
+        If there is match found then the reverse will need to be run to find the start point.
+        """
+        ...
+
+
+trait Searchable(Copyable, Movable, CollectionElement):
+    fn buffer_to_search(ref self) -> Span[UInt8, __origin_of(self)]:
+        ...
+
+
+trait SearchableWithIndex(Searchable):
+    fn original_index(read self) -> UInt:
+        ...
+
+
+# @value
+# struct LineAndIndex(Searchable):
+#     var line: List[UInt8]
+#     var original_index: UInt
+
+#     fn buffer_to_search(ref self) -> Span[UInt8, __origin_of(self)]:
+#         return rebind[Span[UInt8, __origin_of(self)]](self.line)
+
+
+@value
+@register_passable
+struct WhereComputed:
+    var value: Int
+    alias Cpu = Self(0)
+    alias Gpu = Self(1)
+
+    fn __eq__(read self, read other: Self) -> Bool:
+        return self.value == other.value
+
+
+@value
+@register_passable
+struct ComputedMatchResult:
+    var result: MatchResult
+    var where_computed: WhereComputed
+    var index: UInt

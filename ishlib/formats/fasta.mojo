@@ -7,15 +7,24 @@ from ExtraMojo.bstr.memchr import memchr
 from ExtraMojo.bstr.bstr import to_ascii_uppercase
 
 from ishlib.matcher import Matcher
+from ishlib.gpu.searcher_device import Searchable
 
 
 @value
-struct ByteFastaRecord:
+struct ByteFastaRecord(Searchable):
     var name: List[UInt8]
     var seq: List[UInt8]
 
     fn size_in_bytes(read self) -> UInt:
         return sizeof[Self]() + len(self.name) + len(self.seq)
+
+    fn buffer_to_search(ref self) -> Span[UInt8, __origin_of(self)]:
+        # This lifetime of seq is at least as long as self
+        return rebind[Span[UInt8, __origin_of(self)]](Span(self.seq))
+        # This also works
+        # return Span[UInt8, __origin_of(self)](
+        #     ptr=self.seq.unsafe_ptr(), length=len(self.seq)
+        # )
 
 
 @value

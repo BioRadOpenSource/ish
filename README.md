@@ -121,8 +121,12 @@ Novel things:
 - the ish tool itself, doing index-free alignments
 
 ## TODO Tomorrow
-- intrisics may have been working? add back in the assumes?
-- add aarch64 linux support
+- Allow for usage of specific matricies
+- Allow for specifying ends-free-ness of semi-global
+- Dynamically chose the max target length, either peek target file first 100 records, specify on cli, or other?
+- FASTQ support
+- Fix tests
+- Fixup SIMD widths in case we hit avx512
 
 ```sh
 

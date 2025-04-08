@@ -38,12 +38,12 @@ struct FastaSearchRunner[M: Matcher]:
                 writer.write_bytes(record.value().name)
                 writer.write("\n")
                 writer.write_bytes(record.value().seq[0 : m.value().start])
-                writer.write("\033[1;31m")
+                # writer.write("\033[1;31m")
                 writer.write_bytes(
                     record.value().seq[m.value().start : m.value().end]
                 )
                 writer.write()
-                writer.write("\033[0m")
+                # writer.write("\033[0m")
                 writer.write_bytes(record.value().seq[m.value().end :])
                 writer.write("\n")
         writer.flush()
