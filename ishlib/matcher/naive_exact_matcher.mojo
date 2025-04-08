@@ -1,4 +1,6 @@
 """Naive linear exact match search."""
+from gpu.host import DeviceContext
+
 from ishlib.matcher import Matcher, MatchResult
 from ishlib.matcher.alignment.scoring_matrix import ScoringMatrix
 

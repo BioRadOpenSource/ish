@@ -1,4 +1,5 @@
-"""Needleman-Wunsch global alignment."""
+from gpu.host import DeviceContext
+
 from ishlib.matcher import Matcher, MatchResult
 from ishlib.matcher.alignment.scoring_matrix import ScoringMatrix
 from ishlib.matcher.alignment.global_aln.basic import (
@@ -42,5 +43,4 @@ struct BasicGlobalMatcher(Matcher):
     @always_inline
     fn convert_encoding_to_ascii(read self, value: UInt8) -> UInt8:
         """Convert an encoded byte to an ascii byte."""
-
         return self.scoring_matrix.convert_encoding_to_ascii(value)

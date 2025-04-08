@@ -79,6 +79,10 @@ struct AlignmentResult:
     var best: AlignmentEnd
     var overflow_detected: Bool
 
+    fn __init__(out self):
+        self.best = AlignmentEnd(-1, -1, -1)
+        self.overflow_detected = False
+
     fn __init__(
         out self, best: AlignmentEnd, *, overflow_detected: Bool = False
     ):

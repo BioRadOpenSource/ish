@@ -1,4 +1,5 @@
-"""Needleman-Wunsch global alignment."""
+from gpu.host import DeviceContext
+
 from ishlib.matcher import Matcher, MatchResult
 from ishlib.matcher.alignment import create_reversed
 from ishlib.matcher.alignment.scoring_matrix import ScoringMatrix
@@ -42,6 +43,9 @@ struct BasicSemiGlobalMatcher(Matcher):
             score_cutoff=len(pattern),
         )
         if result and result.value().score >= len(pattern):
+            print(
+                result.value().score, "none", result.value().coords.value().end
+            )
             return MatchResult(
                 result.value().coords.value().start,
                 result.value().coords.value().end,

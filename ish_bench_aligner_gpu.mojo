@@ -1647,7 +1647,7 @@ fn bench_basic_semi_global_gpu_parallel(
     # Copy to GPU
     ################
     var num_devices = DeviceContext.number_of_devices()
-    num_devices = 1
+    # num_devices = 1
     var ctxs = List[AlignerDevice](capacity=num_devices)
     for i in range(0, num_devices):
         ctxs.append(AlignerDevice(DeviceContext(i)))
@@ -1938,6 +1938,7 @@ fn gpu_align_batched(
 
     var result = semi_global_parasail_gpu[
         DType.int16,
+        max_query_length=200,
         free_query_start_gaps=True,
         free_query_end_gaps=True,
         free_target_start_gaps=True,
@@ -2063,6 +2064,7 @@ fn gpu_align_coarse(
         # Perform the alignment
         var result = semi_global_parasail_gpu[
             DType.int16,
+            max_query_length=200,
             free_query_start_gaps=True,
             free_query_end_gaps=True,
             free_target_start_gaps=True,
