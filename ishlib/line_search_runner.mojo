@@ -1,5 +1,7 @@
-from ExtraMojo.io.buffered import BufferedReader, BufferedWriter
+from ExtraMojo.io.buffered import BufferedWriter
 
+from ishlib.vendor.kseq import BufferedReader, SearchChar, ByteString
+from ishlib.vendor.zlib import GZFile
 from ishlib.searcher_settings import SearcherSettings
 from ishlib.matcher import Matcher
 from ishlib import ByteSpanWriter
@@ -20,31 +22,32 @@ struct LineSearchRunner[M: Matcher]:
             self.run_search_on_file(f)
 
     fn run_search_on_file(mut self, file: String) raises:
-        var reader = BufferedReader(open(file, "r"))
-        var buffer = List[UInt8]()
+        var reader = BufferedReader(GZFile(file, "r"))
+        # var buffer = List[UInt8]()
+        var buffer = ByteString()
 
         var writer = BufferedWriter(stdout)
 
         var line_number = 1
         while True:
             buffer.clear()
-            if reader.read_until(buffer) == 0:
+            if reader.read_until[SearchChar.Newline](buffer) == 0:
                 break
-            var m = self.matcher.first_match(buffer, self.settings.pattern)
+            var m = self.matcher.first_match(
+                buffer.as_span(), self.settings.pattern
+            )
             if m:
-                writer.write(
-                    file,
-                    ":",
-                    line_number,
-                    " ",
-                    # ByteSpanWriter(buffer[:]),
-                    ByteSpanWriter(buffer[0 : m.value().start]),
-                    "\033[1;31m",
-                    ByteSpanWriter(buffer[m.value().start : m.value().end]),
-                    "\033[0m",
-                    ByteSpanWriter(buffer[m.value().end :]),
-                    "\n",
-                )
+                var b = buffer.as_span()
+                writer.write_bytes(file.as_bytes())
+                writer.write_bytes(":".as_bytes())
+                writer.write(line_number)
+                writer.write(" ")
+                writer.write_bytes(b[0 : m.value().start])
+                writer.write("\033[1;31m")
+                writer.write_bytes(b[m.value().start : m.value().end])
+                writer.write("\033[0m")
+                writer.write_bytes(b[m.value().end :])
+                writer.write("\n")
             line_number += 1
         writer.flush()
         writer.close()

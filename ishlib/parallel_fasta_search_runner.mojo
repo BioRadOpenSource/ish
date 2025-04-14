@@ -1,4 +1,4 @@
-from ExtraMojo.io.buffered import BufferedReader, BufferedWriter
+from ExtraMojo.io.buffered import BufferedWriter
 
 from time.time import perf_counter
 
@@ -26,6 +26,8 @@ from ishlib.matcher import (
 )
 from ishlib import ByteSpanWriter
 from ishlib.matcher.alignment.striped_utils import AlignmentResult
+from ishlib.vendor.kseq import BufferedReader, FastxReader
+from ishlib.vendor.zlib import GZFile
 
 from algorithm.functional import parallelize
 from math import ceildiv
@@ -60,7 +62,9 @@ struct ParallelFastaSearchRunner[M: Matcher]:
 
     fn run_search_on_file(mut self, file: String) raises:
         # TODO: pass an enocoder to the FastaReader
-        var reader = FastaReader(BufferedReader(open(file, "r")))
+        var reader = FastxReader[read_comment=False](
+            BufferedReader(GZFile(file, "r"))
+        )
         var writer = BufferedWriter(stdout)
 
         var sequences = List[SeqAndIndex]()
@@ -71,13 +75,16 @@ struct ParallelFastaSearchRunner[M: Matcher]:
 
         var do_work = True
         while do_work:
-            var record = reader.read_owned(self.matcher)
+            var ret = reader.read()
 
-            if not record:
+            if ret <= 0:
                 do_work = False
             else:
-                bytes_saved += record.value().size_in_bytes()
-                sequences.append(SeqAndIndex(record.value(), seq_number))
+                var record = ByteFastaRecord(
+                    List(reader.name.as_span()), List(reader.seq.as_span())
+                )
+                bytes_saved += record.size_in_bytes()
+                sequences.append(SeqAndIndex(record, seq_number))
                 seq_number += 1
 
             if bytes_saved >= self.settings.batch_size or not do_work:
@@ -156,7 +163,9 @@ struct GpuParallelFastaSearchRunner[
     fn run_search_on_file(mut self, file: String) raises:
         # TODO: Split out the too-long seqs
         # TODO: pass an enocoder to the FastaReader
-        var reader = FastaReader(BufferedReader(open(file, "r")))
+        var reader = FastxReader[read_comment=False](
+            BufferedReader(GZFile(file, "r"))
+        )
         var writer = BufferedWriter(stdout)
 
         fn write_match[
@@ -185,16 +194,28 @@ struct GpuParallelFastaSearchRunner[
         var start = perf_counter()
         var do_work = True
         while do_work:
-            var record = reader.read_owned(self.matcher)
+            var ret = reader.read()
 
-            if not record:
+            if ret <= 0:
                 do_work = False
             else:
-                if len(record.value().seq) > max_target_length:
-                    cpu_sequences.append(SeqAndIndex(record.value(), seq_index))
+                if len(reader.seq) > max_target_length:
+                    cpu_sequences.append(
+                        SeqAndIndex(
+                            ByteFastaRecord(
+                                List(reader.name.as_span()),
+                                List(reader.seq.as_span()),
+                            ),
+                            seq_index,
+                        )
+                    )
                 else:
-                    bytes_saved += record.value().size_in_bytes()
-                    sequences.append(SeqAndIndex(record.value(), seq_index))
+                    var record = ByteFastaRecord(
+                        List(reader.name.as_span()),
+                        List(reader.seq.as_span()),
+                    )
+                    bytes_saved += record.size_in_bytes()
+                    sequences.append(SeqAndIndex(record, seq_index))
 
             seq_index += 1
             if bytes_saved >= self.settings.batch_size or not do_work:
