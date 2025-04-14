@@ -15,7 +15,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/ca-certificates-2025.1.31-hbcca054_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/click-8.1.8-pyh707e725_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
-      - conda: https://repo.prefix.dev/modular-community/linux-64/extramojo-0.12.0-h6f44653_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/importlib-metadata-8.6.1-pyha770c72_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/jupyter_client-8.6.3-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/jupyter_core-5.7.2-pyh31011fe_1.conda
@@ -81,7 +80,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/ca-certificates-2025.1.31-hcefe29a_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/click-8.1.8-pyh707e725_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
-      - conda: https://repo.prefix.dev/modular-community/linux-aarch64/extramojo-0.12.0-h8dc4c6c_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/importlib-metadata-8.6.1-pyha770c72_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/jupyter_client-8.6.3-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/jupyter_core-5.7.2-pyh31011fe_1.conda
@@ -146,7 +144,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/ca-certificates-2025.1.31-hf0a4a13_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/click-8.1.8-pyh707e725_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
-      - conda: https://repo.prefix.dev/modular-community/osx-arm64/extramojo-0.12.0-h58ea7c0_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/importlib-metadata-8.6.1-pyha770c72_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/jupyter_client-8.6.3-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/jupyter_core-5.7.2-pyh31011fe_1.conda
@@ -295,30 +292,6 @@ packages:
   license_family: BSD
   size: 27011
   timestamp: 1733218222191
-- conda: https://repo.prefix.dev/modular-community/linux-64/extramojo-0.12.0-h6f44653_0.conda
-  sha256: dbecf933fdb80de31836a6ac6ff3d8d2aeb5e2f4affc4625dd58bca3426870e7
-  depends:
-  - max 25.2.*
-  - max >=25.2.0,<26.0a0
-  license: Unlicense OR MIT
-  size: 1060754
-  timestamp: 1743000981693
-- conda: https://repo.prefix.dev/modular-community/linux-aarch64/extramojo-0.12.0-h8dc4c6c_0.conda
-  sha256: ce5d42841fc2208d9d833ce2c3e92b26739f8932186ff765fe2559723ac85e50
-  depends:
-  - max 25.2.*
-  - max >=25.2.0,<26.0a0
-  license: Unlicense OR MIT
-  size: 1060614
-  timestamp: 1743000987860
-- conda: https://repo.prefix.dev/modular-community/osx-arm64/extramojo-0.12.0-h58ea7c0_0.conda
-  sha256: 01bdc1c2bdbdb20281e699ae80e3c7717b79f1855124b7d2fcd835ceaa7c15b5
-  depends:
-  - max 25.2.*
-  - max >=25.2.0,<26.0a0
-  license: Unlicense OR MIT
-  size: 1059477
-  timestamp: 1743000991544
 - conda: https://conda.anaconda.org/conda-forge/noarch/importlib-metadata-8.6.1-pyha770c72_0.conda
   sha256: 598951ebdb23e25e4cec4bbff0ae369cec65ead80b50bc08b441d8e54de5cf03
   md5: f4b39bf00c69f56ac01e020ebfac066c

@@ -1,9 +1,10 @@
-from ExtraMojo.io.buffered import BufferedReader, BufferedWriter
+from ExtraMojo.io.buffered import BufferedWriter
 
-from ishlib.formats.fasta import FastaReader, BorrowedFastaRecord
-from ishlib.searcher_settings import SearcherSettings
-from ishlib.matcher import Matcher
 from ishlib import ByteSpanWriter
+from ishlib.matcher import Matcher
+from ishlib.searcher_settings import SearcherSettings
+from ishlib.vendor.kseq import FastxReader, BufferedReader
+from ishlib.vendor.zlib import GZFile
 
 from utils import StringSlice
 from sys import stdout
@@ -21,30 +22,32 @@ struct FastaSearchRunner[M: Matcher]:
             self.run_search_on_file(f)
 
     fn run_search_on_file(mut self, file: String) raises:
-        var reader = FastaReader(BufferedReader(open(file, "r")))
+        var reader = FastxReader[read_comment=False](
+            BufferedReader(GZFile(file, "r"))
+        )
         var writer = BufferedWriter(stdout)
 
         # TODO: hold onto the non-newline stripped sequence as well for outputting the match color
 
         while True:
-            var record = reader.read_borrowed()
-            if not record:
+            var ret = reader.read()
+            if ret <= 0:
                 break
             var m = self.matcher.first_match(
-                record.value().seq, self.settings.pattern
+                reader.seq.as_span(), self.settings.pattern
             )
             if m:
                 writer.write(">")
-                writer.write_bytes(record.value().name)
+                writer.write_bytes(reader.name.as_span())
                 writer.write("\n")
-                writer.write_bytes(record.value().seq[0 : m.value().start])
+                writer.write_bytes(reader.seq.as_span()[0 : m.value().start])
                 # writer.write("\033[1;31m")
                 writer.write_bytes(
-                    record.value().seq[m.value().start : m.value().end]
+                    reader.seq.as_span()[m.value().start : m.value().end]
                 )
                 writer.write()
                 # writer.write("\033[0m")
-                writer.write_bytes(record.value().seq[m.value().end :])
+                writer.write_bytes(reader.seq.as_span()[m.value().end :])
                 writer.write("\n")
         writer.flush()
         writer.close()
