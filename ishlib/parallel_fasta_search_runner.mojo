@@ -28,6 +28,7 @@ from ishlib import ByteSpanWriter
 from ishlib.matcher.alignment.striped_utils import AlignmentResult
 from ishlib.vendor.kseq import BufferedReader, FastxReader
 from ishlib.vendor.zlib import GZFile
+from ishlib.vendor.log import Logger
 
 from algorithm.functional import parallelize
 from math import ceildiv
@@ -156,7 +157,7 @@ struct GpuParallelFastaSearchRunner[
             settings.batch_size,
             len(settings.pattern),
             self.matcher.matrix_len(),
-            max_target_length=max_matrix_length,
+            max_target_length=max_target_length,
         )
 
     fn run_search(mut self) raises:
@@ -229,7 +230,7 @@ struct GpuParallelFastaSearchRunner[
                 or not do_work
             ):
                 var done_reading = perf_counter()
-                print("Time reading", done_reading - start)
+                Logger.timing("Time reading", done_reading - start)
                 var outputs = gpu_parallel_starts_ends[
                     M,
                     SeqAndIndex,
@@ -255,7 +256,7 @@ struct GpuParallelFastaSearchRunner[
                     else:
                         var r = Pointer(to=sequences[m.value().index].seq)
                         write_match(r, m.value())
-                print("write done:", perf_counter() - write_start)
+                Logger.timing("write done:", perf_counter() - write_start)
                 cpu_sequences.clear()
                 sequences.clear()
                 bytes_saved = 0
@@ -263,4 +264,4 @@ struct GpuParallelFastaSearchRunner[
         writer.flush()
         writer.close()
         var file_end = perf_counter()
-        print("Time to process", file, file_end - file_start)
+        Logger.timing("Time to process", file, file_end - file_start)

@@ -6,6 +6,7 @@ from memory import UnsafePointer, stack_allocation, memcpy
 
 from ishlib.matcher import Searchable
 from ishlib.gpu.dynamic_2d_matrix import Dynamic2DMatrix, StorageFormat
+from ishlib.vendor.log import Logger
 
 
 @value
@@ -130,9 +131,10 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
             if device.api() == "cuda" or device.api() == "hip":
                 var s = Self(device)
                 s._create_some_input_buffers(
-                    query_length, matrix_length, batch_size
+                    query_length, matrix_length, batch_size, max_target_length
                 )
                 ret.append(s)
+            break
 
         return ret
 
@@ -152,8 +154,13 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
         )
 
     fn _create_some_input_buffers(
-        mut self, query_len: UInt, matrix_len: UInt, targets_len: UInt
+        mut self,
+        query_len: UInt,
+        matrix_len: UInt,
+        targets_len: UInt,
+        max_target_length: UInt,
     ) raises:
+        var num_targets = ceildiv(targets_len, max_target_length)
         self.host_query = DeviceBufferWrapper["host", DType.uint8](
             self.ctx, size=query_len
         )
@@ -168,6 +175,11 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
             self.ctx, size=targets_len
         )
         self.host_targets.value().resize(self.ctx, new_size=0)
+
+        self.host_target_lengths = DeviceBufferWrapper["host", DType.uint32](
+            self.ctx, size=num_targets
+        )
+        self.host_target_lengths.value().resize(self.ctx, new_size=0)
 
         # Create dev equivalents
         self.device_query = DeviceBufferWrapper["device", DType.uint8](
@@ -184,6 +196,11 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
             self.ctx, size=targets_len
         )
         self.device_targets.value().resize(self.ctx, new_size=0)
+
+        self.device_target_lengths = DeviceBufferWrapper[
+            "device", DType.uint32
+        ](self.ctx, size=num_targets)
+        self.device_target_lengths.value().resize(self.ctx, new_size=0)
 
     fn host_create_input_buffers(
         mut self,

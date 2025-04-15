@@ -1,0 +1,127 @@
+import sys
+from sys.param_env import env_get_string
+from utils import write_args, StringSlice
+
+
+@value
+struct LogLevel:
+    var value: Int
+    alias Error = Self(30)
+    alias Info = Self(20)
+    alias Timing = Self(15)
+    alias Debug = Self(10)
+    alias Nolog = Self(0)
+
+    @staticmethod
+    fn from_str(level: StringLiteral) -> Self:
+        if level.lower() == "info":
+            return Self.Info
+        elif level.lower() == "debug":
+            return Self.Debug
+        elif level.lower() == "error":
+            return Self.Error
+        elif level.lower() == "timing":
+            return Self.Timing
+        else:
+            return Self.Nolog
+
+    fn __is__(self, other: Self) -> Bool:
+        return self.value == other.value
+
+    fn __eq__(self, other: Self) -> Bool:
+        return self.value == other.value
+
+    fn write_to[W: Writer](self, mut writer: W):
+        if self is Self.Info:
+            writer.write("Info")
+        elif self is Self.Debug:
+            writer.write("Debug")
+        elif self is Self.Error:
+            writer.write("Error")
+        elif self is Self.Timing:
+            writer.write("Timing")
+        else:
+            print("Kind is ", self.value)
+
+
+struct Logger:
+    alias LEVEL: LogLevel = LogLevel.from_str(
+        env_get_string["ISH_LOG_LEVEL", "nolog"]()
+    )
+
+    @always_inline
+    @staticmethod
+    fn _is_disabled[level: LogLevel]() -> Bool:
+        return Self.LEVEL.value > level.value
+
+    @always_inline
+    @staticmethod
+    fn info[
+        *Ts: Writable
+    ](
+        *values: *Ts,
+        sep: StringSlice[StaticConstantOrigin] = StringSlice(" "),
+        end: StringSlice[StaticConstantOrigin] = StringSlice("\n"),
+    ):
+        @parameter
+        if Self._is_disabled[LogLevel.Info]():
+            return
+
+        var stderr = sys.stderr
+        LogLevel.Info.write_to(stderr)
+        stderr.write(": ")
+        write_args(stderr, values, sep=sep, end=end)
+
+    @always_inline
+    @staticmethod
+    fn timing[
+        *Ts: Writable
+    ](
+        *values: *Ts,
+        sep: StringSlice[StaticConstantOrigin] = StringSlice(" "),
+        end: StringSlice[StaticConstantOrigin] = StringSlice("\n"),
+    ):
+        @parameter
+        if Self._is_disabled[LogLevel.Timing]():
+            return
+
+        var stderr = sys.stderr
+        LogLevel.Timing.write_to(stderr)
+        stderr.write(": ")
+        write_args(stderr, values, sep=sep, end=end)
+
+    @always_inline
+    @staticmethod
+    fn debug[
+        *Ts: Writable
+    ](
+        *values: *Ts,
+        sep: StringSlice[StaticConstantOrigin] = StringSlice(" "),
+        end: StringSlice[StaticConstantOrigin] = StringSlice("\n"),
+    ):
+        @parameter
+        if Self._is_disabled[LogLevel.Debug]():
+            return
+
+        var stderr = sys.stderr
+        LogLevel.Debug.write_to(stderr)
+        stderr.write(": ")
+        write_args(stderr, values, sep=sep, end=end)
+
+    @always_inline
+    @staticmethod
+    fn error[
+        *Ts: Writable
+    ](
+        *values: *Ts,
+        sep: StringSlice[StaticConstantOrigin] = StringSlice(" "),
+        end: StringSlice[StaticConstantOrigin] = StringSlice("\n"),
+    ):
+        @parameter
+        if Self._is_disabled[LogLevel.Error]():
+            return
+
+        var stderr = sys.stderr
+        LogLevel.Error.write_to(stderr)
+        stderr.write(": ")
+        write_args(stderr, values, sep=sep, end=end)

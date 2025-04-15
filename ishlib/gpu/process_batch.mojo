@@ -20,6 +20,7 @@ from ishlib.matcher import (
     ComputedMatchResult,
 )
 from ishlib.searcher_settings import SearcherSettings
+from ishlib.vendor.log import Logger
 
 
 fn parallel_starts_ends[
@@ -46,10 +47,12 @@ fn parallel_starts_ends[
     var outputs = List[Optional[ComputedMatchResult]](capacity=output_len)
     for _ in range(0, output_len):
         outputs.append(None)
-    print("Time to create ouput buffer with appends:", perf_counter() - start)
+    Logger.timing(
+        "Time to create ouput buffer with appends:", perf_counter() - start
+    )
 
     var targets_per_device = ceildiv(len(seqs), len(ctxs))
-    print(
+    Logger.debug(
         "Targets per device:",
         targets_per_device,
         "for ",
@@ -59,11 +62,6 @@ fn parallel_starts_ends[
         len(seqs),
         "seqs",
     )
-
-    # TODO: handle scenario where there are not enough targets to saturate devices
-    # TODO: maybe move the host buffer creation to initialization, and also ruse it. Make it fixed size based on settings batch size.
-    # This is the slowest part of the whole thing. It also seems that cleaning up the mem is very slow.
-    # TODO: Something is broken when all the reads don't fit in a single batch. It hangs on Launched Kernel, but eventually hits CUDA call failed: CUDA_ERROR_ILLEGAL_ADDRESS (an illegal memory access was encountered), so I guess not a full hang
 
     # Create the buffers
     var gpu_buffer_create_start = perf_counter()
@@ -80,8 +78,10 @@ fn parallel_starts_ends[
     for ctx in ctxs:
         ctx[].synchronize()
     var buffers_created = perf_counter()
-    print("GPU only creatin time:", buffers_created - gpu_buffer_create_start)
-    print("Buffer creation time:", buffers_created - start)
+    Logger.timing(
+        "GPU only creatin time:", buffers_created - gpu_buffer_create_start
+    )
+    Logger.timing("Buffer creation time:", buffers_created - start)
 
     # fill in input data
     var buffer_fill_start = perf_counter()
@@ -101,39 +101,30 @@ fn parallel_starts_ends[
         ctx[].copy_inputs_to_device()
         total_items += end
 
-    # var device_id = 0
-    # for i in range(0, len(seqs), targets_per_device):
-    #     ctxs[device_id].device_create_input_buffers()
-    #     ctxs[device_id].set_host_inputs(
-    #         Span(settings.pattern),
-    #         matcher.matrix_bytes(),
-    #         matcher.matrix_len(),
-    #         seqs[i : min(i + targets_per_device, len(seqs))],
-    #     )
-    #     ctxs[device_id].copy_inputs_to_device()
-    #     device_id += 1
     var buffer_fill_end = perf_counter()
-    print("Time to fill host buffer:", buffer_fill_end - buffer_fill_start)
+    Logger.timing(
+        "Time to fill host buffer:", buffer_fill_end - buffer_fill_start
+    )
 
     # This is the slowest part by far, moving it around doesn't seem to help much. I wish we had threads.
     var cpu_start = perf_counter()
     cpu_parallel_starts_ends(matcher, settings, cpu_seqs, outputs)
     var cpu_end = perf_counter()
-    print("Long seqs cpu time: ", cpu_end - cpu_start)
+    Logger.timing("Long seqs cpu time: ", cpu_end - cpu_start)
 
     for ctx in ctxs:
         ctx[].synchronize()
     var buffers_filled = perf_counter()
-    print("Buffer fill time:", buffers_filled - buffers_created)
+    Logger.timing("Buffer fill time:", buffers_filled - buffers_created)
 
     # Launch Kernel
     for ctx in ctxs:
         ctx[].device_create_output_buffers()
-        print("Created device output buffers")
+        Logger.debug("Created device output buffers")
         ctx[].launch_kernel()
-        print("Launched kernel")
+        Logger.debug("Launched kernel")
         ctx[].host_create_output_buffers()
-        print("Created host output buffers")
+        Logger.debug("Created host output buffers")
 
     # Process the long seqs
     # TODO: work on ordering these correctly
@@ -143,12 +134,12 @@ fn parallel_starts_ends[
         ctx[].synchronize()
         ctx[].copy_outputs_to_host()
     var gpu_done = perf_counter()
-    print("GPU processing time (with cpu):", gpu_done - buffers_filled)
+    Logger.timing("GPU processing time (with cpu):", gpu_done - buffers_filled)
 
     for ctx in ctxs:
         ctx[].synchronize()
     var copy_down = perf_counter()
-    print("Copy down time:", copy_down - gpu_done)
+    Logger.timing("Copy down time:", copy_down - gpu_done)
 
     # Now check for any matches?
     total_items = 0
@@ -167,8 +158,8 @@ fn parallel_starts_ends[
             total_items,
         )
         var starts_done = perf_counter()
-        print("Starts time:", starts_done - starts_start)
+        Logger.timing("Starts time:", starts_done - starts_start)
         total_items = end
     var end = perf_counter()
-    print("Total time:", end - start)
+    Logger.timing("Total time:", end - start)
     return outputs

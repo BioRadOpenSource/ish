@@ -19,7 +19,7 @@ struct SearcherSettings:
     var record_type: String
     var threads: UInt
     var batch_size: UInt
-    var no_gpu: Bool
+    var max_gpus: UInt
 
     @staticmethod
     fn from_args() raises -> Optional[Self]:
@@ -77,24 +77,27 @@ struct SearcherSettings:
             OptConfig(
                 "batch-size",
                 OptKind.IntLike,
-                default_value=String("10737418240"),
+                default_value=String("264362073"),
                 # TODO: elaborate on this for GPU batch sizing, with multiple devices.
                 description=(
                     "The number of bytes in a parallel processing batch. Note"
                     " that this may use 2-3x this amount to account for"
-                    " intermediate transfer buffers. Default is 10GiB. Note"
-                    " that this allows for overflow when parsing, records may"
-                    " 'hang over' the end of this buffer amount if needed."
+                    " intermediate transfer buffers."
                 ),
             )
         )
         parser.add_opt(
             OptConfig(
-                "no-gpu",
-                OptKind.BoolLike,
-                is_flag=True,
-                default_value=String("False"),
-                description="Don't use the GPU(s), even if available.",
+                "max-gpus",
+                OptKind.IntLike,
+                default_value=String("1"),
+                description=(
+                    "The max number of GPUs to try to use. If set to 0 this"
+                    " will ignore any found GPUs. In general, if you have only"
+                    " one query then there won't be much using more than 1 GPU."
+                    " GPUs won't always be faster than CPU parallelization"
+                    " depeding on the profile of data you are working with."
+                ),
             )
         )
 
@@ -123,7 +126,7 @@ struct SearcherSettings:
                 print("missing files")
                 raise "Expected files, found none."
 
-            var no_gpu = opts.get_bool("no-gpu")
+            var max_gpus = opts.get_int("max-gpus")
 
             return Self(
                 files,
@@ -133,7 +136,7 @@ struct SearcherSettings:
                 record_type,
                 threads,
                 batch_size,
-                no_gpu,
+                max_gpus,
             )
         except e:
             print(parser.help_msg())

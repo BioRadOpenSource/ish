@@ -18,6 +18,7 @@ from ishlib.parallel_line_search_runner import (
     GpuParallelLineSearchRunner,
 )
 from ishlib.searcher_settings import SearcherSettings
+from ishlib.vendor.log import Logger
 
 
 fn main() raises:
@@ -161,7 +162,7 @@ fn main() raises:
                 )
                 runner.run_search()
             else:
-                if settings.no_gpu:
+                if settings.max_gpus == 0 or not has_gpu():
                     var runner = ParallelLineSearchRunner[
                         StripedSemiGlobalMatcher
                     ](settings, StripedSemiGlobalMatcher(settings.pattern))
@@ -262,7 +263,7 @@ fn main() raises:
                 )
                 runner.run_search()
             else:
-                if settings.no_gpu:
+                if settings.max_gpus == 0 or not has_gpu():
                     var runner = ParallelFastaSearchRunner[
                         StripedSemiGlobalMatcher
                     ](settings, StripedSemiGlobalMatcher(settings.pattern))
@@ -312,10 +313,12 @@ fn main() raises:
                                 settings,
                                 StripedSemiGlobalMatcher(settings.pattern),
                             )
-                            print("Setupt time:", perf_counter() - start)
+                            Logger.timing(
+                                "Setupt time:", perf_counter() - start
+                            )
                             runner.run_search()
                             var end = perf_counter()
-                            print("Time to process: ", end - start)
+                            Logger.timing("Time to process: ", end - start)
                         elif qlen <= 400:
                             var runner = GpuParallelFastaSearchRunner[
                                 StripedSemiGlobalMatcher,
