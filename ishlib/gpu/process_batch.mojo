@@ -46,9 +46,27 @@ fn parallel_starts_ends[
     var outputs = List[Optional[ComputedMatchResult]](capacity=output_len)
     for _ in range(0, output_len):
         outputs.append(None)
+    print("Time to create ouput buffer with appends:", perf_counter() - start)
 
     var targets_per_device = ceildiv(len(seqs), len(ctxs))
+    print(
+        "Targets per device:",
+        targets_per_device,
+        "for ",
+        len(ctxs),
+        "devices",
+        "over",
+        len(seqs),
+        "seqs",
+    )
+
+    # TODO: handle scenario where there are not enough targets to saturate devices
+    # TODO: maybe move the host buffer creation to initialization, and also ruse it. Make it fixed size based on settings batch size.
+    # This is the slowest part of the whole thing. It also seems that cleaning up the mem is very slow.
+    # TODO: Something is broken when all the reads don't fit in a single batch. It hangs on Launched Kernel, but eventually hits CUDA call failed: CUDA_ERROR_ILLEGAL_ADDRESS (an illegal memory access was encountered), so I guess not a full hang
+
     # Create the buffers
+    var gpu_buffer_create_start = perf_counter()
     for ctx in ctxs:
         ctx[].set_block_info(
             len(seqs),
@@ -62,20 +80,40 @@ fn parallel_starts_ends[
     for ctx in ctxs:
         ctx[].synchronize()
     var buffers_created = perf_counter()
+    print("GPU only creatin time:", buffers_created - gpu_buffer_create_start)
     print("Buffer creation time:", buffers_created - start)
 
     # fill in input data
-    var device_id = 0
-    for i in range(0, len(seqs), targets_per_device):
-        ctxs[device_id].device_create_input_buffers()
-        ctxs[device_id].set_host_inputs(
+    var buffer_fill_start = perf_counter()
+
+    var total_items = 0
+    for ctx in ctxs:
+        var end = min(
+            total_items + ctx[].block_info.value().num_targets, len(seqs)
+        )
+        ctx[].device_create_input_buffers()
+        ctx[].set_host_inputs(
             Span(settings.pattern),
             matcher.matrix_bytes(),
             matcher.matrix_len(),
-            seqs[i : min(i + targets_per_device, len(seqs))],
+            seqs[total_items:end],
         )
-        ctxs[device_id].copy_inputs_to_device()
-        device_id += 1
+        ctx[].copy_inputs_to_device()
+        total_items += end
+
+    # var device_id = 0
+    # for i in range(0, len(seqs), targets_per_device):
+    #     ctxs[device_id].device_create_input_buffers()
+    #     ctxs[device_id].set_host_inputs(
+    #         Span(settings.pattern),
+    #         matcher.matrix_bytes(),
+    #         matcher.matrix_len(),
+    #         seqs[i : min(i + targets_per_device, len(seqs))],
+    #     )
+    #     ctxs[device_id].copy_inputs_to_device()
+    #     device_id += 1
+    var buffer_fill_end = perf_counter()
+    print("Time to fill host buffer:", buffer_fill_end - buffer_fill_start)
 
     # This is the slowest part by far, moving it around doesn't seem to help much. I wish we had threads.
     var cpu_start = perf_counter()
@@ -91,8 +129,11 @@ fn parallel_starts_ends[
     # Launch Kernel
     for ctx in ctxs:
         ctx[].device_create_output_buffers()
+        print("Created device output buffers")
         ctx[].launch_kernel()
+        print("Launched kernel")
         ctx[].host_create_output_buffers()
+        print("Created host output buffers")
 
     # Process the long seqs
     # TODO: work on ordering these correctly
@@ -110,7 +151,7 @@ fn parallel_starts_ends[
     print("Copy down time:", copy_down - gpu_done)
 
     # Now check for any matches?
-    var total_items = 0
+    total_items = 0
     for ctx in ctxs:
         var end = min(
             total_items + ctx[].block_info.value().num_targets, len(seqs)
@@ -119,14 +160,8 @@ fn parallel_starts_ends[
         cpu_parallel_starts[where_computed = WhereComputed.Gpu](
             matcher,
             settings,
-            Span[Int32, __origin_of(ctx[].host_scores.value())](
-                ptr=ctx[].host_scores.value().unsafe_ptr(),
-                length=ctx[].block_info.value().num_targets,
-            ).get_immutable(),
-            Span[Int32, __origin_of(ctx[].host_scores.value())](
-                ptr=ctx[].host_target_ends.value().unsafe_ptr(),
-                length=ctx[].block_info.value().num_targets,
-            ).get_immutable(),
+            ctx[].host_scores.value().as_span().get_immutable(),
+            ctx[].host_target_ends.value().as_span().get_immutable(),
             seqs[total_items:end],
             outputs,
             total_items,

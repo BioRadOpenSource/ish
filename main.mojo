@@ -1,3 +1,5 @@
+from time.time import perf_counter
+
 from ishlib.gpu import has_gpu
 from ishlib.line_search_runner import LineSearchRunner
 from ishlib.fasta_search_runner import FastaSearchRunner
@@ -159,71 +161,100 @@ fn main() raises:
                 )
                 runner.run_search()
             else:
-
-                @parameter
-                if has_gpu():
-                    var qlen = len(settings.pattern)
-                    if qlen <= 25:
-                        var runner = GpuParallelLineSearchRunner[
-                            StripedSemiGlobalMatcher,
-                            max_matrix_length=0,
-                            max_query_length=25,
-                        ](settings, StripedSemiGlobalMatcher(settings.pattern))
-                        runner.run_search()
-                    elif qlen <= 50:
-                        var runner = GpuParallelLineSearchRunner[
-                            StripedSemiGlobalMatcher,
-                            max_matrix_length=0,
-                            max_query_length=50,
-                        ](settings, StripedSemiGlobalMatcher(settings.pattern))
-                        runner.run_search()
-                    elif qlen <= 100:
-                        var runner = GpuParallelLineSearchRunner[
-                            StripedSemiGlobalMatcher,
-                            max_matrix_length=0,
-                            max_query_length=100,
-                        ](settings, StripedSemiGlobalMatcher(settings.pattern))
-                        runner.run_search()
-                    elif qlen <= 200:
-                        var runner = GpuParallelLineSearchRunner[
-                            StripedSemiGlobalMatcher,
-                            max_matrix_length=0,
-                            max_query_length=200,
-                        ](settings, StripedSemiGlobalMatcher(settings.pattern))
-                        runner.run_search()
-                    elif qlen <= 400:
-                        var runner = GpuParallelLineSearchRunner[
-                            StripedSemiGlobalMatcher,
-                            max_matrix_length=0,
-                            max_query_length=400,
-                        ](settings, StripedSemiGlobalMatcher(settings.pattern))
-                        runner.run_search()
-                    elif qlen <= 800:
-                        var runner = GpuParallelLineSearchRunner[
-                            StripedSemiGlobalMatcher,
-                            max_matrix_length=0,
-                            max_query_length=800,
-                        ](settings, StripedSemiGlobalMatcher(settings.pattern))
-                        runner.run_search()
-                    elif qlen <= 1600:
-                        var runner = GpuParallelLineSearchRunner[
-                            StripedSemiGlobalMatcher,
-                            max_matrix_length=0,
-                            max_query_length=1600,
-                        ](settings, StripedSemiGlobalMatcher(settings.pattern))
-                        runner.run_search()
-                    else:
-                        # CPU fallback
-                        var runner = ParallelLineSearchRunner[
-                            StripedSemiGlobalMatcher
-                        ](settings, StripedSemiGlobalMatcher(settings.pattern))
-                        runner.run_search()
-
-                else:
+                if settings.no_gpu:
                     var runner = ParallelLineSearchRunner[
                         StripedSemiGlobalMatcher
                     ](settings, StripedSemiGlobalMatcher(settings.pattern))
                     runner.run_search()
+                else:
+
+                    @parameter
+                    if has_gpu():
+                        var qlen = len(settings.pattern)
+                        if qlen <= 25:
+                            var runner = GpuParallelLineSearchRunner[
+                                StripedSemiGlobalMatcher,
+                                max_matrix_length=0,
+                                max_query_length=25,
+                            ](
+                                settings,
+                                StripedSemiGlobalMatcher(settings.pattern),
+                            )
+                            runner.run_search()
+                        elif qlen <= 50:
+                            var runner = GpuParallelLineSearchRunner[
+                                StripedSemiGlobalMatcher,
+                                max_matrix_length=0,
+                                max_query_length=50,
+                            ](
+                                settings,
+                                StripedSemiGlobalMatcher(settings.pattern),
+                            )
+                            runner.run_search()
+                        elif qlen <= 100:
+                            var runner = GpuParallelLineSearchRunner[
+                                StripedSemiGlobalMatcher,
+                                max_matrix_length=0,
+                                max_query_length=100,
+                            ](
+                                settings,
+                                StripedSemiGlobalMatcher(settings.pattern),
+                            )
+                            runner.run_search()
+                        elif qlen <= 200:
+                            var runner = GpuParallelLineSearchRunner[
+                                StripedSemiGlobalMatcher,
+                                max_matrix_length=0,
+                                max_query_length=200,
+                            ](
+                                settings,
+                                StripedSemiGlobalMatcher(settings.pattern),
+                            )
+                            runner.run_search()
+                        elif qlen <= 400:
+                            var runner = GpuParallelLineSearchRunner[
+                                StripedSemiGlobalMatcher,
+                                max_matrix_length=0,
+                                max_query_length=400,
+                            ](
+                                settings,
+                                StripedSemiGlobalMatcher(settings.pattern),
+                            )
+                            runner.run_search()
+                        elif qlen <= 800:
+                            var runner = GpuParallelLineSearchRunner[
+                                StripedSemiGlobalMatcher,
+                                max_matrix_length=0,
+                                max_query_length=800,
+                            ](
+                                settings,
+                                StripedSemiGlobalMatcher(settings.pattern),
+                            )
+                            runner.run_search()
+                        elif qlen <= 1600:
+                            var runner = GpuParallelLineSearchRunner[
+                                StripedSemiGlobalMatcher,
+                                max_matrix_length=0,
+                                max_query_length=1600,
+                            ](
+                                settings,
+                                StripedSemiGlobalMatcher(settings.pattern),
+                            )
+                            runner.run_search()
+                        else:
+                            # CPU fallback
+                            var runner = ParallelLineSearchRunner[
+                                StripedSemiGlobalMatcher
+                            ](
+                                settings,
+                                StripedSemiGlobalMatcher(settings.pattern),
+                            )
+                            runner.run_search()
+                    else:
+                        var runner = ParallelLineSearchRunner[
+                            StripedSemiGlobalMatcher
+                        ](settings, StripedSemiGlobalMatcher(settings.pattern))
+                        runner.run_search()
         elif settings.record_type == "fasta":
             if settings.threads == 1:
                 var runner = FastaSearchRunner[StripedSemiGlobalMatcher](
@@ -231,71 +262,104 @@ fn main() raises:
                 )
                 runner.run_search()
             else:
-
-                @parameter
-                if has_gpu():
-                    var qlen = len(settings.pattern)
-                    if qlen <= 25:
-                        var runner = GpuParallelFastaSearchRunner[
-                            StripedSemiGlobalMatcher,
-                            max_matrix_length=0,
-                            max_query_length=25,
-                        ](settings, StripedSemiGlobalMatcher(settings.pattern))
-                        runner.run_search()
-                    elif qlen <= 50:
-                        var runner = GpuParallelFastaSearchRunner[
-                            StripedSemiGlobalMatcher,
-                            max_matrix_length=0,
-                            max_query_length=50,
-                        ](settings, StripedSemiGlobalMatcher(settings.pattern))
-                        runner.run_search()
-                    elif qlen <= 100:
-                        var runner = GpuParallelFastaSearchRunner[
-                            StripedSemiGlobalMatcher,
-                            max_matrix_length=0,
-                            max_query_length=100,
-                        ](settings, StripedSemiGlobalMatcher(settings.pattern))
-                        runner.run_search()
-                    elif qlen <= 200:
-                        var runner = GpuParallelFastaSearchRunner[
-                            StripedSemiGlobalMatcher,
-                            max_matrix_length=0,
-                            max_query_length=200,
-                        ](settings, StripedSemiGlobalMatcher(settings.pattern))
-                        runner.run_search()
-                    elif qlen <= 400:
-                        var runner = GpuParallelFastaSearchRunner[
-                            StripedSemiGlobalMatcher,
-                            max_matrix_length=0,
-                            max_query_length=400,
-                        ](settings, StripedSemiGlobalMatcher(settings.pattern))
-                        runner.run_search()
-                    elif qlen <= 800:
-                        var runner = GpuParallelFastaSearchRunner[
-                            StripedSemiGlobalMatcher,
-                            max_matrix_length=0,
-                            max_query_length=800,
-                        ](settings, StripedSemiGlobalMatcher(settings.pattern))
-                        runner.run_search()
-                    elif qlen <= 1600:
-                        var runner = GpuParallelFastaSearchRunner[
-                            StripedSemiGlobalMatcher,
-                            max_matrix_length=0,
-                            max_query_length=1600,
-                        ](settings, StripedSemiGlobalMatcher(settings.pattern))
-                        runner.run_search()
-                    else:
-                        # CPU fallback
-                        var runner = ParallelFastaSearchRunner[
-                            StripedSemiGlobalMatcher
-                        ](settings, StripedSemiGlobalMatcher(settings.pattern))
-                        runner.run_search()
-
-                else:
+                if settings.no_gpu:
                     var runner = ParallelFastaSearchRunner[
                         StripedSemiGlobalMatcher
                     ](settings, StripedSemiGlobalMatcher(settings.pattern))
                     runner.run_search()
+                else:
+
+                    @parameter
+                    if has_gpu():
+                        var qlen = len(settings.pattern)
+                        if qlen <= 25:
+                            var runner = GpuParallelFastaSearchRunner[
+                                StripedSemiGlobalMatcher,
+                                max_matrix_length=0,
+                                max_query_length=25,
+                            ](
+                                settings,
+                                StripedSemiGlobalMatcher(settings.pattern),
+                            )
+                            runner.run_search()
+                        elif qlen <= 50:
+                            var runner = GpuParallelFastaSearchRunner[
+                                StripedSemiGlobalMatcher,
+                                max_matrix_length=0,
+                                max_query_length=50,
+                            ](
+                                settings,
+                                StripedSemiGlobalMatcher(settings.pattern),
+                            )
+                            runner.run_search()
+                        elif qlen <= 100:
+                            var runner = GpuParallelFastaSearchRunner[
+                                StripedSemiGlobalMatcher,
+                                max_matrix_length=0,
+                                max_query_length=100,
+                            ](
+                                settings,
+                                StripedSemiGlobalMatcher(settings.pattern),
+                            )
+                            runner.run_search()
+                        elif qlen <= 200:
+                            var start = perf_counter()
+                            var runner = GpuParallelFastaSearchRunner[
+                                StripedSemiGlobalMatcher,
+                                max_matrix_length=0,
+                                max_query_length=200,
+                            ](
+                                settings,
+                                StripedSemiGlobalMatcher(settings.pattern),
+                            )
+                            print("Setupt time:", perf_counter() - start)
+                            runner.run_search()
+                            var end = perf_counter()
+                            print("Time to process: ", end - start)
+                        elif qlen <= 400:
+                            var runner = GpuParallelFastaSearchRunner[
+                                StripedSemiGlobalMatcher,
+                                max_matrix_length=0,
+                                max_query_length=400,
+                            ](
+                                settings,
+                                StripedSemiGlobalMatcher(settings.pattern),
+                            )
+                            runner.run_search()
+                        elif qlen <= 800:
+                            var runner = GpuParallelFastaSearchRunner[
+                                StripedSemiGlobalMatcher,
+                                max_matrix_length=0,
+                                max_query_length=800,
+                            ](
+                                settings,
+                                StripedSemiGlobalMatcher(settings.pattern),
+                            )
+                            runner.run_search()
+                        elif qlen <= 1600:
+                            var runner = GpuParallelFastaSearchRunner[
+                                StripedSemiGlobalMatcher,
+                                max_matrix_length=0,
+                                max_query_length=1600,
+                            ](
+                                settings,
+                                StripedSemiGlobalMatcher(settings.pattern),
+                            )
+                            runner.run_search()
+                        else:
+                            # CPU fallback
+                            var runner = ParallelFastaSearchRunner[
+                                StripedSemiGlobalMatcher
+                            ](
+                                settings,
+                                StripedSemiGlobalMatcher(settings.pattern),
+                            )
+                            runner.run_search()
+                    else:
+                        var runner = ParallelFastaSearchRunner[
+                            StripedSemiGlobalMatcher
+                        ](settings, StripedSemiGlobalMatcher(settings.pattern))
+                        runner.run_search()
         else:
             raise "Invalid record type: {}".format(settings.record_type)
     else:

@@ -19,6 +19,7 @@ struct SearcherSettings:
     var record_type: String
     var threads: UInt
     var batch_size: UInt
+    var no_gpu: Bool
 
     @staticmethod
     fn from_args() raises -> Optional[Self]:
@@ -87,6 +88,16 @@ struct SearcherSettings:
                 ),
             )
         )
+        parser.add_opt(
+            OptConfig(
+                "no-gpu",
+                OptKind.BoolLike,
+                is_flag=True,
+                default_value=String("False"),
+                description="Don't use the GPU(s), even if available.",
+            )
+        )
+
         parser.expect_at_least_n_args(
             1, "Files to search for the given pattern."
         )
@@ -112,6 +123,8 @@ struct SearcherSettings:
                 print("missing files")
                 raise "Expected files, found none."
 
+            var no_gpu = opts.get_bool("no-gpu")
+
             return Self(
                 files,
                 pattern,
@@ -120,6 +133,7 @@ struct SearcherSettings:
                 record_type,
                 threads,
                 batch_size,
+                no_gpu,
             )
         except e:
             print(parser.help_msg())
