@@ -18,6 +18,7 @@ from ishlib.matcher import (
     WhereComputed,
 )
 from ishlib.searcher_settings import SearcherSettings
+from ishlib.vendor.log import Logger
 
 from algorithm.functional import parallelize
 from utils import StringSlice
@@ -213,7 +214,7 @@ struct GpuParallelLineSearchRunner[
                 or not do_work
             ):
                 var done_reading = perf_counter()
-                print("Time reading", done_reading - start)
+                Logger.debug("Time reading", done_reading - start)
                 var outputs = gpu_parallel_starts_ends[
                     M,
                     LineAndIndex,
@@ -239,7 +240,7 @@ struct GpuParallelLineSearchRunner[
                     else:
                         var r = Pointer(to=sequences[m.value().index].line)
                         write_match(r, m.value())
-                print("write done:", perf_counter() - write_start)
+                Logger.debug("write done:", perf_counter() - write_start)
                 cpu_sequences.clear()
                 sequences.clear()
                 bytes_saved = 0
