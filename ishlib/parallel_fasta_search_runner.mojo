@@ -109,14 +109,14 @@ struct ParallelFastaSearchRunner[M: Matcher]:
                     writer.write_bytes(r[].seq.name)
                     writer.write("\n")
                     writer.write_bytes(r[].seq.seq[0 : m.value().result.start])
-                    writer.write("\033[1;31m")
+                    # writer.write("\033[1;31m")
                     writer.write_bytes(
                         r[].seq.seq[
                             m.value().result.start : m.value().result.end
                         ]
                     )
                     writer.write()
-                    writer.write("\033[0m")
+                    # writer.write("\033[0m")
                     writer.write_bytes(r[].seq.seq[m.value().result.end :])
                     writer.write("\n")
                 sequences.clear()
@@ -152,7 +152,12 @@ struct GpuParallelFastaSearchRunner[
             M.batch_match_coarse[
                 max_matrix_length, max_query_length, max_target_length
             ]
-        ].create_devices()
+        ].create_devices(
+            settings.batch_size,
+            len(settings.pattern),
+            self.matcher.matrix_len(),
+            max_target_length=max_matrix_length,
+        )
 
     fn run_search(mut self) raises:
         # Simple thing first?
@@ -161,6 +166,7 @@ struct GpuParallelFastaSearchRunner[
             self.run_search_on_file(f)
 
     fn run_search_on_file(mut self, file: String) raises:
+        var file_start = perf_counter()
         # TODO: Split out the too-long seqs
         # TODO: pass an enocoder to the FastaReader
         var reader = FastxReader[read_comment=False](
@@ -214,11 +220,14 @@ struct GpuParallelFastaSearchRunner[
                         List(reader.name.as_span()),
                         List(reader.seq.as_span()),
                     )
-                    bytes_saved += record.size_in_bytes()
+                    bytes_saved += max_target_length
                     sequences.append(SeqAndIndex(record, seq_index))
 
             seq_index += 1
-            if bytes_saved >= self.settings.batch_size or not do_work:
+            if (
+                bytes_saved >= self.settings.batch_size - max_target_length
+                or not do_work
+            ):
                 var done_reading = perf_counter()
                 print("Time reading", done_reading - start)
                 var outputs = gpu_parallel_starts_ends[
@@ -253,3 +262,5 @@ struct GpuParallelFastaSearchRunner[
                 seq_index = 0
         writer.flush()
         writer.close()
+        var file_end = perf_counter()
+        print("Time to process", file, file_end - file_start)
