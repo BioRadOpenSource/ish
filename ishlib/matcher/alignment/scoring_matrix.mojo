@@ -147,6 +147,7 @@ alias ACTGN = InlineArray[Int8, 25](
 
 
 @value
+@register_passable
 struct MatrixKind:
     var value: UInt8
     alias ASCII = Self(0)
@@ -194,6 +195,26 @@ struct MatrixKind:
             writer.write("BLOSUM62")
         else:
             writer.write("UNKNOWN")
+
+    fn __len__(read self) -> Int:
+        if self == Self.ASCII:
+            return 0
+        elif self == Self.ACTGN:
+            return len(ACTGN)
+        elif self == Self.BLOSUM62:
+            return len(BLOSUM62)
+        else:
+            return 0
+
+    fn skip_lookup(read self) -> Bool:
+        if self == Self.ASCII:
+            return True
+        elif self == Self.ACTGN:
+            return False
+        elif self == Self.BLOSUM62:
+            return False
+        else:
+            return True
 
 
 @value

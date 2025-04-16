@@ -9,14 +9,17 @@ from math import ceildiv
 from memory import UnsafePointer, stack_allocation, memcpy
 
 from ishlib.gpu.dynamic_2d_matrix import Dynamic2DMatrix, StorageFormat
-from ishlib.matcher.alignment.scoring_matrix import BasicScoringMatrix
+from ishlib.matcher.alignment.scoring_matrix import (
+    BasicScoringMatrix,
+    MatrixKind,
+)
 from ishlib.matcher.alignment.semi_global_aln.basic import (
     semi_global_parasail_gpu,
 )
 
 
 fn gpu_align_coarse[
-    max_matrix_length: UInt = 576,
+    matrix_kind: MatrixKind,
     max_query_length: UInt = 200,
     max_target_length: UInt = 1024,
 ](
@@ -32,21 +35,20 @@ fn gpu_align_coarse[
     target_ends_len: UInt,
     thread_count: UInt,
 ):
-    alias matrix_skip_lookup = max_matrix_length == 0
+    alias matrix_skip_lookup = matrix_kind.skip_lookup()
     # Load scoring matrix into shared memory
     var basic_profile_bytes = stack_allocation[
-        max_matrix_length,
+        len(matrix_kind),
         SIMD[DType.int8, 1],
         address_space = AddressSpace.SHARED,
     ]()
 
-    for i in range(0, min(basic_matrix_len, max_matrix_length)):
+    for i in range(0, min(Int(basic_matrix_len), len(matrix_kind))):
         basic_profile_bytes[i] = basic_matrix_values[i]
 
     var basic_matrix = BasicScoringMatrix[
         address_space = AddressSpace(3), no_lookup=matrix_skip_lookup
-    ](basic_profile_bytes, min(max_matrix_length, basic_matrix_len))
-    # print("Create matrix of len", basic_matrix_len, matrix_skip_lookup)
+    ](basic_profile_bytes, min(Int(basic_matrix_len), len(matrix_kind)))
 
     # Load query sequence into shared memory - all threads use the same query
     var query_seq_ptr = stack_allocation[

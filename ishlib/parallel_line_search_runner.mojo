@@ -131,9 +131,7 @@ struct GpuParallelLineSearchRunner[
     var matcher: M
     var ctxs: List[
         SearcherDevice[
-            M.batch_match_coarse[
-                max_matrix_length, max_query_length, max_target_length
-            ]
+            M.batch_match_coarse[max_query_length, max_target_length]
         ]
     ]
 
@@ -141,9 +139,7 @@ struct GpuParallelLineSearchRunner[
         self.settings = settings
         self.matcher = matcher
         self.ctxs = SearcherDevice[
-            M.batch_match_coarse[
-                max_matrix_length, max_query_length, max_target_length
-            ]
+            M.batch_match_coarse[max_query_length, max_target_length]
         ].create_devices(
             settings.batch_size,
             len(settings.pattern),
@@ -218,7 +214,6 @@ struct GpuParallelLineSearchRunner[
                 var outputs = gpu_parallel_starts_ends[
                     M,
                     LineAndIndex,
-                    max_matrix_length,
                     max_query_length,
                     max_target_length,
                 ](

@@ -150,9 +150,7 @@ struct GpuParallelFastaSearchRunner[
     var matcher: M
     var ctxs: List[
         SearcherDevice[
-            M.batch_match_coarse[
-                max_matrix_length, max_query_length, max_target_length
-            ]
+            M.batch_match_coarse[max_query_length, max_target_length]
         ]
     ]
 
@@ -160,9 +158,7 @@ struct GpuParallelFastaSearchRunner[
         self.settings = settings
         self.matcher = matcher
         self.ctxs = SearcherDevice[
-            M.batch_match_coarse[
-                max_matrix_length, max_query_length, max_target_length
-            ]
+            M.batch_match_coarse[max_query_length, max_target_length]
         ].create_devices(
             settings.batch_size,
             len(settings.pattern),
@@ -244,7 +240,6 @@ struct GpuParallelFastaSearchRunner[
                 var outputs = gpu_parallel_starts_ends[
                     M,
                     SeqAndIndex,
-                    max_matrix_length,
                     max_query_length,
                     max_target_length,
                 ](
@@ -260,13 +255,23 @@ struct GpuParallelFastaSearchRunner[
                     if not m:
                         continue
 
-                    var r = Pointer(to=sequences[m.value().index].seq)
-                    # Convert back to asii
-                    for i in range(0, len(r[].seq)):
-                        r[].seq[i] = self.matcher.convert_encoding_to_ascii(
-                            r[].seq[i]
-                        )
-                    write_match(r, m.value())
+                    if m.value().where_computed == WhereComputed.Gpu:
+                        var r = Pointer(to=sequences[m.value().index].seq)
+                        # Convert back to asii
+                        for i in range(0, len(r[].seq)):
+                            r[].seq[i] = self.matcher.convert_encoding_to_ascii(
+                                r[].seq[i]
+                            )
+                        write_match(r, m.value())
+                    else:
+                        var r = Pointer(to=cpu_sequences[m.value().index].seq)
+                        # Convert back to asii
+                        for i in range(0, len(r[].seq)):
+                            r[].seq[i] = self.matcher.convert_encoding_to_ascii(
+                                r[].seq[i]
+                            )
+                        write_match(r, m.value())
+
                 Logger.timing("write done:", perf_counter() - write_start)
                 cpu_sequences.clear()
                 sequences.clear()

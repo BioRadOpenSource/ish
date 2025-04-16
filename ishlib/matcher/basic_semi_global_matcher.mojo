@@ -56,9 +56,6 @@ struct BasicSemiGlobalMatcher(Matcher):
         )
         # TODO: Update this
         if result and result.value().score >= len(pattern):
-            print(
-                result.value().score, "none", result.value().coords.value().end
-            )
             return MatchResult(
                 result.value().coords.value().start,
                 result.value().coords.value().end,
@@ -75,3 +72,9 @@ struct BasicSemiGlobalMatcher(Matcher):
     fn convert_encoding_to_ascii(read self, value: UInt8) -> UInt8:
         """Convert an encoded byte to an ascii byte."""
         return self.scoring_matrix.convert_encoding_to_ascii(value)
+
+    @always_inline
+    fn encoded_pattern(ref self) -> Span[UInt8, __origin_of(self)]:
+        return Span[UInt8, __origin_of(self)](
+            ptr=self.pattern.unsafe_ptr(), length=len(self.pattern)
+        )
