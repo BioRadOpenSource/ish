@@ -81,9 +81,12 @@ struct ParallelFastaSearchRunner[M: Matcher]:
             if ret <= 0:
                 do_work = False
             else:
-                var record = ByteFastaRecord(
-                    List(reader.name.as_span()), List(reader.seq.as_span())
-                )
+                var seq = List[UInt8](capacity=len(reader.seq))
+                for s in range(0, len(reader.seq)):
+                    seq.append(
+                        self.matcher.convert_ascii_to_encoding(reader.seq[s])
+                    )
+                var record = ByteFastaRecord(List(reader.name.as_span()), seq)
                 bytes_saved += record.size_in_bytes()
                 sequences.append(SeqAndIndex(record, seq_number))
                 seq_number += 1
@@ -106,6 +109,13 @@ struct ParallelFastaSearchRunner[M: Matcher]:
                     if not m:
                         continue
                     var r = Pointer.address_of(sequences[i])
+
+                    # Convert back to asii
+                    for i in range(0, len(r[].seq.seq)):
+                        r[].seq.seq[i] = self.matcher.convert_encoding_to_ascii(
+                            r[].seq.seq[i]
+                        )
+
                     writer.write(">")
                     writer.write_bytes(r[].seq.name)
                     writer.write("\n")
@@ -206,21 +216,21 @@ struct GpuParallelFastaSearchRunner[
             if ret <= 0:
                 do_work = False
             else:
+                var seq = List[UInt8](capacity=len(reader.seq))
+                for s in range(0, len(reader.seq)):
+                    seq.append(
+                        self.matcher.convert_ascii_to_encoding(reader.seq[s])
+                    )
+                var record = ByteFastaRecord(List(reader.name.as_span()), seq)
+
                 if len(reader.seq) > max_target_length:
                     cpu_sequences.append(
                         SeqAndIndex(
-                            ByteFastaRecord(
-                                List(reader.name.as_span()),
-                                List(reader.seq.as_span()),
-                            ),
+                            record,
                             seq_index,
                         )
                     )
                 else:
-                    var record = ByteFastaRecord(
-                        List(reader.name.as_span()),
-                        List(reader.seq.as_span()),
-                    )
                     bytes_saved += max_target_length
                     sequences.append(SeqAndIndex(record, seq_index))
 
@@ -250,12 +260,13 @@ struct GpuParallelFastaSearchRunner[
                     if not m:
                         continue
 
-                    if m.value().where_computed == WhereComputed.Gpu:
-                        var r = Pointer(to=sequences[m.value().index].seq)
-                        write_match(r, m.value())
-                    else:
-                        var r = Pointer(to=sequences[m.value().index].seq)
-                        write_match(r, m.value())
+                    var r = Pointer(to=sequences[m.value().index].seq)
+                    # Convert back to asii
+                    for i in range(0, len(r[].seq)):
+                        r[].seq[i] = self.matcher.convert_encoding_to_ascii(
+                            r[].seq[i]
+                        )
+                    write_match(r, m.value())
                 Logger.timing("write done:", perf_counter() - write_start)
                 cpu_sequences.clear()
                 sequences.clear()

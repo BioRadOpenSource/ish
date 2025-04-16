@@ -1,8 +1,9 @@
 """Naive linear exact match search."""
 from gpu.host import DeviceContext
 
+from ishlib.vendor.log import Logger
 from ishlib.matcher import Matcher, MatchResult
-from ishlib.matcher.alignment.scoring_matrix import ScoringMatrix
+from ishlib.matcher.alignment.scoring_matrix import ScoringMatrix, MatrixKind
 
 
 @value
@@ -10,9 +11,14 @@ struct NaiveExactMatcher(Matcher):
     var pattern: List[UInt8]
     var scoring_matrix: ScoringMatrix
 
-    fn __init__(out self, pattern: Span[UInt8]):
-        self.pattern = List(pattern)  # assuming ascii matrix
-        self.scoring_matrix = ScoringMatrix.all_ascii_default_matrix()
+    fn __init__(
+        out self,
+        pattern: Span[UInt8],
+        matrix_kind: MatrixKind = MatrixKind.ASCII,
+    ):
+        Logger.info("Performing matching with NaiveExactMatcher")
+        self.scoring_matrix = matrix_kind.matrix()
+        self.pattern = self.scoring_matrix.convert_ascii_to_encoding(pattern)
 
     fn first_match(
         read self, haystack: Span[UInt8], pattern: Span[UInt8]

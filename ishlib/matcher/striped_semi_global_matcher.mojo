@@ -1,17 +1,19 @@
 """Smith-Waterman local alignment."""
 from gpu.host import DeviceContext
 from sys.info import simdwidthof
+from utils import StringSlice
 
 from ishlib.matcher import Matcher, MatchResult
 from ishlib.matcher.alignment import create_reversed
+from ishlib.matcher.alignment.scoring_matrix import ScoringMatrix, MatrixKind
 from ishlib.gpu.kernels.semi_global import gpu_align_coarse
 from ishlib.matcher.alignment.semi_global_aln.striped import (
     Profile,
-    ScoringMatrix,
     ScoreSize,
     semi_global_aln_start_end,
     semi_global_aln,
 )
+from ishlib.vendor.log import Logger
 
 
 # TODO: why is this a bit slower than the bench aligner, where the local on the same sequence, is much faster?
@@ -31,31 +33,41 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
     var profile: Profile[Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH]
     var reverse_profile: Profile[Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH]
     var matrix: ScoringMatrix
+    var gap_open: UInt
+    var gap_extend: UInt
 
-    fn __init__(out self, pattern: List[UInt8]):
-        var matrix = ScoringMatrix.all_ascii_default_matrix()
-        self.matrix = matrix
-        self.pattern = pattern
-        self.rev_pattern = create_reversed(pattern)
+    fn __init__(
+        out self,
+        pattern: List[UInt8],
+        matrix_kind: MatrixKind = MatrixKind.ASCII,
+        gap_open: UInt = 3,
+        gap_extend: UInt = 1,
+    ):
+        Logger.info("Performing matching with StripedSemiGlobalMatcher.")
+        self.gap_open = gap_open
+        self.gap_extend = gap_extend
+        self.matrix = matrix_kind.matrix()
+        self.pattern = self.matrix.convert_ascii_to_encoding(pattern)
+        self.rev_pattern = create_reversed(self.pattern)
         var profile = Profile[Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH](
-            self.pattern, self.matrix, ScoreSize.Adaptive
+            self.pattern, self.matrix, ScoreSize.Word
         )
         self.profile = profile
         var reverse_profile = Profile[Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH](
-            self.rev_pattern, self.matrix, ScoreSize.Adaptive
+            self.rev_pattern, self.matrix, ScoreSize.Word
         )
         self.reverse_profile = reverse_profile
 
     fn first_match(
-        read self, haystack: Span[UInt8], pattern: Span[UInt8]
+        read self, haystack: Span[UInt8], _pattern: Span[UInt8]
     ) -> Optional[MatchResult]:
         """Find the first match in the haystack."""
 
         var result = semi_global_aln_start_end[do_saturation_check=False](
             reference=haystack,
             query_len=len(self.pattern),
-            gap_open_penalty=3,
-            gap_extension_penalty=1,
+            gap_open_penalty=self.gap_open,
+            gap_extension_penalty=self.gap_extend,
             profile=self.profile.profile_large.value(),
             rev_profile=self.reverse_profile.profile_large.value(),
             bias=self.profile.bias.cast[DType.uint16](),
@@ -82,8 +94,8 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
         var result = semi_global_aln[do_saturation_check=False](
             reference=rev_haystack,
             query_len=len(pattern),
-            gap_open_penalty=3,
-            gap_extension_penalty=1,
+            gap_open_penalty=self.gap_open,
+            gap_extension_penalty=self.gap_extend,
             profile=self.reverse_profile.profile_large.value(),
             bias=self.profile.bias.cast[DType.uint16](),
             max_score=self.profile.max_score,

@@ -25,16 +25,20 @@ struct LineSearchRunner[M: Matcher]:
         var reader = BufferedReader(GZFile(file, "r"))
         # var buffer = List[UInt8]()
         var buffer = ByteString()
+        var encoded = ByteString()
 
         var writer = BufferedWriter(stdout)
 
         var line_number = 1
         while True:
             buffer.clear()
+            encoded.clear()
             if reader.read_until[SearchChar.Newline](buffer) == 0:
                 break
+            for i in range(0, len(buffer)):
+                encoded.push(self.matcher.convert_ascii_to_encoding(buffer[i]))
             var m = self.matcher.first_match(
-                buffer.as_span(), self.settings.pattern
+                encoded.as_span(), self.settings.pattern
             )
             if m:
                 var b = buffer.as_span()

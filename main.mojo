@@ -33,23 +33,27 @@ fn main() raises:
         if settings.record_type == "line":
             if settings.threads == 1:
                 var runner = LineSearchRunner[NaiveExactMatcher](
-                    settings, NaiveExactMatcher(settings.pattern)
+                    settings,
+                    NaiveExactMatcher(settings.pattern, settings.matrix_kind),
                 )
                 runner.run_search()
             else:
                 var runner = ParallelLineSearchRunner[NaiveExactMatcher](
-                    settings, NaiveExactMatcher(settings.pattern)
+                    settings,
+                    NaiveExactMatcher(settings.pattern, settings.matrix_kind),
                 )
                 runner.run_search()
         elif settings.record_type == "fasta":
             if settings.threads == 1:
                 var runner = FastaSearchRunner[NaiveExactMatcher](
-                    settings, NaiveExactMatcher(settings.pattern)
+                    settings,
+                    NaiveExactMatcher(settings.pattern, settings.matrix_kind),
                 )
                 runner.run_search()
             else:
                 var runner = ParallelFastaSearchRunner[NaiveExactMatcher](
-                    settings, NaiveExactMatcher(settings.pattern)
+                    settings,
+                    NaiveExactMatcher(settings.pattern, settings.matrix_kind),
                 )
                 runner.run_search()
         else:
@@ -58,23 +62,27 @@ fn main() raises:
         if settings.record_type == "line":
             if settings.threads == 1:
                 var runner = LineSearchRunner[BasicLocalMatcher](
-                    settings, BasicLocalMatcher(settings.pattern)
+                    settings,
+                    BasicLocalMatcher(settings.pattern, settings.matrix_kind),
                 )
                 runner.run_search()
             else:
                 var runner = ParallelLineSearchRunner[BasicLocalMatcher](
-                    settings, BasicLocalMatcher(settings.pattern)
+                    settings,
+                    BasicLocalMatcher(settings.pattern, settings.matrix_kind),
                 )
                 runner.run_search()
         elif settings.record_type == "fasta":
             if settings.threads == 1:
                 var runner = FastaSearchRunner[BasicLocalMatcher](
-                    settings, BasicLocalMatcher(settings.pattern)
+                    settings,
+                    BasicLocalMatcher(settings.pattern, settings.matrix_kind),
                 )
                 runner.run_search()
             else:
                 var runner = ParallelFastaSearchRunner[BasicLocalMatcher](
-                    settings, BasicLocalMatcher(settings.pattern)
+                    settings,
+                    BasicLocalMatcher(settings.pattern, settings.matrix_kind),
                 )
                 runner.run_search()
         else:
@@ -84,23 +92,35 @@ fn main() raises:
             if settings.threads == 1:
                 var runner = LineSearchRunner[
                     StripedLocalMatcher[__origin_of(settings.pattern)]
-                ](settings, StripedLocalMatcher(settings.pattern))
+                ](
+                    settings,
+                    StripedLocalMatcher(settings.pattern, settings.matrix_kind),
+                )
                 runner.run_search()
             else:
                 var runner = ParallelLineSearchRunner[
                     StripedLocalMatcher[__origin_of(settings.pattern)]
-                ](settings, StripedLocalMatcher(settings.pattern))
+                ](
+                    settings,
+                    StripedLocalMatcher(settings.pattern, settings.matrix_kind),
+                )
                 runner.run_search()
         elif settings.record_type == "fasta":
             if settings.threads == 1:
                 var runner = FastaSearchRunner[
                     StripedLocalMatcher[__origin_of(settings.pattern)]
-                ](settings, StripedLocalMatcher(settings.pattern))
+                ](
+                    settings,
+                    StripedLocalMatcher(settings.pattern, settings.matrix_kind),
+                )
                 runner.run_search()
             else:
                 var runner = ParallelFastaSearchRunner[
                     StripedLocalMatcher[__origin_of(settings.pattern)]
-                ](settings, StripedLocalMatcher(settings.pattern))
+                ](
+                    settings,
+                    StripedLocalMatcher(settings.pattern, settings.matrix_kind),
+                )
                 runner.run_search()
         else:
             raise "Invalid record type: {}".format(settings.record_type)
@@ -108,23 +128,27 @@ fn main() raises:
         if settings.record_type == "line":
             if settings.threads == 1:
                 var runner = LineSearchRunner(
-                    settings, BasicGlobalMatcher(settings.pattern)
+                    settings,
+                    BasicGlobalMatcher(settings.pattern, settings.matrix_kind),
                 )
                 runner.run_search()
             else:
                 var runner = ParallelLineSearchRunner(
-                    settings, BasicGlobalMatcher(settings.pattern)
+                    settings,
+                    BasicGlobalMatcher(settings.pattern, settings.matrix_kind),
                 )
                 runner.run_search()
         elif settings.record_type == "fasta":
             if settings.threads == 1:
                 var runner = FastaSearchRunner(
-                    settings, BasicGlobalMatcher(settings.pattern)
+                    settings,
+                    BasicGlobalMatcher(settings.pattern, settings.matrix_kind),
                 )
                 runner.run_search()
             else:
                 var runner = ParallelFastaSearchRunner(
-                    settings, BasicGlobalMatcher(settings.pattern)
+                    settings,
+                    BasicGlobalMatcher(settings.pattern, settings.matrix_kind),
                 )
                 runner.run_search()
         else:
@@ -133,23 +157,35 @@ fn main() raises:
         if settings.record_type == "line":
             if settings.threads == 1:
                 var runner = LineSearchRunner(
-                    settings, BasicSemiGlobalMatcher(settings.pattern)
+                    settings,
+                    BasicSemiGlobalMatcher(
+                        settings.pattern, settings.matrix_kind
+                    ),
                 )
                 runner.run_search()
             else:
                 var runner = ParallelLineSearchRunner(
-                    settings, BasicSemiGlobalMatcher(settings.pattern)
+                    settings,
+                    BasicSemiGlobalMatcher(
+                        settings.pattern, settings.matrix_kind
+                    ),
                 )
                 runner.run_search()
         elif settings.record_type == "fasta":
             if settings.threads == 1:
                 var runner = FastaSearchRunner(
-                    settings, BasicSemiGlobalMatcher(settings.pattern)
+                    settings,
+                    BasicSemiGlobalMatcher(
+                        settings.pattern, settings.matrix_kind
+                    ),
                 )
                 runner.run_search()
             else:
                 var runner = ParallelFastaSearchRunner(
-                    settings, BasicSemiGlobalMatcher(settings.pattern)
+                    settings,
+                    BasicSemiGlobalMatcher(
+                        settings.pattern, settings.matrix_kind
+                    ),
                 )
                 runner.run_search()
         else:
@@ -158,14 +194,22 @@ fn main() raises:
         if settings.record_type == "line":
             if settings.threads == 1:
                 var runner = LineSearchRunner[StripedSemiGlobalMatcher](
-                    settings, StripedSemiGlobalMatcher(settings.pattern)
+                    settings,
+                    StripedSemiGlobalMatcher(
+                        settings.pattern, settings.matrix_kind
+                    ),
                 )
                 runner.run_search()
             else:
                 if settings.max_gpus == 0 or not has_gpu():
                     var runner = ParallelLineSearchRunner[
                         StripedSemiGlobalMatcher
-                    ](settings, StripedSemiGlobalMatcher(settings.pattern))
+                    ](
+                        settings,
+                        StripedSemiGlobalMatcher(
+                            settings.pattern, settings.matrix_kind
+                        ),
+                    )
                     runner.run_search()
                 else:
 
@@ -179,7 +223,9 @@ fn main() raises:
                                 max_query_length=25,
                             ](
                                 settings,
-                                StripedSemiGlobalMatcher(settings.pattern),
+                                StripedSemiGlobalMatcher(
+                                    settings.pattern, settings.matrix_kind
+                                ),
                             )
                             runner.run_search()
                         elif qlen <= 50:
@@ -189,7 +235,9 @@ fn main() raises:
                                 max_query_length=50,
                             ](
                                 settings,
-                                StripedSemiGlobalMatcher(settings.pattern),
+                                StripedSemiGlobalMatcher(
+                                    settings.pattern, settings.matrix_kind
+                                ),
                             )
                             runner.run_search()
                         elif qlen <= 100:
@@ -199,7 +247,9 @@ fn main() raises:
                                 max_query_length=100,
                             ](
                                 settings,
-                                StripedSemiGlobalMatcher(settings.pattern),
+                                StripedSemiGlobalMatcher(
+                                    settings.pattern, settings.matrix_kind
+                                ),
                             )
                             runner.run_search()
                         elif qlen <= 200:
@@ -209,7 +259,9 @@ fn main() raises:
                                 max_query_length=200,
                             ](
                                 settings,
-                                StripedSemiGlobalMatcher(settings.pattern),
+                                StripedSemiGlobalMatcher(
+                                    settings.pattern, settings.matrix_kind
+                                ),
                             )
                             runner.run_search()
                         elif qlen <= 400:
@@ -219,7 +271,9 @@ fn main() raises:
                                 max_query_length=400,
                             ](
                                 settings,
-                                StripedSemiGlobalMatcher(settings.pattern),
+                                StripedSemiGlobalMatcher(
+                                    settings.pattern, settings.matrix_kind
+                                ),
                             )
                             runner.run_search()
                         elif qlen <= 800:
@@ -229,7 +283,9 @@ fn main() raises:
                                 max_query_length=800,
                             ](
                                 settings,
-                                StripedSemiGlobalMatcher(settings.pattern),
+                                StripedSemiGlobalMatcher(
+                                    settings.pattern, settings.matrix_kind
+                                ),
                             )
                             runner.run_search()
                         elif qlen <= 1600:
@@ -239,7 +295,9 @@ fn main() raises:
                                 max_query_length=1600,
                             ](
                                 settings,
-                                StripedSemiGlobalMatcher(settings.pattern),
+                                StripedSemiGlobalMatcher(
+                                    settings.pattern, settings.matrix_kind
+                                ),
                             )
                             runner.run_search()
                         else:
@@ -248,25 +306,40 @@ fn main() raises:
                                 StripedSemiGlobalMatcher
                             ](
                                 settings,
-                                StripedSemiGlobalMatcher(settings.pattern),
+                                StripedSemiGlobalMatcher(
+                                    settings.pattern, settings.matrix_kind
+                                ),
                             )
                             runner.run_search()
                     else:
                         var runner = ParallelLineSearchRunner[
                             StripedSemiGlobalMatcher
-                        ](settings, StripedSemiGlobalMatcher(settings.pattern))
+                        ](
+                            settings,
+                            StripedSemiGlobalMatcher(
+                                settings.pattern, settings.matrix_kind
+                            ),
+                        )
                         runner.run_search()
         elif settings.record_type == "fasta":
             if settings.threads == 1:
                 var runner = FastaSearchRunner[StripedSemiGlobalMatcher](
-                    settings, StripedSemiGlobalMatcher(settings.pattern)
+                    settings,
+                    StripedSemiGlobalMatcher(
+                        settings.pattern, settings.matrix_kind
+                    ),
                 )
                 runner.run_search()
             else:
                 if settings.max_gpus == 0 or not has_gpu():
                     var runner = ParallelFastaSearchRunner[
                         StripedSemiGlobalMatcher
-                    ](settings, StripedSemiGlobalMatcher(settings.pattern))
+                    ](
+                        settings,
+                        StripedSemiGlobalMatcher(
+                            settings.pattern, settings.matrix_kind
+                        ),
+                    )
                     runner.run_search()
                 else:
 
@@ -280,7 +353,9 @@ fn main() raises:
                                 max_query_length=25,
                             ](
                                 settings,
-                                StripedSemiGlobalMatcher(settings.pattern),
+                                StripedSemiGlobalMatcher(
+                                    settings.pattern, settings.matrix_kind
+                                ),
                             )
                             runner.run_search()
                         elif qlen <= 50:
@@ -290,7 +365,9 @@ fn main() raises:
                                 max_query_length=50,
                             ](
                                 settings,
-                                StripedSemiGlobalMatcher(settings.pattern),
+                                StripedSemiGlobalMatcher(
+                                    settings.pattern, settings.matrix_kind
+                                ),
                             )
                             runner.run_search()
                         elif qlen <= 100:
@@ -300,7 +377,9 @@ fn main() raises:
                                 max_query_length=100,
                             ](
                                 settings,
-                                StripedSemiGlobalMatcher(settings.pattern),
+                                StripedSemiGlobalMatcher(
+                                    settings.pattern, settings.matrix_kind
+                                ),
                             )
                             runner.run_search()
                         elif qlen <= 200:
@@ -311,7 +390,9 @@ fn main() raises:
                                 max_query_length=200,
                             ](
                                 settings,
-                                StripedSemiGlobalMatcher(settings.pattern),
+                                StripedSemiGlobalMatcher(
+                                    settings.pattern, settings.matrix_kind
+                                ),
                             )
                             Logger.timing(
                                 "Setupt time:", perf_counter() - start
@@ -326,7 +407,9 @@ fn main() raises:
                                 max_query_length=400,
                             ](
                                 settings,
-                                StripedSemiGlobalMatcher(settings.pattern),
+                                StripedSemiGlobalMatcher(
+                                    settings.pattern, settings.matrix_kind
+                                ),
                             )
                             runner.run_search()
                         elif qlen <= 800:
@@ -336,7 +419,9 @@ fn main() raises:
                                 max_query_length=800,
                             ](
                                 settings,
-                                StripedSemiGlobalMatcher(settings.pattern),
+                                StripedSemiGlobalMatcher(
+                                    settings.pattern, settings.matrix_kind
+                                ),
                             )
                             runner.run_search()
                         elif qlen <= 1600:
@@ -346,7 +431,9 @@ fn main() raises:
                                 max_query_length=1600,
                             ](
                                 settings,
-                                StripedSemiGlobalMatcher(settings.pattern),
+                                StripedSemiGlobalMatcher(
+                                    settings.pattern, settings.matrix_kind
+                                ),
                             )
                             runner.run_search()
                         else:
@@ -355,13 +442,20 @@ fn main() raises:
                                 StripedSemiGlobalMatcher
                             ](
                                 settings,
-                                StripedSemiGlobalMatcher(settings.pattern),
+                                StripedSemiGlobalMatcher(
+                                    settings.pattern, settings.matrix_kind
+                                ),
                             )
                             runner.run_search()
                     else:
                         var runner = ParallelFastaSearchRunner[
                             StripedSemiGlobalMatcher
-                        ](settings, StripedSemiGlobalMatcher(settings.pattern))
+                        ](
+                            settings,
+                            StripedSemiGlobalMatcher(
+                                settings.pattern, settings.matrix_kind
+                            ),
+                        )
                         runner.run_search()
         else:
             raise "Invalid record type: {}".format(settings.record_type)
