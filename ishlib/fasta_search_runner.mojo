@@ -33,9 +33,11 @@ struct FastaSearchRunner[M: Matcher]:
             var ret = reader.read()
             if ret <= 0:
                 break
-            var m = self.matcher.first_match(
-                reader.seq.as_span(), self.settings.pattern
-            )
+            var seq = List[UInt8](capacity=len(reader.seq))
+            for s in range(0, len(reader.seq)):
+                seq.append(self.matcher.convert_ascii_to_encoding(reader.seq[s]))
+
+            var m = self.matcher.first_match(seq, self.settings.pattern)
             if m:
                 writer.write(">")
                 writer.write_bytes(reader.name.as_span())

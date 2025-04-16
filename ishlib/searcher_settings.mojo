@@ -1,7 +1,10 @@
+from bit.bit import is_power_of_two, next_power_of_two
 from collections import Optional
 from sys.info import num_physical_cores
 
 from ExtraMojo.cli.parser import OptParser, OptConfig, OptKind
+
+from ishlib.matcher.alignment.scoring_matrix import MatrixKind
 
 
 @value
@@ -12,8 +15,13 @@ struct SearcherSettings:
     """The files to search for matches."""
     var pattern: List[UInt8]
     """The pattern to search for."""
+    var matrix_kind: MatrixKind
+    """The scorign matrix to use."""
     var min_score: Int
     """The minimum score needed to return a match."""
+
+    var gap_open_penalty: Int
+    var gap_extension_penalty: Int
 
     var match_algo: String
     var record_type: String
@@ -36,10 +44,42 @@ struct SearcherSettings:
         )
         parser.add_opt(
             OptConfig(
+                "scoring-matrix",
+                OptKind.StringLike,
+                default_value=String("ascii"),
+                # fmt: off
+                description=(
+                "The scoring matrix to use.\n"
+                "\tascii: does no encoding of input bytes, matches are 2, mismatch is -2.\n"
+                "\tblosum62: encodes searched inputs as amino acids and uses the classic Blosum62 scoring matrix.\n"
+                "\tactgn: encodes searched inputs as nucleotides, matches are 2, mismatch is -2, Ns match anything\n"
+                # TODO: support iupac
+                )
+                # fmt: on
+            )
+        )
+        parser.add_opt(
+            OptConfig(
                 "min-score",
                 OptKind.IntLike,
                 default_value=String("1"),
                 description="The min score needed to return a match.",
+            )
+        )
+        parser.add_opt(
+            OptConfig(
+                "gap-open",
+                OptKind.IntLike,
+                default_value=String("3"),
+                description="Score penalty for opening a gap.",
+            )
+        )
+        parser.add_opt(
+            OptConfig(
+                "gap-extend",
+                OptKind.IntLike,
+                default_value=String("1"),
+                description="Score penalty for extending a gap.",
             )
         )
         parser.add_opt(
@@ -77,7 +117,7 @@ struct SearcherSettings:
             OptConfig(
                 "batch-size",
                 OptKind.IntLike,
-                default_value=String("264362073"),
+                default_value=String("268435456"),
                 # TODO: elaborate on this for GPU batch sizing, with multiple devices.
                 description=(
                     "The number of bytes in a parallel processing batch. Note"
@@ -112,18 +152,27 @@ struct SearcherSettings:
                 return None
 
             var pattern = List(opts.get_string("pattern").as_bytes())
+            var matrix_kind = MatrixKind.from_str(
+                opts.get_string("scoring-matrix")
+            )
             var min_score = opts.get_int("min-score")
+            var gap_open = abs(opts.get_int("gap-open"))
+            var gap_extend = abs(opts.get_int("gap-extend"))
             var match_algo = opts.get_string("match-algo")
             var record_type = opts.get_string("record-type")
             var threads = opts.get_int("threads")
             if threads <= 0:
                 raise "Threads must be >= 1."
             var batch_size = opts.get_int("batch-size")
+            if not is_power_of_two(batch_size):
+                var next_power_of_two = next_power_of_two(batch_size)
+                raise "Batch size is not a power of two, try: " + String(
+                    next_power_of_two
+                )
             if batch_size < 1024 * 10:
-                raise "Batch size too small"
+                raise "Batch size too small, try"
             var files = opts.args
             if len(files) == 0:
-                print("missing files")
                 raise "Expected files, found none."
 
             var max_gpus = opts.get_int("max-gpus")
@@ -131,7 +180,10 @@ struct SearcherSettings:
             return Self(
                 files,
                 pattern,
+                matrix_kind,
                 min_score,
+                gap_open,
+                gap_extend,
                 match_algo,
                 record_type,
                 threads,

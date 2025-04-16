@@ -3,6 +3,8 @@ from math import sqrt
 from memory import UnsafePointer, AddressSpace
 from sys.info import alignof
 
+from ishlib.vendor.log import Logger
+
 # fmt: off
 alias AA_TO_NUM = InlineArray[UInt8, 128](
     23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
@@ -142,6 +144,56 @@ alias ACTGN = InlineArray[Int8, 25](
      2,  2,  2,  2,  2  # N
 )
 # fmt: on
+
+
+@value
+struct MatrixKind:
+    var value: UInt8
+    alias ASCII = Self(0)
+    alias ACTGN = Self(1)
+    alias BLOSUM62 = Self(2)
+
+    @staticmethod
+    fn from_str(read name: String) raises -> Self:
+        if name.lower() == "ascii":
+            return Self.ASCII
+        elif name.lower() == "actgn":
+            return Self.ACTGN
+        elif name.lower() == "blosum62":
+            return Self.BLOSUM62
+        else:
+            raise "Invalid scoring matrix name: " + name
+
+    fn __eq__(read self, read other: Self) -> Bool:
+        return self.value == other.value
+
+    fn __str__(read self) -> String:
+        var s = String()
+        self.write_to(s)
+        return s
+
+    fn matrix(read self) -> ScoringMatrix:
+        if self == Self.ASCII:
+            return ScoringMatrix.all_ascii_default_matrix()
+        elif self == Self.ACTGN:
+            return ScoringMatrix.actgn_matrix()
+        elif self == Self.BLOSUM62:
+            return ScoringMatrix.blosum62()
+        else:
+            Logger.error(
+                "Unsupported scoring matrix kind. Returning ASCII matrix."
+            )
+            return ScoringMatrix.all_ascii_default_matrix()
+
+    fn write_to[W: Writer](read self, mut writer: W):
+        if self == Self.ASCII:
+            writer.write("ASCII")
+        elif self == Self.ACTGN:
+            writer.write("ACTGN")
+        elif self == Self.BLOSUM62:
+            writer.write("BLOSUM62")
+        else:
+            writer.write("UNKNOWN")
 
 
 @value
@@ -293,9 +345,7 @@ struct ScoringMatrix:
             seq[i] = self.ascii_to_encoding[Int(seq[i])]
 
     @always_inline
-    fn convert_ascii_to_encoding(
-        read self, owned seq: Span[UInt8]
-    ) -> List[UInt8]:
+    fn convert_ascii_to_encoding(read self, seq: Span[UInt8]) -> List[UInt8]:
         var out = List[UInt8](capacity=len(seq))
         for value in seq:
             out.append(self.ascii_to_encoding[Int(value[])])

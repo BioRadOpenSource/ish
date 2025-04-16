@@ -6,10 +6,11 @@ from utils import write_args, StringSlice
 @value
 struct LogLevel:
     var value: Int
-    alias Error = Self(30)
-    alias Info = Self(20)
-    alias Timing = Self(15)
-    alias Debug = Self(10)
+    alias Error = Self(500)
+    alias Warn = Self(400)
+    alias Info = Self(300)
+    alias Timing = Self(200)
+    alias Debug = Self(100)
     alias Nolog = Self(0)
 
     @staticmethod
@@ -20,6 +21,8 @@ struct LogLevel:
             return Self.Debug
         elif level.lower() == "error":
             return Self.Error
+        elif level.lower() == "warn":
+            return Self.Warn
         elif level.lower() == "timing":
             return Self.Timing
         else:
@@ -38,6 +41,8 @@ struct LogLevel:
             writer.write("Debug")
         elif self is Self.Error:
             writer.write("Error")
+        elif self is Self.Warn:
+            writer.write("Warn")
         elif self is Self.Timing:
             writer.write("Timing")
         else:
@@ -123,5 +128,23 @@ struct Logger:
 
         var stderr = sys.stderr
         LogLevel.Error.write_to(stderr)
+        stderr.write(": ")
+        write_args(stderr, values, sep=sep, end=end)
+
+    @always_inline
+    @staticmethod
+    fn warn[
+        *Ts: Writable
+    ](
+        *values: *Ts,
+        sep: StringSlice[StaticConstantOrigin] = StringSlice(" "),
+        end: StringSlice[StaticConstantOrigin] = StringSlice("\n"),
+    ):
+        @parameter
+        if Self._is_disabled[LogLevel.Warn]():
+            return
+
+        var stderr = sys.stderr
+        LogLevel.Warn.write_to(stderr)
         stderr.write(": ")
         write_args(stderr, values, sep=sep, end=end)

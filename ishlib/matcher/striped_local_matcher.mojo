@@ -2,11 +2,13 @@
 from gpu.host import DeviceContext
 from sys.info import simdwidthof
 
+from ishlib.vendor.log import Logger
 from ishlib.matcher import Matcher, MatchResult
+from ishlib.matcher.alignment import create_reversed
+from ishlib.matcher.alignment.scoring_matrix import ScoringMatrix, MatrixKind
 from ishlib.matcher.alignment.local_aln.striped import (
     ssw_align,
     Profile,
-    ScoringMatrix,
     ScoreSize,
 )
 
@@ -17,19 +19,27 @@ struct StripedLocalMatcher[mut: Bool, //, origin: Origin[mut]](Matcher):
         UInt8
     ]() // 1  # TODO: needs tuning on wider machines (avx512) for example
     alias SIMD_U16_WIDTH = simdwidthof[UInt16]() // 1
-    var pattern: Span[UInt8, origin]
+    var pattern: List[UInt8]
     var rev_pattern: List[UInt8]
     var profile: Profile[Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH]
     var reverse_profile: Profile[Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH]
     var matrix: ScoringMatrix
+    var gap_open: UInt
+    var gap_extend: UInt
 
-    fn __init__(out self, pattern: Span[UInt8, origin]):
-        var matrix = ScoringMatrix.all_ascii_default_matrix()
-        self.matrix = matrix
-        self.pattern = pattern
-        self.rev_pattern = List[UInt8](capacity=len(pattern))
-        for char in reversed(pattern):
-            self.rev_pattern.append(char[])
+    fn __init__(
+        out self,
+        pattern: Span[UInt8, origin],
+        matrix_kind: MatrixKind = MatrixKind.ASCII,
+        gap_open: UInt = 3,
+        gap_extend: UInt = 1,
+    ):
+        Logger.info("Performing matching with StripedLocalMatcher")
+        self.gap_open = gap_open
+        self.gap_extend = gap_extend
+        self.matrix = matrix_kind.matrix()
+        self.pattern = self.matrix.convert_ascii_to_encoding(pattern)
+        self.rev_pattern = create_reversed(self.pattern)
         var profile = Profile[Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH](
             self.pattern, self.matrix, ScoreSize.Adaptive
         )
@@ -48,6 +58,8 @@ struct StripedLocalMatcher[mut: Bool, //, origin: Origin[mut]](Matcher):
             self.matrix,
             haystack,
             self.pattern,
+            gap_open_penalty=self.gap_open,
+            gap_extension_penalty=self.gap_extend,
             reverse_profile=self.reverse_profile,
             score_cutoff=Int32(len(self.pattern)) - 1,
         )
