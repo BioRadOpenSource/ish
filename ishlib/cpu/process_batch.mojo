@@ -22,7 +22,7 @@ fn parallel_starts_ends[
     fn do_matching(index: Int) capturing:
         var target = Pointer.address_of(seqs[index])
         var result = matcher.first_match(
-            target[].buffer_to_search(), settings.pattern
+            target[].buffer_to_search(), matcher.encoded_pattern()
         )
         if result:
             output[target[].original_index()] = ComputedMatchResult(
@@ -48,10 +48,10 @@ fn parallel_starts[
     offset: UInt,
 ):
     fn do_matching(index: Int) capturing:
-        if target_scores[index] < len(settings.pattern):
+        if target_scores[index] < len(matcher.encoded_pattern()):
             return
         var start = matcher.find_start(
-            seqs[index].buffer_to_search(), settings.pattern
+            seqs[index].buffer_to_search(), matcher.encoded_pattern()
         )
         outputs[seqs[index].original_index()] = ComputedMatchResult(
             MatchResult(start, Int(target_ends[index])),

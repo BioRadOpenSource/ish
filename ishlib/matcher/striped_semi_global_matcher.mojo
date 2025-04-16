@@ -33,6 +33,7 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
     var profile: Profile[Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH]
     var reverse_profile: Profile[Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH]
     var matrix: ScoringMatrix
+    var _matrix_kind: MatrixKind
     var gap_open: UInt
     var gap_extend: UInt
 
@@ -47,6 +48,7 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
         self.gap_open = gap_open
         self.gap_extend = gap_extend
         self.matrix = matrix_kind.matrix()
+        self._matrix_kind = matrix_kind
         self.pattern = self.matrix.convert_ascii_to_encoding(pattern)
         self.rev_pattern = create_reversed(self.pattern)
         var profile = Profile[Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH](
@@ -88,12 +90,12 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
         return None
 
     fn find_start(
-        read self, haystack: Span[UInt8], pattern: Span[UInt8]
+        read self, haystack: Span[UInt8], _pattern: Span[UInt8]
     ) -> Int:
         var rev_haystack = create_reversed(haystack)
         var result = semi_global_aln[do_saturation_check=False](
             reference=rev_haystack,
-            query_len=len(pattern),
+            query_len=len(self.pattern),
             gap_open_penalty=self.gap_open,
             gap_extension_penalty=self.gap_extend,
             profile=self.reverse_profile.profile_large.value(),
@@ -117,15 +119,27 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
         """Convert an encoded byte to an ascii byte."""
         return self.matrix.convert_encoding_to_ascii(value)
 
+    @always_inline
     fn matrix_bytes(read self) -> UnsafePointer[Int8]:
         return self.matrix.values.unsafe_ptr()
 
+    @always_inline
     fn matrix_len(read self) -> UInt:
         return len(self.matrix.values)
 
+    @always_inline
+    fn matrix_kind(read self) -> MatrixKind:
+        return self._matrix_kind
+
+    @always_inline
+    fn encoded_pattern(ref self) -> Span[UInt8, __origin_of(self)]:
+        return Span[UInt8, __origin_of(self)](
+            ptr=self.pattern.unsafe_ptr(), length=len(self.pattern)
+        )
+
     @staticmethod
     fn batch_match_coarse[
-        max_matrix_length: UInt, max_query_length: UInt, max_target_length: UInt
+        max_query_length: UInt, max_target_length: UInt
     ](
         query: DeviceBuffer[DType.uint8],
         ref_buffer: DeviceBuffer[DType.uint8],
@@ -135,22 +149,77 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
         ref_end_result_buffer: DeviceBuffer[DType.int32],
         basic_matrix_values: DeviceBuffer[DType.int8],
         basic_matrix_len: Int,
+        matrix_kind: MatrixKind,
         query_len: Int,
         target_ends_len: Int,
         thread_count: Int,
     ):
-        gpu_align_coarse[
-            max_matrix_length, max_query_length, max_target_length
-        ](
-            query,
-            ref_buffer,
-            target_ends,
-            score_result_buffer,
-            query_end_result_buffer,
-            ref_end_result_buffer,
-            basic_matrix_values,
-            basic_matrix_len,
-            query_len,
-            target_ends_len,
-            thread_count,
-        )
+        # TODO: make this a param?
+        if matrix_kind == MatrixKind.ASCII:
+            gpu_align_coarse[
+                MatrixKind.ASCII, max_query_length, max_target_length
+            ](
+                query,
+                ref_buffer,
+                target_ends,
+                score_result_buffer,
+                query_end_result_buffer,
+                ref_end_result_buffer,
+                basic_matrix_values,
+                basic_matrix_len,
+                query_len,
+                target_ends_len,
+                thread_count,
+            )
+        elif matrix_kind == MatrixKind.ACTGN:
+            gpu_align_coarse[
+                MatrixKind.ACTGN, max_query_length, max_target_length
+            ](
+                query,
+                ref_buffer,
+                target_ends,
+                score_result_buffer,
+                query_end_result_buffer,
+                ref_end_result_buffer,
+                basic_matrix_values,
+                basic_matrix_len,
+                query_len,
+                target_ends_len,
+                thread_count,
+            )
+        elif matrix_kind == MatrixKind.BLOSUM62:
+            gpu_align_coarse[
+                MatrixKind.BLOSUM62, max_query_length, max_target_length
+            ](
+                query,
+                ref_buffer,
+                target_ends,
+                score_result_buffer,
+                query_end_result_buffer,
+                ref_end_result_buffer,
+                basic_matrix_values,
+                basic_matrix_len,
+                query_len,
+                target_ends_len,
+                thread_count,
+            )
+        else:
+            Logger.warn(
+                "No valid MatrixKind set for gpu_align_coarse: ",
+                String(matrix_kind),
+            )
+            gpu_align_coarse[
+                MatrixKind.ASCII, max_query_length, max_target_length
+            ](
+                query,
+                ref_buffer,
+                target_ends,
+                score_result_buffer,
+                query_end_result_buffer,
+                ref_end_result_buffer,
+                basic_matrix_values,
+                basic_matrix_len,
+                query_len,
+                target_ends_len,
+                thread_count,
+            )

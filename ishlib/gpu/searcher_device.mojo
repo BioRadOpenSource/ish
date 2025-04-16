@@ -5,6 +5,7 @@ from math import ceildiv
 from memory import UnsafePointer, stack_allocation, memcpy
 
 from ishlib.matcher import Searchable
+from ishlib.matcher.alignment.scoring_matrix import MatrixKind
 from ishlib.gpu.dynamic_2d_matrix import Dynamic2DMatrix, StorageFormat
 from ishlib.vendor.log import Logger
 
@@ -17,6 +18,7 @@ struct BlockInfo:
     var matrix_len: UInt
     var max_target_length: UInt
     var targets_len: UInt
+    var matrix_kind: MatrixKind
 
 
 @value
@@ -143,6 +145,7 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
         num_targets: UInt,
         query_len: UInt,
         matrix_len: UInt,
+        matrix_kind: MatrixKind,
         max_target_length: UInt = 1024,
     ):
         self.block_info = BlockInfo(
@@ -151,6 +154,7 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
             matrix_len,
             max_target_length,
             max_target_length * num_targets,
+            matrix_kind,
         )
 
     fn _create_some_input_buffers(
@@ -465,6 +469,7 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
             self.device_target_ends.value(),
             self.device_scoring_matrix.value(),
             self.block_info.value().matrix_len,
+            self.block_info.value().matrix_kind,
             self.block_info.value().query_len,
             self.block_info.value().num_targets,
             threads_to_launch,

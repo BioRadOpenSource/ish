@@ -46,7 +46,7 @@ struct LogLevel:
         elif self is Self.Timing:
             writer.write("Timing")
         else:
-            print("Kind is ", self.value)
+            writer.write("Uknown")
 
 
 struct Logger:

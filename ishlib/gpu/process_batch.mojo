@@ -26,15 +26,12 @@ from ishlib.vendor.log import Logger
 fn parallel_starts_ends[
     M: GpuMatcher,
     S: SearchableWithIndex,
-    max_matrix_length: UInt = 576,
     max_query_length: UInt = 200,
     max_target_length: UInt = 1024,
 ](
     mut ctxs: List[
         SearcherDevice[
-            M.batch_match_coarse[
-                max_matrix_length, max_query_length, max_target_length
-            ]
+            M.batch_match_coarse[max_query_length, max_target_length]
         ],
     ],
     read matcher: M,
@@ -68,8 +65,9 @@ fn parallel_starts_ends[
     for ctx in ctxs:
         ctx[].set_block_info(
             len(seqs),
-            len(settings.pattern),
+            len(matcher.encoded_pattern()),
             matcher.matrix_len(),
+            matcher.matrix_kind(),
             max_target_length=max_target_length,
         )
         ctx[].host_create_input_buffers()
@@ -93,7 +91,7 @@ fn parallel_starts_ends[
         )
         ctx[].device_create_input_buffers()
         ctx[].set_host_inputs(
-            Span(settings.pattern),
+            matcher.encoded_pattern(),
             matcher.matrix_bytes(),
             matcher.matrix_len(),
             seqs[total_items:end],

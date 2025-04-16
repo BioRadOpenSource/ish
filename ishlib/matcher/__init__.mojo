@@ -2,6 +2,8 @@ from collections import Optional
 from gpu.host import DeviceBuffer
 from memory import Span, UnsafePointer
 
+from ishlib.matcher.alignment.scoring_matrix import MatrixKind
+
 
 @value
 @register_passable("trivial")
@@ -33,12 +35,19 @@ trait Matcher(Copyable, Movable):
         """Convert an encoded byte to an ascii byte."""
         ...
 
+    fn encoded_pattern(ref self) -> Span[UInt8, __origin_of(self)]:
+        """Get the encoded pattern to be matched."""
+        ...
+
 
 trait GpuMatcher(Matcher):
     fn matrix_bytes(read self) -> UnsafePointer[Int8]:
         ...
 
     fn matrix_len(read self) -> UInt:
+        ...
+
+    fn matrix_kind(read self) -> MatrixKind:
         ...
 
     fn find_start(
@@ -50,7 +59,7 @@ trait GpuMatcher(Matcher):
 
     @staticmethod
     fn batch_match_coarse[
-        max_matrix_length: UInt, max_query_length: UInt, max_target_length: UInt
+        max_query_length: UInt, max_target_length: UInt
     ](
         query: DeviceBuffer[DType.uint8],
         ref_buffer: DeviceBuffer[DType.uint8],
@@ -60,6 +69,7 @@ trait GpuMatcher(Matcher):
         ref_end_result_buffer: DeviceBuffer[DType.int32],
         basic_matrix_values: DeviceBuffer[DType.int8],
         basic_matrix_len: Int,
+        matrix_kind: MatrixKind,
         query_len: Int,
         target_ends_len: Int,
         thread_count: Int,
@@ -79,15 +89,6 @@ trait Searchable(Copyable, Movable, CollectionElement):
 trait SearchableWithIndex(Searchable):
     fn original_index(read self) -> UInt:
         ...
-
-
-# @value
-# struct LineAndIndex(Searchable):
-#     var line: List[UInt8]
-#     var original_index: UInt
-
-#     fn buffer_to_search(ref self) -> Span[UInt8, __origin_of(self)]:
-#         return rebind[Span[UInt8, __origin_of(self)]](self.line)
 
 
 @value
