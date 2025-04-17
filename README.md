@@ -120,13 +120,17 @@ Novel things:
 - Dynamic selection of the simd width based on the query length
 - the ish tool itself, doing index-free alignments
 
-## TODO Tomorrow
-- Allow for usage of specific matricies
+## TODO 
 - Allow for specifying ends-free-ness of semi-global
-- Dynamically chose the max target length, either peek target file first 100 records, specify on cli, or other?
+- do a file peek and:
+    - Dynamically chose the max target length, either peek target file first 100 records, specify on cli, or other?
+    - Check for binary and skip files that are
+- Choose a better default between cpu and gpu / think about more. GPU crushes on big files / long running / many files, cpu is faster for small jobs
 - FASTQ support
 - Fix tests
 - Fixup SIMD widths in case we hit avx512
+- Add ability to not skip dotfiles
+- Support muliple quries
 
 ```sh
 
