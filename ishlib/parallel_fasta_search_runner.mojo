@@ -172,10 +172,12 @@ struct GpuParallelFastaSearchRunner[
             len(settings.pattern),
             self.matcher.matrix_len(),
             max_target_length=max_target_length,
+            max_devices=settings.max_gpus,
         )
 
     fn run_search(mut self) raises:
         # Simple thing first?
+        # TODO: parallelize over files? probably not till we have threads since setup is the slow part
         for file in self.settings.files:
             var f = file[]  # force copy
             self.run_search_on_file(f)
