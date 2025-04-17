@@ -2,10 +2,12 @@ from ExtraMojo.io.buffered import BufferedWriter
 
 from ishlib.vendor.kseq import BufferedReader, SearchChar, ByteString
 from ishlib.vendor.zlib import GZFile
+from ishlib.vendor.log import Logger
 from ishlib.searcher_settings import SearcherSettings
 from ishlib.matcher import Matcher
 from ishlib import ByteSpanWriter
 
+from pathlib import Path
 from utils import StringSlice
 from sys import stdout
 
@@ -19,9 +21,11 @@ struct LineSearchRunner[M: Matcher]:
         # Simple thing first?
         for file in self.settings.files:
             var f = file[]  # force copy
+            Logger.debug("Processing", f)
             self.run_search_on_file(f)
 
-    fn run_search_on_file(mut self, file: String) raises:
+    fn run_search_on_file(mut self, path: Path) raises:
+        var file = String(path)
         var reader = BufferedReader(GZFile(file, "r"))
         # var buffer = List[UInt8]()
         var buffer = ByteString()

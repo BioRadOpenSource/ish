@@ -32,6 +32,7 @@ from ishlib.vendor.log import Logger
 
 from algorithm.functional import parallelize
 from math import ceildiv
+from pathlib import Path
 from utils import StringSlice
 from sys import stdout, info
 
@@ -59,12 +60,13 @@ struct ParallelFastaSearchRunner[M: Matcher]:
         # Simple thing first?
         for file in self.settings.files:
             var f = file[]  # force copy
+            Logger.debug("Processing", f)
             self.run_search_on_file(f)
 
-    fn run_search_on_file(mut self, file: String) raises:
+    fn run_search_on_file(mut self, file: Path) raises:
         # TODO: pass an enocoder to the FastaReader
         var reader = FastxReader[read_comment=False](
-            BufferedReader(GZFile(file, "r"))
+            BufferedReader(GZFile(String(file), "r"))
         )
         var writer = BufferedWriter(stdout)
 
@@ -178,12 +180,12 @@ struct GpuParallelFastaSearchRunner[
             var f = file[]  # force copy
             self.run_search_on_file(f)
 
-    fn run_search_on_file(mut self, file: String) raises:
+    fn run_search_on_file(mut self, file: Path) raises:
         var file_start = perf_counter()
         # TODO: Split out the too-long seqs
         # TODO: pass an enocoder to the FastaReader
         var reader = FastxReader[read_comment=False](
-            BufferedReader(GZFile(file, "r"))
+            BufferedReader(GZFile(String(file), "r"))
         )
         var writer = BufferedWriter(stdout)
 

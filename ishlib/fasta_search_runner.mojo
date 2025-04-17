@@ -5,7 +5,9 @@ from ishlib.matcher import Matcher
 from ishlib.searcher_settings import SearcherSettings
 from ishlib.vendor.kseq import FastxReader, BufferedReader
 from ishlib.vendor.zlib import GZFile
+from ishlib.vendor.log import Logger
 
+from pathlib import Path
 from utils import StringSlice
 from sys import stdout
 
@@ -19,11 +21,12 @@ struct FastaSearchRunner[M: Matcher]:
         # Simple thing first?
         for file in self.settings.files:
             var f = file[]  # force copy
+            Logger.debug("Processing", f)
             self.run_search_on_file(f)
 
-    fn run_search_on_file(mut self, file: String) raises:
+    fn run_search_on_file(mut self, file: Path) raises:
         var reader = FastxReader[read_comment=False](
-            BufferedReader(GZFile(file, "r"))
+            BufferedReader(GZFile(String(file), "r"))
         )
         var writer = BufferedWriter(stdout)
 

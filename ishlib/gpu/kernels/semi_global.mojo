@@ -108,6 +108,6 @@ fn gpu_align_coarse[
         # Store results
         # TODO: move this to after the loop?
         score_result_buffer[idx] = result.score
-        query_end_result_buffer[idx] = Int32(result.query)
-        ref_end_result_buffer[idx] = Int32(result.target)
+        query_end_result_buffer[idx] = Int32(result.query) + 1
+        ref_end_result_buffer[idx] = Int32(result.target) + 1
         barrier()

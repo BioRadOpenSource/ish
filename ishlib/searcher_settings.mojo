@@ -1,18 +1,20 @@
 from bit.bit import is_power_of_two, next_power_of_two
 from collections import Optional
 from sys.info import num_physical_cores
+from pathlib.path import Path
 
 from ExtraMojo.cli.parser import OptParser, OptConfig, OptKind
 
 from ishlib.matcher.alignment.scoring_matrix import MatrixKind
 from ishlib.vendor.tty_info import TTYInfo, Info as TTYInfoResult, STDOUT_FD
+from ishlib.vendor.walk_dir import walk_dir
 
 
 @value
 struct SearcherSettings:
     """Settings for the ish searcher."""
 
-    var files: List[String]
+    var files: List[Path]
     """The files to search for matches."""
     var pattern: List[UInt8]
     """The pattern to search for."""
@@ -52,9 +54,9 @@ struct SearcherSettings:
                 # fmt: off
                 description=(
                 "The scoring matrix to use.\n"
-                "\tascii: does no encoding of input bytes, matches are 2, mismatch is -2.\n"
-                "\tblosum62: encodes searched inputs as amino acids and uses the classic Blosum62 scoring matrix.\n"
-                "\tactgn: encodes searched inputs as nucleotides, matches are 2, mismatch is -2, Ns match anything\n"
+                "\t\tascii: does no encoding of input bytes, matches are 2, mismatch is -2.\n"
+                "\t\tblosum62: encodes searched inputs as amino acids and uses the classic Blosum62 scoring matrix.\n"
+                "\t\tactgn: encodes searched inputs as nucleotides, matches are 2, mismatch is -2, Ns match anything\n"
                 # TODO: support iupac
                 )
                 # fmt: on
@@ -64,7 +66,7 @@ struct SearcherSettings:
             OptConfig(
                 "score",
                 OptKind.FloatLike,
-                default_value=String("0.9"),
+                default_value=String("0.8"),
                 description=(
                     "The min score needed to return a match. Results >= this"
                     " value will be returned."
@@ -91,7 +93,7 @@ struct SearcherSettings:
             OptConfig(
                 "match-algo",
                 OptKind.StringLike,
-                default_value=String("ssw"),
+                default_value=String("striped-semi-global"),
                 description=(
                     "The algorithm to use for matching: [naive_exact,"
                     " striped-local, basic-local, basic-global,"
@@ -180,12 +182,14 @@ struct SearcherSettings:
             if len(files) == 0:
                 raise "Expected files, found none."
 
+            var expanded_files = expand_files_to_search(files)
+
             var max_gpus = opts.get_int("max-gpus")
 
             var tty = TTYInfo()
 
             return Self(
-                files,
+                expanded_files,
                 pattern,
                 matrix_kind,
                 Float32(score),
@@ -202,3 +206,16 @@ struct SearcherSettings:
             print(parser.help_msg())
             print(e)
             return None
+
+
+fn expand_files_to_search(files: List[String]) raises -> List[Path]:
+    """Expand the passed in files or directories to search."""
+    var out = List[Path]()
+
+    for p in files:
+        var path = Path(p[])
+        if path.is_dir():
+            out.extend(walk_dir[ignore_dot_files=True](path))
+        else:
+            out.append(path)
+    return out
