@@ -57,8 +57,8 @@ struct ParallelLineSearchRunner[M: Matcher]:
         var lines = List[LineAndIndex]()
         var bytes_saved = 0
         var buffer = List[UInt8]()
-        var line_number = 0
-
+        var batch_line_number = 0
+        var global_lines_seen = 0
         # TODO: hold onto the non-newline stripped sequence as well for outputting the match color
 
         var do_work = True
@@ -73,7 +73,8 @@ struct ParallelLineSearchRunner[M: Matcher]:
                         self.matcher.convert_ascii_to_encoding(buffer[i])
                     )
                 bytes_saved += len(line)
-                lines.append(LineAndIndex(line, line_number))
+                lines.append(LineAndIndex(line, batch_line_number))
+                batch_line_number += 1
 
             if bytes_saved >= self.settings.batch_size or not do_work:
                 var outputs = List[Optional[ComputedMatchResult]](
@@ -88,32 +89,47 @@ struct ParallelLineSearchRunner[M: Matcher]:
                     lines,
                     outputs,
                 )
-                # var outputs = self.par(lines)
+
                 for i in range(0, len(outputs)):
                     var m = outputs[i]
                     if not m:
                         continue
                     var r = Pointer.address_of(lines[i])
-                    writer.write(
-                        file,
-                        ":",
-                        line_number,
-                        " ",
-                        # ByteSpanWriter(buffer[:]),
-                        ByteSpanWriter(r[].line[0 : m.value().result.start]),
-                        "\033[1;31m",
-                        ByteSpanWriter(
-                            r[].line[
-                                m.value().result.start : m.value().result.end
-                            ]
-                        ),
-                        "\033[0m",
-                        ByteSpanWriter(r[].line[m.value().result.end :]),
-                        "\n",
-                    )
-                    line_number += 1
+
+                    for i in range(0, len(r[].line)):
+                        r[].line[i] = self.matcher.convert_encoding_to_ascii(
+                            r[].line[i]
+                        )
+                    if self.settings.tty_info.is_a_tty:
+                        writer.write(
+                            file,
+                            ":",
+                            r[].orig_index + global_lines_seen + 1,
+                            " ",
+                            ByteSpanWriter(
+                                r[].line[0 : m.value().result.start]
+                            ),
+                            "\033[1;31m",
+                            ByteSpanWriter(
+                                r[].line[
+                                    m.value()
+                                    .result.start : m.value()
+                                    .result.end
+                                ]
+                            ),
+                            "\033[0m",
+                            ByteSpanWriter(r[].line[m.value().result.end :]),
+                            "\n",
+                        )
+                    else:
+                        writer.write(
+                            ByteSpanWriter(r[].line[:]),
+                            "\n",
+                        )
                 lines.clear()
                 bytes_saved = 0
+                global_lines_seen += batch_line_number
+                batch_line_number = 0
         writer.flush()
         writer.close()
 
@@ -158,30 +174,37 @@ struct GpuParallelLineSearchRunner[
         # TODO: pass an enocoder to the FastaReader
         var reader = BufferedReader(open(file, "r"))
         var writer = BufferedWriter(stdout)
-        var line_number = 0
 
         fn write_match[
             mut: Bool, //, o: Origin[mut]
-        ](r: Pointer[List[UInt8], o], m: ComputedMatchResult) capturing raises:
-            writer.write(
-                file,
-                ":",
-                line_number,
-                " ",
-                # ByteSpanWriter(buffer[:]),
-                ByteSpanWriter(r[][0 : m.result.start]),
-                "\033[1;31m",
-                ByteSpanWriter(r[][m.result.start : m.result.end]),
-                "\033[0m",
-                ByteSpanWriter(r[][m.result.end :]),
-                "\n",
-            )
-            line_number += 1
+        ](
+            r: Pointer[List[UInt8], o], m: ComputedMatchResult, orig_index: Int
+        ) capturing raises:
+            if self.settings.tty_info.is_a_tty:
+                writer.write(
+                    file,
+                    ":",
+                    orig_index + 1,
+                    " ",
+                    # ByteSpanWriter(buffer[:]),
+                    ByteSpanWriter(r[][0 : m.result.start]),
+                    "\033[1;31m",
+                    ByteSpanWriter(r[][m.result.start : m.result.end]),
+                    "\033[0m",
+                    ByteSpanWriter(r[][m.result.end :]),
+                    "\n",
+                )
+            else:
+                writer.write(
+                    ByteSpanWriter(r[][:]),
+                    "\n",
+                )
 
         var cpu_sequences = List[LineAndIndex]()
         var sequences = List[LineAndIndex]()
         var bytes_saved = 0
         var seq_index = 0
+        var global_seqs_seen = 0
 
         # TODO: hold onto the non-newline stripped sequence as well for outputting the match color
 
@@ -231,14 +254,33 @@ struct GpuParallelLineSearchRunner[
 
                     if m.value().where_computed == WhereComputed.Gpu:
                         var r = Pointer(to=sequences[m.value().index].line)
-                        write_match(r, m.value())
+                        for i in range(0, len(r[])):
+                            r[][i] = self.matcher.convert_encoding_to_ascii(
+                                r[][i]
+                            )
+                        write_match(
+                            r,
+                            m.value(),
+                            sequences[m.value().index].orig_index
+                            + global_seqs_seen,
+                        )
                     else:
-                        var r = Pointer(to=sequences[m.value().index].line)
-                        write_match(r, m.value())
+                        var r = Pointer(to=cpu_sequences[m.value().index].line)
+                        for i in range(0, len(r[])):
+                            r[][i] = self.matcher.convert_encoding_to_ascii(
+                                r[][i]
+                            )
+                        write_match(
+                            r,
+                            m.value(),
+                            cpu_sequences[m.value().index].orig_index
+                            + global_seqs_seen,
+                        )
                 Logger.debug("write done:", perf_counter() - write_start)
                 cpu_sequences.clear()
                 sequences.clear()
                 bytes_saved = 0
+                global_seqs_seen += seq_index
                 seq_index = 0
         writer.flush()
         writer.close()

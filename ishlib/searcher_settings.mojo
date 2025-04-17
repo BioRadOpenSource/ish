@@ -5,6 +5,7 @@ from sys.info import num_physical_cores
 from ExtraMojo.cli.parser import OptParser, OptConfig, OptKind
 
 from ishlib.matcher.alignment.scoring_matrix import MatrixKind
+from ishlib.vendor.tty_info import TTYInfo, Info as TTYInfoResult, STDOUT_FD
 
 
 @value
@@ -28,6 +29,7 @@ struct SearcherSettings:
     var threads: UInt
     var batch_size: UInt
     var max_gpus: UInt
+    var tty_info: TTYInfoResult
 
     @staticmethod
     fn from_args() raises -> Optional[Self]:
@@ -180,6 +182,8 @@ struct SearcherSettings:
 
             var max_gpus = opts.get_int("max-gpus")
 
+            var tty = TTYInfo()
+
             return Self(
                 files,
                 pattern,
@@ -192,6 +196,7 @@ struct SearcherSettings:
                 threads,
                 batch_size,
                 max_gpus,
+                tty.info(STDOUT_FD),
             )
         except e:
             print(parser.help_msg())
