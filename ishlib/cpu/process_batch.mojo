@@ -48,7 +48,10 @@ fn parallel_starts[
     offset: UInt,
 ):
     fn do_matching(index: Int) capturing:
-        if target_scores[index] < len(matcher.encoded_pattern()):
+        if (
+            Float32(target_scores[index]) / matcher.max_alignment_score()
+            < matcher.score_threshold()
+        ):
             return
         var start = matcher.find_start(
             seqs[index].buffer_to_search(), matcher.encoded_pattern()

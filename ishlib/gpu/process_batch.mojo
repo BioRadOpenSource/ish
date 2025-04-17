@@ -68,6 +68,8 @@ fn parallel_starts_ends[
             len(matcher.encoded_pattern()),
             matcher.matrix_len(),
             matcher.matrix_kind(),
+            settings.gap_open_penalty,
+            settings.gap_extension_penalty,
             max_target_length=max_target_length,
         )
         ctx[].host_create_input_buffers()

@@ -34,6 +34,8 @@ fn gpu_align_coarse[
     query_len: UInt,
     target_ends_len: UInt,
     thread_count: UInt,
+    gap_open: UInt,
+    gap_extend: UInt,
 ):
     alias matrix_skip_lookup = matrix_kind.skip_lookup()
     # Load scoring matrix into shared memory
@@ -97,8 +99,8 @@ fn gpu_align_coarse[
             idx,
             target_len,
             basic_matrix,
-            gap_open_penalty=gap_open_penalty,
-            gap_extension_penalty=gap_ext_penalty,
+            gap_open_penalty=-Int(gap_open),
+            gap_extension_penalty=-Int(gap_extend),
         )
 
         barrier()

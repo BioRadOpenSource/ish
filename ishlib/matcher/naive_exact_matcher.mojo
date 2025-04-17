@@ -9,6 +9,7 @@ from ishlib.matcher.alignment.scoring_matrix import ScoringMatrix, MatrixKind
 @value
 struct NaiveExactMatcher(Matcher):
     var pattern: List[UInt8]
+    var max_score: Int
     var scoring_matrix: ScoringMatrix
 
     fn __init__(
@@ -18,7 +19,10 @@ struct NaiveExactMatcher(Matcher):
     ):
         Logger.info("Performing matching with NaiveExactMatcher")
         self.scoring_matrix = matrix_kind.matrix()
-        self.pattern = self.scoring_matrix.convert_ascii_to_encoding(pattern)
+        (
+            self.pattern,
+            self.max_score,
+        ) = self.scoring_matrix.convert_ascii_to_encoding_and_score(pattern)
 
     fn first_match(
         read self, haystack: Span[UInt8], pattern: Span[UInt8]
@@ -51,3 +55,12 @@ struct NaiveExactMatcher(Matcher):
         return Span[UInt8, __origin_of(self)](
             ptr=self.pattern.unsafe_ptr(), length=len(self.pattern)
         )
+
+    @always_inline
+    fn max_alignment_score(read self) -> Int:
+        return self.max_score
+
+    @always_inline
+    fn score_threshold(read self) -> Float32:
+        """Returns the score threshold needed to be concidered a match."""
+        return 1.0

@@ -17,7 +17,7 @@ struct SearcherSettings:
     """The pattern to search for."""
     var matrix_kind: MatrixKind
     """The scorign matrix to use."""
-    var min_score: Int
+    var score_threshold: Float32
     """The minimum score needed to return a match."""
 
     var gap_open_penalty: Int
@@ -60,10 +60,13 @@ struct SearcherSettings:
         )
         parser.add_opt(
             OptConfig(
-                "min-score",
-                OptKind.IntLike,
-                default_value=String("1"),
-                description="The min score needed to return a match.",
+                "score",
+                OptKind.FloatLike,
+                default_value=String("0.9"),
+                description=(
+                    "The min score needed to return a match. Results >= this"
+                    " value will be returned."
+                ),
             )
         )
         parser.add_opt(
@@ -155,7 +158,7 @@ struct SearcherSettings:
             var matrix_kind = MatrixKind.from_str(
                 opts.get_string("scoring-matrix")
             )
-            var min_score = opts.get_int("min-score")
+            var score = opts.get_float("score")
             var gap_open = abs(opts.get_int("gap-open"))
             var gap_extend = abs(opts.get_int("gap-extend"))
             var match_algo = opts.get_string("match-algo")
@@ -181,7 +184,7 @@ struct SearcherSettings:
                 files,
                 pattern,
                 matrix_kind,
-                min_score,
+                Float32(score),
                 gap_open,
                 gap_extend,
                 match_algo,

@@ -39,6 +39,17 @@ trait Matcher(Copyable, Movable):
         """Get the encoded pattern to be matched."""
         ...
 
+    @always_inline
+    fn max_alignment_score(read self) -> Int:
+        """Return the best possible alignment score given the matrix used for the pattern.
+        """
+        ...
+
+    @always_inline
+    fn score_threshold(read self) -> Float32:
+        """Returns the score threshold needed to be concidered a match."""
+        ...
+
 
 trait GpuMatcher(Matcher):
     fn matrix_bytes(read self) -> UnsafePointer[Int8]:
@@ -73,6 +84,8 @@ trait GpuMatcher(Matcher):
         query_len: Int,
         target_ends_len: Int,
         thread_count: Int,
+        gap_open: UInt,
+        gap_extend: UInt,
     ):
         """A coarse grain mono-directional match function to be used as a GPU kernel.
 

@@ -13,22 +13,29 @@ from ishlib.vendor.log import Logger
 struct BasicSemiGlobalMatcher(Matcher):
     var pattern: List[UInt8]
     var rev_pattern: List[UInt8]
+    var max_score: Int
     var scoring_matrix: ScoringMatrix
     var gap_open: UInt
     var gap_extend: UInt
+    var _score_threshold: Float32
 
     fn __init__(
         out self,
         pattern: Span[UInt8],
+        score_threshold: Float32,
         matrix_kind: MatrixKind = MatrixKind.ASCII,
         gap_open: UInt = 3,
         gap_extend: UInt = 1,
     ):
         Logger.info("Performing matching with BasicSemiGlobalMatcher.")
+        self._score_threshold = score_threshold
         self.gap_open = gap_open
         self.gap_extend = gap_extend
         self.scoring_matrix = matrix_kind.matrix()
-        self.pattern = self.scoring_matrix.convert_ascii_to_encoding(pattern)
+        (
+            self.pattern,
+            self.max_score,
+        ) = self.scoring_matrix.convert_ascii_to_encoding_and_score(pattern)
         self.rev_pattern = create_reversed(self.pattern)
 
     fn first_match(
@@ -55,7 +62,11 @@ struct BasicSemiGlobalMatcher(Matcher):
             score_cutoff=len(pattern),
         )
         # TODO: Update this
-        if result and result.value().score >= len(pattern):
+        if (
+            result
+            and Float32(result.value().score) / self.max_alignment_score()
+            >= self.score_threshold()
+        ):
             return MatchResult(
                 result.value().coords.value().start,
                 result.value().coords.value().end,
@@ -78,3 +89,12 @@ struct BasicSemiGlobalMatcher(Matcher):
         return Span[UInt8, __origin_of(self)](
             ptr=self.pattern.unsafe_ptr(), length=len(self.pattern)
         )
+
+    @always_inline
+    fn max_alignment_score(read self) -> Int:
+        return self.max_score
+
+    @always_inline
+    fn score_threshold(read self) -> Float32:
+        """Returns the score threshold needed to be concidered a match."""
+        return self._score_threshold

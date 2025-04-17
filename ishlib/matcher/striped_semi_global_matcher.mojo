@@ -16,9 +16,6 @@ from ishlib.matcher.alignment.semi_global_aln.striped import (
 from ishlib.vendor.log import Logger
 
 
-# TODO: why is this a bit slower than the bench aligner, where the local on the same sequence, is much faster?
-
-
 @value
 struct StripedSemiGlobalMatcher(GpuMatcher):
     alias SIMD_U8_WIDTH = simdwidthof[
@@ -29,6 +26,7 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
     ]()  # // 4  # TODO: needs tuning on wider machines
     var pattern: List[UInt8]
     var rev_pattern: List[UInt8]
+    var max_score: Int
     # var rev_haystack_buffer: List[UInt8]
     var profile: Profile[Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH]
     var reverse_profile: Profile[Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH]
@@ -36,10 +34,12 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
     var _matrix_kind: MatrixKind
     var gap_open: UInt
     var gap_extend: UInt
+    var _score_threshold: Float32
 
     fn __init__(
         out self,
         pattern: List[UInt8],
+        score_threshold: Float32,
         matrix_kind: MatrixKind = MatrixKind.ASCII,
         gap_open: UInt = 3,
         gap_extend: UInt = 1,
@@ -47,9 +47,13 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
         Logger.info("Performing matching with StripedSemiGlobalMatcher.")
         self.gap_open = gap_open
         self.gap_extend = gap_extend
+        self._score_threshold = score_threshold
         self.matrix = matrix_kind.matrix()
         self._matrix_kind = matrix_kind
-        self.pattern = self.matrix.convert_ascii_to_encoding(pattern)
+        (
+            self.pattern,
+            self.max_score,
+        ) = self.matrix.convert_ascii_to_encoding_and_score(pattern)
         self.rev_pattern = create_reversed(self.pattern)
         var profile = Profile[Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH](
             self.pattern, self.matrix, ScoreSize.Word
@@ -81,7 +85,11 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
             free_target_end_gaps=True,
             score_cutoff=Int32(len(self.pattern)),
         )
-        if result and result.value().score >= len(self.pattern):
+        if (
+            result
+            and Float32(result.value().score) / self.max_alignment_score()
+            >= self.score_threshold()
+        ):
             return MatchResult(
                 Int(result.value().target_start),
                 Int(result.value().target_end + 1),
@@ -137,6 +145,15 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
             ptr=self.pattern.unsafe_ptr(), length=len(self.pattern)
         )
 
+    @always_inline
+    fn max_alignment_score(read self) -> Int:
+        return self.max_score
+
+    @always_inline
+    fn score_threshold(read self) -> Float32:
+        """Returns the score threshold needed to be concidered a match."""
+        return self._score_threshold
+
     @staticmethod
     fn batch_match_coarse[
         max_query_length: UInt, max_target_length: UInt
@@ -153,6 +170,8 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
         query_len: Int,
         target_ends_len: Int,
         thread_count: Int,
+        gap_open: UInt,
+        gap_extend: UInt,
     ):
         # TODO: make this a param?
         if matrix_kind == MatrixKind.ASCII:
@@ -170,6 +189,8 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
                 query_len,
                 target_ends_len,
                 thread_count,
+                gap_open,
+                gap_extend,
             )
         elif matrix_kind == MatrixKind.ACTGN:
             gpu_align_coarse[
@@ -186,6 +207,8 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
                 query_len,
                 target_ends_len,
                 thread_count,
+                gap_open,
+                gap_extend,
             )
         elif matrix_kind == MatrixKind.BLOSUM62:
             gpu_align_coarse[
@@ -202,6 +225,8 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
                 query_len,
                 target_ends_len,
                 thread_count,
+                gap_open,
+                gap_extend,
             )
         else:
             Logger.warn(
@@ -222,4 +247,6 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
                 query_len,
                 target_ends_len,
                 thread_count,
+                gap_open,
+                gap_extend,
             )
