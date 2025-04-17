@@ -34,26 +34,38 @@ fn main() raises:
             if settings.threads == 1:
                 var runner = LineSearchRunner[NaiveExactMatcher](
                     settings,
-                    NaiveExactMatcher(settings.pattern, settings.matrix_kind),
+                    NaiveExactMatcher(
+                        settings.pattern,
+                        settings.matrix_kind,
+                    ),
                 )
                 runner.run_search()
             else:
                 var runner = ParallelLineSearchRunner[NaiveExactMatcher](
                     settings,
-                    NaiveExactMatcher(settings.pattern, settings.matrix_kind),
+                    NaiveExactMatcher(
+                        settings.pattern,
+                        settings.matrix_kind,
+                    ),
                 )
                 runner.run_search()
         elif settings.record_type == "fasta":
             if settings.threads == 1:
                 var runner = FastaSearchRunner[NaiveExactMatcher](
                     settings,
-                    NaiveExactMatcher(settings.pattern, settings.matrix_kind),
+                    NaiveExactMatcher(
+                        settings.pattern,
+                        settings.matrix_kind,
+                    ),
                 )
                 runner.run_search()
             else:
                 var runner = ParallelFastaSearchRunner[NaiveExactMatcher](
                     settings,
-                    NaiveExactMatcher(settings.pattern, settings.matrix_kind),
+                    NaiveExactMatcher(
+                        settings.pattern,
+                        settings.matrix_kind,
+                    ),
                 )
                 runner.run_search()
         else:
@@ -63,26 +75,42 @@ fn main() raises:
             if settings.threads == 1:
                 var runner = LineSearchRunner[BasicLocalMatcher](
                     settings,
-                    BasicLocalMatcher(settings.pattern, settings.matrix_kind),
+                    BasicLocalMatcher(
+                        settings.pattern,
+                        settings.score_threshold,
+                        settings.matrix_kind,
+                    ),
                 )
                 runner.run_search()
             else:
                 var runner = ParallelLineSearchRunner[BasicLocalMatcher](
                     settings,
-                    BasicLocalMatcher(settings.pattern, settings.matrix_kind),
+                    BasicLocalMatcher(
+                        settings.pattern,
+                        settings.score_threshold,
+                        settings.matrix_kind,
+                    ),
                 )
                 runner.run_search()
         elif settings.record_type == "fasta":
             if settings.threads == 1:
                 var runner = FastaSearchRunner[BasicLocalMatcher](
                     settings,
-                    BasicLocalMatcher(settings.pattern, settings.matrix_kind),
+                    BasicLocalMatcher(
+                        settings.pattern,
+                        settings.score_threshold,
+                        settings.matrix_kind,
+                    ),
                 )
                 runner.run_search()
             else:
                 var runner = ParallelFastaSearchRunner[BasicLocalMatcher](
                     settings,
-                    BasicLocalMatcher(settings.pattern, settings.matrix_kind),
+                    BasicLocalMatcher(
+                        settings.pattern,
+                        settings.score_threshold,
+                        settings.matrix_kind,
+                    ),
                 )
                 runner.run_search()
         else:
@@ -94,7 +122,11 @@ fn main() raises:
                     StripedLocalMatcher[__origin_of(settings.pattern)]
                 ](
                     settings,
-                    StripedLocalMatcher(settings.pattern, settings.matrix_kind),
+                    StripedLocalMatcher(
+                        settings.pattern,
+                        settings.score_threshold,
+                        settings.matrix_kind,
+                    ),
                 )
                 runner.run_search()
             else:
@@ -102,7 +134,11 @@ fn main() raises:
                     StripedLocalMatcher[__origin_of(settings.pattern)]
                 ](
                     settings,
-                    StripedLocalMatcher(settings.pattern, settings.matrix_kind),
+                    StripedLocalMatcher(
+                        settings.pattern,
+                        settings.score_threshold,
+                        settings.matrix_kind,
+                    ),
                 )
                 runner.run_search()
         elif settings.record_type == "fasta":
@@ -111,7 +147,11 @@ fn main() raises:
                     StripedLocalMatcher[__origin_of(settings.pattern)]
                 ](
                     settings,
-                    StripedLocalMatcher(settings.pattern, settings.matrix_kind),
+                    StripedLocalMatcher(
+                        settings.pattern,
+                        settings.score_threshold,
+                        settings.matrix_kind,
+                    ),
                 )
                 runner.run_search()
             else:
@@ -119,7 +159,11 @@ fn main() raises:
                     StripedLocalMatcher[__origin_of(settings.pattern)]
                 ](
                     settings,
-                    StripedLocalMatcher(settings.pattern, settings.matrix_kind),
+                    StripedLocalMatcher(
+                        settings.pattern,
+                        settings.score_threshold,
+                        settings.matrix_kind,
+                    ),
                 )
                 runner.run_search()
         else:
@@ -129,26 +173,42 @@ fn main() raises:
             if settings.threads == 1:
                 var runner = LineSearchRunner(
                     settings,
-                    BasicGlobalMatcher(settings.pattern, settings.matrix_kind),
+                    BasicGlobalMatcher(
+                        settings.pattern,
+                        settings.score_threshold,
+                        settings.matrix_kind,
+                    ),
                 )
                 runner.run_search()
             else:
                 var runner = ParallelLineSearchRunner(
                     settings,
-                    BasicGlobalMatcher(settings.pattern, settings.matrix_kind),
+                    BasicGlobalMatcher(
+                        settings.pattern,
+                        settings.score_threshold,
+                        settings.matrix_kind,
+                    ),
                 )
                 runner.run_search()
         elif settings.record_type == "fasta":
             if settings.threads == 1:
                 var runner = FastaSearchRunner(
                     settings,
-                    BasicGlobalMatcher(settings.pattern, settings.matrix_kind),
+                    BasicGlobalMatcher(
+                        settings.pattern,
+                        settings.score_threshold,
+                        settings.matrix_kind,
+                    ),
                 )
                 runner.run_search()
             else:
                 var runner = ParallelFastaSearchRunner(
                     settings,
-                    BasicGlobalMatcher(settings.pattern, settings.matrix_kind),
+                    BasicGlobalMatcher(
+                        settings.pattern,
+                        settings.score_threshold,
+                        settings.matrix_kind,
+                    ),
                 )
                 runner.run_search()
         else:
@@ -159,7 +219,9 @@ fn main() raises:
                 var runner = LineSearchRunner(
                     settings,
                     BasicSemiGlobalMatcher(
-                        settings.pattern, settings.matrix_kind
+                        settings.pattern,
+                        settings.score_threshold,
+                        settings.matrix_kind,
                     ),
                 )
                 runner.run_search()
@@ -167,7 +229,9 @@ fn main() raises:
                 var runner = ParallelLineSearchRunner(
                     settings,
                     BasicSemiGlobalMatcher(
-                        settings.pattern, settings.matrix_kind
+                        settings.pattern,
+                        settings.score_threshold,
+                        settings.matrix_kind,
                     ),
                 )
                 runner.run_search()
@@ -176,7 +240,9 @@ fn main() raises:
                 var runner = FastaSearchRunner(
                     settings,
                     BasicSemiGlobalMatcher(
-                        settings.pattern, settings.matrix_kind
+                        settings.pattern,
+                        settings.score_threshold,
+                        settings.matrix_kind,
                     ),
                 )
                 runner.run_search()
@@ -184,7 +250,9 @@ fn main() raises:
                 var runner = ParallelFastaSearchRunner(
                     settings,
                     BasicSemiGlobalMatcher(
-                        settings.pattern, settings.matrix_kind
+                        settings.pattern,
+                        settings.score_threshold,
+                        settings.matrix_kind,
                     ),
                 )
                 runner.run_search()
@@ -196,7 +264,9 @@ fn main() raises:
                 var runner = LineSearchRunner[StripedSemiGlobalMatcher](
                     settings,
                     StripedSemiGlobalMatcher(
-                        settings.pattern, settings.matrix_kind
+                        settings.pattern,
+                        settings.score_threshold,
+                        settings.matrix_kind,
                     ),
                 )
                 runner.run_search()
@@ -207,7 +277,9 @@ fn main() raises:
                     ](
                         settings,
                         StripedSemiGlobalMatcher(
-                            settings.pattern, settings.matrix_kind
+                            settings.pattern,
+                            settings.score_threshold,
+                            settings.matrix_kind,
                         ),
                     )
                     runner.run_search()
@@ -224,7 +296,9 @@ fn main() raises:
                             ](
                                 settings,
                                 StripedSemiGlobalMatcher(
-                                    settings.pattern, settings.matrix_kind
+                                    settings.pattern,
+                                    settings.score_threshold,
+                                    settings.matrix_kind,
                                 ),
                             )
                             runner.run_search()
@@ -236,7 +310,9 @@ fn main() raises:
                             ](
                                 settings,
                                 StripedSemiGlobalMatcher(
-                                    settings.pattern, settings.matrix_kind
+                                    settings.pattern,
+                                    settings.score_threshold,
+                                    settings.matrix_kind,
                                 ),
                             )
                             runner.run_search()
@@ -248,7 +324,9 @@ fn main() raises:
                             ](
                                 settings,
                                 StripedSemiGlobalMatcher(
-                                    settings.pattern, settings.matrix_kind
+                                    settings.pattern,
+                                    settings.score_threshold,
+                                    settings.matrix_kind,
                                 ),
                             )
                             runner.run_search()
@@ -260,7 +338,9 @@ fn main() raises:
                             ](
                                 settings,
                                 StripedSemiGlobalMatcher(
-                                    settings.pattern, settings.matrix_kind
+                                    settings.pattern,
+                                    settings.score_threshold,
+                                    settings.matrix_kind,
                                 ),
                             )
                             runner.run_search()
@@ -272,7 +352,9 @@ fn main() raises:
                             ](
                                 settings,
                                 StripedSemiGlobalMatcher(
-                                    settings.pattern, settings.matrix_kind
+                                    settings.pattern,
+                                    settings.score_threshold,
+                                    settings.matrix_kind,
                                 ),
                             )
                             runner.run_search()
@@ -284,7 +366,9 @@ fn main() raises:
                             ](
                                 settings,
                                 StripedSemiGlobalMatcher(
-                                    settings.pattern, settings.matrix_kind
+                                    settings.pattern,
+                                    settings.score_threshold,
+                                    settings.matrix_kind,
                                 ),
                             )
                             runner.run_search()
@@ -296,7 +380,9 @@ fn main() raises:
                             ](
                                 settings,
                                 StripedSemiGlobalMatcher(
-                                    settings.pattern, settings.matrix_kind
+                                    settings.pattern,
+                                    settings.score_threshold,
+                                    settings.matrix_kind,
                                 ),
                             )
                             runner.run_search()
@@ -307,7 +393,9 @@ fn main() raises:
                             ](
                                 settings,
                                 StripedSemiGlobalMatcher(
-                                    settings.pattern, settings.matrix_kind
+                                    settings.pattern,
+                                    settings.score_threshold,
+                                    settings.matrix_kind,
                                 ),
                             )
                             runner.run_search()
@@ -317,7 +405,9 @@ fn main() raises:
                         ](
                             settings,
                             StripedSemiGlobalMatcher(
-                                settings.pattern, settings.matrix_kind
+                                settings.pattern,
+                                settings.score_threshold,
+                                settings.matrix_kind,
                             ),
                         )
                         runner.run_search()
@@ -326,7 +416,9 @@ fn main() raises:
                 var runner = FastaSearchRunner[StripedSemiGlobalMatcher](
                     settings,
                     StripedSemiGlobalMatcher(
-                        settings.pattern, settings.matrix_kind
+                        settings.pattern,
+                        settings.score_threshold,
+                        settings.matrix_kind,
                     ),
                 )
                 runner.run_search()
@@ -337,7 +429,9 @@ fn main() raises:
                     ](
                         settings,
                         StripedSemiGlobalMatcher(
-                            settings.pattern, settings.matrix_kind
+                            settings.pattern,
+                            settings.score_threshold,
+                            settings.matrix_kind,
                         ),
                     )
                     runner.run_search()
@@ -354,7 +448,9 @@ fn main() raises:
                             ](
                                 settings,
                                 StripedSemiGlobalMatcher(
-                                    settings.pattern, settings.matrix_kind
+                                    settings.pattern,
+                                    settings.score_threshold,
+                                    settings.matrix_kind,
                                 ),
                             )
                             runner.run_search()
@@ -366,7 +462,9 @@ fn main() raises:
                             ](
                                 settings,
                                 StripedSemiGlobalMatcher(
-                                    settings.pattern, settings.matrix_kind
+                                    settings.pattern,
+                                    settings.score_threshold,
+                                    settings.matrix_kind,
                                 ),
                             )
                             runner.run_search()
@@ -378,7 +476,9 @@ fn main() raises:
                             ](
                                 settings,
                                 StripedSemiGlobalMatcher(
-                                    settings.pattern, settings.matrix_kind
+                                    settings.pattern,
+                                    settings.score_threshold,
+                                    settings.matrix_kind,
                                 ),
                             )
                             runner.run_search()
@@ -391,7 +491,9 @@ fn main() raises:
                             ](
                                 settings,
                                 StripedSemiGlobalMatcher(
-                                    settings.pattern, settings.matrix_kind
+                                    settings.pattern,
+                                    settings.score_threshold,
+                                    settings.matrix_kind,
                                 ),
                             )
                             Logger.timing(
@@ -408,7 +510,9 @@ fn main() raises:
                             ](
                                 settings,
                                 StripedSemiGlobalMatcher(
-                                    settings.pattern, settings.matrix_kind
+                                    settings.pattern,
+                                    settings.score_threshold,
+                                    settings.matrix_kind,
                                 ),
                             )
                             runner.run_search()
@@ -420,7 +524,9 @@ fn main() raises:
                             ](
                                 settings,
                                 StripedSemiGlobalMatcher(
-                                    settings.pattern, settings.matrix_kind
+                                    settings.pattern,
+                                    settings.score_threshold,
+                                    settings.matrix_kind,
                                 ),
                             )
                             runner.run_search()
@@ -432,7 +538,9 @@ fn main() raises:
                             ](
                                 settings,
                                 StripedSemiGlobalMatcher(
-                                    settings.pattern, settings.matrix_kind
+                                    settings.pattern,
+                                    settings.score_threshold,
+                                    settings.matrix_kind,
                                 ),
                             )
                             runner.run_search()
@@ -443,7 +551,9 @@ fn main() raises:
                             ](
                                 settings,
                                 StripedSemiGlobalMatcher(
-                                    settings.pattern, settings.matrix_kind
+                                    settings.pattern,
+                                    settings.score_threshold,
+                                    settings.matrix_kind,
                                 ),
                             )
                             runner.run_search()
@@ -453,7 +563,9 @@ fn main() raises:
                         ](
                             settings,
                             StripedSemiGlobalMatcher(
-                                settings.pattern, settings.matrix_kind
+                                settings.pattern,
+                                settings.score_threshold,
+                                settings.matrix_kind,
                             ),
                         )
                         runner.run_search()

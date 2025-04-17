@@ -19,6 +19,8 @@ struct BlockInfo:
     var max_target_length: UInt
     var targets_len: UInt
     var matrix_kind: MatrixKind
+    var gap_open: UInt
+    var gap_extend: UInt
 
 
 @value
@@ -146,6 +148,8 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
         query_len: UInt,
         matrix_len: UInt,
         matrix_kind: MatrixKind,
+        gap_open: UInt,
+        gap_extend: UInt,
         max_target_length: UInt = 1024,
     ):
         self.block_info = BlockInfo(
@@ -155,6 +159,8 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
             max_target_length,
             max_target_length * num_targets,
             matrix_kind,
+            gap_open,
+            gap_extend,
         )
 
     fn _create_some_input_buffers(
@@ -473,6 +479,8 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
             self.block_info.value().query_len,
             self.block_info.value().num_targets,
             threads_to_launch,
+            self.block_info.value().gap_open,
+            self.block_info.value().gap_extend,
             grid_dim=num_blocks,
             block_dim=block_size,
         )

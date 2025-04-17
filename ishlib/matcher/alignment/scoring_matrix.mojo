@@ -351,12 +351,26 @@ struct ScoringMatrix:
     fn __len__(read self) -> Int:
         return len(self.values)
 
-    fn get(read self, i: Int, j: Int) -> Int8:
-        return self.values[i * self.size + j]
+    fn get[I: Indexer](read self, i: I, j: I) -> Int8:
+        return self.values[Int(i) * self.size + Int(j)]
 
     fn _set_last_row_to_value(mut self, value: Int8 = 2):
         for i in range((self.size - 1) * self.size, len(self.values)):
             self.values[i] = value
+
+    @always_inline
+    fn convert_ascii_to_encoding_and_score(
+        read self, seq: Span[UInt8]
+    ) -> (List[UInt8], Int):
+        """Convert the input seq to the encoding, and also track the optimal alignment score.
+        """
+        var score = 0
+        var out = List[UInt8](capacity=len(seq))
+        for value in seq:
+            var encoded = self.ascii_to_encoding[Int(value[])]
+            score += Int(self.get(encoded, encoded))
+            out.append(encoded)
+        return (out, score)
 
     @always_inline
     fn convert_ascii_to_encoding[

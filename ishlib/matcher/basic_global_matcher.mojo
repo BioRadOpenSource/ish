@@ -13,15 +13,22 @@ from ishlib.vendor.log import Logger
 struct BasicGlobalMatcher(Matcher):
     var pattern: List[UInt8]
     var scoring_matrix: ScoringMatrix
+    var max_score: Int
+    var _score_threshold: Float32
 
     fn __init__(
         out self,
         pattern: Span[UInt8],
+        score_threshold: Float32,
         matrix_kind: MatrixKind = MatrixKind.ASCII,
     ):
         Logger.info("Performing matching with BasicGlobalMatcher.")
+        self._score_threshold = score_threshold
         self.scoring_matrix = matrix_kind.matrix()
-        self.pattern = self.scoring_matrix.convert_ascii_to_encoding(pattern)
+        (
+            self.pattern,
+            self.max_score,
+        ) = self.scoring_matrix.convert_ascii_to_encoding_and_score(pattern)
 
     fn first_match(
         read self, haystack: Span[UInt8], pattern: Span[UInt8]
@@ -34,7 +41,10 @@ struct BasicGlobalMatcher(Matcher):
             gap_open_penalty=-3,
             gap_extension_penalty=-1,
         )
-        if result.score >= len(pattern):
+        if (
+            Float32(result.score) / Float32(self.max_alignment_score())
+            >= self.score_threshold()
+        ):
             return MatchResult(
                 result.coords.value().start, result.coords.value().end
             )
@@ -56,3 +66,12 @@ struct BasicGlobalMatcher(Matcher):
         return Span[UInt8, __origin_of(self)](
             ptr=self.pattern.unsafe_ptr(), length=len(self.pattern)
         )
+
+    @always_inline
+    fn max_alignment_score(read self) -> Int:
+        return self.max_score
+
+    @always_inline
+    fn score_threshold(read self) -> Float32:
+        """Returns the score threshold needed to be concidered a match."""
+        return self._score_threshold
