@@ -22,8 +22,6 @@ from ishlib.vendor.log import Logger
 
 
 fn main() raises:
-    # TODO: buble up the scoring matrix
-
     var searcher_settings = SearcherSettings.from_args()
     if not searcher_settings:
         return

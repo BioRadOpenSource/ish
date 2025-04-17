@@ -119,16 +119,22 @@ struct ParallelFastaSearchRunner[M: Matcher]:
                     writer.write(">")
                     writer.write_bytes(r[].seq.name)
                     writer.write("\n")
-                    writer.write_bytes(r[].seq.seq[0 : m.value().result.start])
-                    # writer.write("\033[1;31m")
-                    writer.write_bytes(
-                        r[].seq.seq[
-                            m.value().result.start : m.value().result.end
-                        ]
-                    )
-                    writer.write()
-                    # writer.write("\033[0m")
-                    writer.write_bytes(r[].seq.seq[m.value().result.end :])
+
+                    if self.settings.tty_info.is_a_tty:
+                        writer.write_bytes(
+                            r[].seq.seq[0 : m.value().result.start]
+                        )
+                        writer.write("\033[1;31m")
+                        writer.write_bytes(
+                            r[].seq.seq[
+                                m.value().result.start : m.value().result.end
+                            ]
+                        )
+                        writer.write()
+                        writer.write("\033[0m")
+                        writer.write_bytes(r[].seq.seq[m.value().result.end :])
+                    else:
+                        writer.write_bytes(r[].seq.seq)
                     writer.write("\n")
                 sequences.clear()
                 bytes_saved = 0
@@ -189,12 +195,14 @@ struct GpuParallelFastaSearchRunner[
             writer.write(">")
             writer.write_bytes(r[].name)
             writer.write("\n")
-            writer.write_bytes(r[].seq[0 : m.result.start])
-            # writer.write("\033[1;31m")
-            writer.write_bytes(r[].seq[m.result.start : m.result.end])
-            writer.write()
-            # writer.write("\033[0m")
-            writer.write_bytes(r[].seq[m.result.end :])
+            if self.settings.tty_info.is_a_tty:
+                writer.write_bytes(r[].seq[0 : m.result.start])
+                writer.write("\033[1;31m")
+                writer.write_bytes(r[].seq[m.result.start : m.result.end])
+                writer.write("\033[0m")
+                writer.write_bytes(r[].seq[m.result.end :])
+            else:
+                writer.write_bytes(r[].seq)
             writer.write("\n")
 
         var cpu_sequences = List[SeqAndIndex]()

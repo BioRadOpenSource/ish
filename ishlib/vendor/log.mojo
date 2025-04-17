@@ -2,16 +2,15 @@ import sys
 from sys.param_env import env_get_string
 from utils import write_args, StringSlice
 
-
 @value
 struct LogLevel:
     var value: Int
+    alias Nolog = Self(100000)
     alias Error = Self(500)
     alias Warn = Self(400)
     alias Info = Self(300)
     alias Timing = Self(200)
     alias Debug = Self(100)
-    alias Nolog = Self(0)
 
     @staticmethod
     fn from_str(level: StringLiteral) -> Self:
@@ -49,7 +48,15 @@ struct LogLevel:
             writer.write("Uknown")
 
 
-struct Logger:
+alias RED = "\x1b[31m"
+alias GREEN = "\x1b[32m"
+alias YELLOW = "\x1b[33m"
+alias BLUE = "\x1b[34m"
+alias RESET = "\x1b[0m"
+
+
+@value
+struct Logger[colorize: Bool = True](CollectionElement):
     alias LEVEL: LogLevel = LogLevel.from_str(
         env_get_string["ISH_LOG_LEVEL", "nolog"]()
     )
@@ -73,8 +80,10 @@ struct Logger:
             return
 
         var stderr = sys.stderr
+
+        stderr.write("[")
         LogLevel.Info.write_to(stderr)
-        stderr.write(": ")
+        stderr.write("] ")
         write_args(stderr, values, sep=sep, end=end)
 
     @always_inline
@@ -91,9 +100,19 @@ struct Logger:
             return
 
         var stderr = sys.stderr
+
+        @parameter
+        if colorize:
+            stderr.write(BLUE)
+
+        stderr.write("[")
         LogLevel.Timing.write_to(stderr)
-        stderr.write(": ")
+        stderr.write("] ")
         write_args(stderr, values, sep=sep, end=end)
+
+        @parameter
+        if colorize:
+            stderr.write(RESET)
 
     @always_inline
     @staticmethod
@@ -109,8 +128,9 @@ struct Logger:
             return
 
         var stderr = sys.stderr
+        stderr.write("[")
         LogLevel.Debug.write_to(stderr)
-        stderr.write(": ")
+        stderr.write("] ")
         write_args(stderr, values, sep=sep, end=end)
 
     @always_inline
@@ -127,9 +147,18 @@ struct Logger:
             return
 
         var stderr = sys.stderr
+
+        @parameter
+        if colorize:
+            stderr.write(RED)
+        stderr.write("[")
         LogLevel.Error.write_to(stderr)
-        stderr.write(": ")
+        stderr.write("] ")
         write_args(stderr, values, sep=sep, end=end)
+
+        @parameter
+        if colorize:
+            stderr.write(RESET)
 
     @always_inline
     @staticmethod
@@ -145,6 +174,15 @@ struct Logger:
             return
 
         var stderr = sys.stderr
+
+        @parameter
+        if colorize:
+            stderr.write(YELLOW)
+        stderr.write("[")
         LogLevel.Warn.write_to(stderr)
-        stderr.write(": ")
+        stderr.write("] ")
         write_args(stderr, values, sep=sep, end=end)
+
+        @parameter
+        if colorize:
+            stderr.write(RESET)

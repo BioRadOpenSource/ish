@@ -35,21 +35,29 @@ struct FastaSearchRunner[M: Matcher]:
                 break
             var seq = List[UInt8](capacity=len(reader.seq))
             for s in range(0, len(reader.seq)):
-                seq.append(self.matcher.convert_ascii_to_encoding(reader.seq[s]))
+                seq.append(
+                    self.matcher.convert_ascii_to_encoding(reader.seq[s])
+                )
 
             var m = self.matcher.first_match(seq, self.settings.pattern)
             if m:
                 writer.write(">")
                 writer.write_bytes(reader.name.as_span())
                 writer.write("\n")
-                writer.write_bytes(reader.seq.as_span()[0 : m.value().start])
-                # writer.write("\033[1;31m")
-                writer.write_bytes(
-                    reader.seq.as_span()[m.value().start : m.value().end]
-                )
-                writer.write()
-                # writer.write("\033[0m")
-                writer.write_bytes(reader.seq.as_span()[m.value().end :])
+                if self.settings.tty_info.is_a_tty:
+                    writer.write_bytes(
+                        reader.seq.as_span()[0 : m.value().start]
+                    )
+                    writer.write("\033[1;31m")
+                    writer.write_bytes(
+                        reader.seq.as_span()[m.value().start : m.value().end]
+                    )
+                    writer.write()
+                    writer.write("\033[0m")
+                    writer.write_bytes(reader.seq.as_span()[m.value().end :])
+                else:
+                    writer.write_bytes(reader.seq.as_span())
                 writer.write("\n")
+
         writer.flush()
         writer.close()
