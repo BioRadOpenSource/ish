@@ -163,6 +163,7 @@ struct GpuParallelLineSearchRunner[
             len(settings.pattern),
             self.matcher.matrix_len(),
             max_target_length=max_matrix_length,
+            max_devices=settings.max_gpus,
         )
 
     fn run_search(mut self) raises:
