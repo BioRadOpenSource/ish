@@ -289,7 +289,6 @@ fn main() raises:
                         if qlen <= 25:
                             var runner = GpuParallelLineSearchRunner[
                                 StripedSemiGlobalMatcher,
-                                max_matrix_length=576,
                                 max_query_length=25,
                             ](
                                 settings,
@@ -303,7 +302,6 @@ fn main() raises:
                         elif qlen <= 50:
                             var runner = GpuParallelLineSearchRunner[
                                 StripedSemiGlobalMatcher,
-                                max_matrix_length=576,
                                 max_query_length=50,
                             ](
                                 settings,
@@ -317,7 +315,6 @@ fn main() raises:
                         elif qlen <= 100:
                             var runner = GpuParallelLineSearchRunner[
                                 StripedSemiGlobalMatcher,
-                                max_matrix_length=576,
                                 max_query_length=100,
                             ](
                                 settings,
@@ -331,7 +328,6 @@ fn main() raises:
                         elif qlen <= 200:
                             var runner = GpuParallelLineSearchRunner[
                                 StripedSemiGlobalMatcher,
-                                max_matrix_length=576,
                                 max_query_length=200,
                             ](
                                 settings,
@@ -345,7 +341,6 @@ fn main() raises:
                         elif qlen <= 400:
                             var runner = GpuParallelLineSearchRunner[
                                 StripedSemiGlobalMatcher,
-                                max_matrix_length=576,
                                 max_query_length=400,
                             ](
                                 settings,
@@ -359,7 +354,6 @@ fn main() raises:
                         elif qlen <= 800:
                             var runner = GpuParallelLineSearchRunner[
                                 StripedSemiGlobalMatcher,
-                                max_matrix_length=576,
                                 max_query_length=800,
                             ](
                                 settings,
@@ -373,7 +367,6 @@ fn main() raises:
                         elif qlen <= 1600:
                             var runner = GpuParallelLineSearchRunner[
                                 StripedSemiGlobalMatcher,
-                                max_matrix_length=576,
                                 max_query_length=1600,
                             ](
                                 settings,
@@ -441,7 +434,6 @@ fn main() raises:
                         if qlen <= 25:
                             var runner = GpuParallelFastaSearchRunner[
                                 StripedSemiGlobalMatcher,
-                                max_matrix_length=576,
                                 max_query_length=25,
                             ](
                                 settings,
@@ -455,7 +447,6 @@ fn main() raises:
                         elif qlen <= 50:
                             var runner = GpuParallelFastaSearchRunner[
                                 StripedSemiGlobalMatcher,
-                                max_matrix_length=576,
                                 max_query_length=50,
                             ](
                                 settings,
@@ -469,7 +460,6 @@ fn main() raises:
                         elif qlen <= 100:
                             var runner = GpuParallelFastaSearchRunner[
                                 StripedSemiGlobalMatcher,
-                                max_matrix_length=576,
                                 max_query_length=100,
                             ](
                                 settings,
@@ -484,7 +474,6 @@ fn main() raises:
                             var start = perf_counter()
                             var runner = GpuParallelFastaSearchRunner[
                                 StripedSemiGlobalMatcher,
-                                max_matrix_length=576,
                                 max_query_length=200,
                             ](
                                 settings,
@@ -503,7 +492,6 @@ fn main() raises:
                         elif qlen <= 400:
                             var runner = GpuParallelFastaSearchRunner[
                                 StripedSemiGlobalMatcher,
-                                max_matrix_length=576,
                                 max_query_length=400,
                             ](
                                 settings,
@@ -517,7 +505,6 @@ fn main() raises:
                         elif qlen <= 800:
                             var runner = GpuParallelFastaSearchRunner[
                                 StripedSemiGlobalMatcher,
-                                max_matrix_length=576,
                                 max_query_length=800,
                             ](
                                 settings,
@@ -531,7 +518,6 @@ fn main() raises:
                         elif qlen <= 1600:
                             var runner = GpuParallelFastaSearchRunner[
                                 StripedSemiGlobalMatcher,
-                                max_matrix_length=576,
                                 max_query_length=1600,
                             ](
                                 settings,

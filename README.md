@@ -96,16 +96,12 @@ This is a benchmarking tool based on `parasail_aligner`.
 ## Future Work
 
 Next Steps:
-- Add ability to set score more easily as a fraction of length or some toher metrics
 - Add alignment output - like a nice viz
 - Add FASTQ support for record type
 - Add SAM support for record type
 - Add CSV support, matching against individual columns?
 - Add more matchers
-- Add ability to set scoring matrix type (ascii, actgn, bl50, bl62)
-- Add tty detection
-- Turn colorization on and off based on tty
-- Switch to turn on/off the `filepath:linenumber` output
+- Parallelize over files when gpus are available
 
 Idea attribution:
 - SSW lib / parasail
@@ -122,13 +118,10 @@ Novel things:
 
 ## TODO 
 - Allow for specifying ends-free-ness of semi-global
-- do a file peek and:
-    - Dynamically chose the max target length, either peek target file first 100 records, specify on cli, or other?
-    - Check for binary and skip files that are
 - Choose a better default between cpu and gpu / think about more. GPU crushes on big files / long running / many files, cpu is faster for small jobs
-- FASTQ support
 - Fix tests
 - Fixup SIMD widths in case we hit avx512
+- FASTQ support
 - Add ability to not skip dotfiles
 - Support muliple quries
 

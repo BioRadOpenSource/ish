@@ -79,7 +79,7 @@ fn parallel_starts_ends[
         ctx[].synchronize()
     var buffers_created = perf_counter()
     Logger.timing(
-        "GPU only creatin time:", buffers_created - gpu_buffer_create_start
+        "GPU only creation time:", buffers_created - gpu_buffer_create_start
     )
     Logger.timing("Buffer creation time:", buffers_created - start)
 

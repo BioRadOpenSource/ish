@@ -148,7 +148,14 @@ struct GZFile(KRead):
     fn unbuffered_read[
         o: MutableOrigin
     ](mut self, buffer: Span[UInt8, o]) raises -> Int:
-        """Read data from the gzip file."""
+        """Read data from the gzip file.
+
+        Args:
+            buffer: The buffer to read data into, attempts to fill the buffer.
+
+        Returns:
+            The number of bytes read, or an error code if it's less than zero.
+        """
 
         var bytes_read = self.lib.gzread(
             self.handle, buffer.unsafe_ptr(), c_uint(len(buffer))

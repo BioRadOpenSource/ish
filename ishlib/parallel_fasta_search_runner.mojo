@@ -7,7 +7,9 @@ from ishlib.formats.fasta import (
     BorrowedFastaRecord,
     ByteFastaRecord,
 )
-from ishlib.searcher_settings import SearcherSettings
+from ishlib.searcher_settings import (
+    SearcherSettings,
+)
 from ishlib.cpu.process_batch import (
     parallel_starts_ends as cpu_parallel_starts_ends,
 )
@@ -24,7 +26,8 @@ from ishlib.matcher import (
     ComputedMatchResult,
     WhereComputed,
 )
-from ishlib import ByteSpanWriter
+from ishlib import ByteSpanWriter, RecordType
+from ishlib.peek_file import peek_file
 from ishlib.matcher.alignment.striped_utils import AlignmentResult
 from ishlib.vendor.kseq import BufferedReader, FastxReader
 from ishlib.vendor.zlib import GZFile
@@ -60,6 +63,10 @@ struct ParallelFastaSearchRunner[M: Matcher]:
         # Simple thing first?
         for file in self.settings.files:
             var f = file[]  # force copy
+            var peek = peek_file[record_type = RecordType.FASTA](f)
+            Logger.debug("Suggested length:", peek.suggested_max_length)
+            if peek.is_binary:
+                Logger.warn("Skipping binary file:", file[])
             Logger.debug("Processing", f)
             self.run_search_on_file(f)
 
@@ -148,7 +155,6 @@ struct ParallelFastaSearchRunner[M: Matcher]:
 @value
 struct GpuParallelFastaSearchRunner[
     M: GpuMatcher,
-    max_matrix_length: UInt = 576,
     max_query_length: UInt = 200,
     max_target_length: UInt = 1024,
 ]:
@@ -156,38 +162,127 @@ struct GpuParallelFastaSearchRunner[
 
     var settings: SearcherSettings
     var matcher: M
-    var ctxs: List[
-        SearcherDevice[
-            M.batch_match_coarse[max_query_length, max_target_length]
-        ]
-    ]
 
     fn __init__(out self, settings: SearcherSettings, matcher: M) raises:
         self.settings = settings
         self.matcher = matcher
-        self.ctxs = SearcherDevice[
-            M.batch_match_coarse[max_query_length, max_target_length]
-        ].create_devices(
-            settings.batch_size,
-            len(settings.pattern),
-            self.matcher.matrix_len(),
-            max_target_length=max_target_length,
-            max_devices=settings.max_gpus,
-        )
 
     fn run_search(mut self) raises:
-        # Simple thing first?
-        # TODO: parallelize over files? probably not till we have threads since setup is the slow part
-        for file in self.settings.files:
-            var f = file[]  # force copy
-            self.run_search_on_file(f)
+        # Peek the first file to get the suggested size, then use that for all of them.
+        # Still peek each for binary
 
-    fn run_search_on_file(mut self, file: Path) raises:
+        # First non-binary file
+        var files = self.settings.files
+        var first_peek = peek_file[
+            record_type = RecordType.FASTA, check_record_size=True
+        ](files[0])
+        if first_peek.is_binary:
+            for i in range(1, len(files)):
+                first_peek = peek_file[
+                    record_type = RecordType.FASTA, check_record_size=True
+                ](files[i])
+
+        Logger.debug("Suggested length of:", first_peek.suggested_max_length)
+        # Create ctxs
+        if first_peek.suggested_max_length <= 128:
+            var ctxs = self.create_ctxs[max_query_length, 128]()
+            self.search_files[
+                max_query_length=max_query_length, max_target_length=128
+            ](files, ctxs)
+        elif first_peek.suggested_max_length <= 256:
+            var ctxs = self.create_ctxs[max_query_length, 256]()
+            self.search_files[
+                max_query_length=max_query_length, max_target_length=256
+            ](files, ctxs)
+        elif first_peek.suggested_max_length <= 512:
+            var ctxs = self.create_ctxs[max_query_length, 512]()
+            self.search_files[
+                max_query_length=max_query_length, max_target_length=512
+            ](files, ctxs)
+        elif first_peek.suggested_max_length <= 1024:
+            var ctxs = self.create_ctxs[max_query_length, 1024]()
+            self.search_files[
+                max_query_length=max_query_length, max_target_length=1024
+            ](files, ctxs)
+        elif first_peek.suggested_max_length <= 2048:
+            var ctxs = self.create_ctxs[max_query_length, 2048]()
+            self.search_files[
+                max_query_length=max_query_length, max_target_length=2048
+            ](files, ctxs)
+        elif first_peek.suggested_max_length <= 4096:
+            var ctxs = self.create_ctxs[max_query_length, 4096]()
+            self.search_files[
+                max_query_length=max_query_length, max_target_length=4096
+            ](files, ctxs)
+        else:
+            # TODO: do we actually have an upper limit?
+            Logger.warn(
+                "Longer line lengths that nicely supported, more work will"
+                " be sent to CPU, concider running with max-gpus set to 0."
+            )
+            var ctxs = self.create_ctxs[max_query_length, 4096]()
+            self.search_files[
+                max_query_length=max_query_length, max_target_length=4096
+            ](files, ctxs)
+
+    fn create_ctxs[
+        max_query_length: UInt = 200, max_target_length: UInt = 1024
+    ](mut self) raises -> List[
+        SearcherDevice[
+            M.batch_match_coarse[max_query_length, max_target_length]
+        ]
+    ]:
+        var ctxs = SearcherDevice[
+            M.batch_match_coarse[max_query_length, max_target_length]
+        ].create_devices(
+            self.settings.batch_size,
+            len(self.settings.pattern),
+            self.matcher.matrix_len(),
+            max_target_length=max_target_length,
+            max_devices=self.settings.max_gpus,
+        )
+        return ctxs
+
+    fn search_files[
+        max_query_length: UInt = 200, max_target_length: UInt = 1024
+    ](
+        mut self,
+        paths: List[Path],
+        mut ctxs: List[
+            SearcherDevice[
+                M.batch_match_coarse[max_query_length, max_target_length]
+            ]
+        ],
+    ) raises:
+        for i in range(0, len(paths)):
+            var f = paths[i]  # force copy
+            Logger.debug("Processing", f)
+            if i > 0:
+                # Can skip the first peek since we've already checked it.
+                var peek = peek_file[
+                    record_type = RecordType.FASTA, check_record_size=False
+                ](f)
+                if peek.is_binary:
+                    Logger.warn("Skipping binary file:", paths[i])
+                    continue
+            self.run_search_on_file[max_query_length, max_target_length](
+                f, ctxs
+            )
+
+    fn run_search_on_file[
+        max_query_length: UInt = 200, max_target_length: UInt = 1024
+    ](
+        mut self,
+        path: Path,
+        mut ctxs: List[
+            SearcherDevice[
+                M.batch_match_coarse[max_query_length, max_target_length]
+            ]
+        ],
+    ) raises:
         var file_start = perf_counter()
-        # TODO: Split out the too-long seqs
-        # TODO: pass an enocoder to the FastaReader
         var reader = FastxReader[read_comment=False](
-            BufferedReader(GZFile(String(file), "r"))
+            BufferedReader(GZFile(String(path), "r"))
         )
         var writer = BufferedWriter(stdout)
 
@@ -255,7 +350,7 @@ struct GpuParallelFastaSearchRunner[
                     max_query_length,
                     max_target_length,
                 ](
-                    self.ctxs,
+                    ctxs,
                     self.matcher,
                     self.settings,
                     sequences,
@@ -292,4 +387,4 @@ struct GpuParallelFastaSearchRunner[
         writer.flush()
         writer.close()
         var file_end = perf_counter()
-        Logger.timing("Time to process", file, file_end - file_start)
+        Logger.timing("Time to process", path, file_end - file_start)

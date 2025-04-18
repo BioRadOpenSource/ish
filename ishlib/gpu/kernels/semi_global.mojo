@@ -71,10 +71,6 @@ fn gpu_align_coarse[
     if thread_id >= thread_count:
         return
 
-    # Hard coded parameters
-    var gap_open_penalty = -3
-    var gap_ext_penalty = -1
-
     # Process references in a strided pattern
     # Each thread processes references with indices: thread_id, thread_id + thread_count, thread_id + 2*thread_count, etc.
     for idx in range(thread_id, target_ends_len, thread_count):
