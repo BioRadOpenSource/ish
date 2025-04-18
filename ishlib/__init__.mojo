@@ -17,3 +17,14 @@ struct ByteSpanWriter[origin: ImmutableOrigin](Writable):
 
     fn write_to[W: Writer](read self, mut writer: W):
         writer.write_bytes(self.inner)
+
+
+@value
+@register_passable
+struct RecordType:
+    var value: Int
+    alias LINE = Self(0)
+    alias FASTA = Self(1)
+
+    fn __eq__(read self, other: Self) -> Bool:
+        return self.value == other.value
