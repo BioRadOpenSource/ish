@@ -59,8 +59,13 @@ fn strip_newlines_in_place(
     Returns:
         True if the resulting buffer's length equals `expected`, False otherwise.
     """
+    # read_pos always starts the loop at the first byte that has not yet been examined.
     var read_pos: Int = 0
+    # write_pos always starts at the first byte that has not yet been written into its final position
     var write_pos: Int = 0
+    # Before the first newline, every byte is kept, so the pointers march together (no gap)
+    # After the first newline, the pointers may diverge, and we will need to copy bytes
+
     while read_pos < disk:
         var span_rel = memchr[do_alignment=True](
             Span[UInt8, __origin_of(bs.ptr)](
@@ -72,6 +77,8 @@ fn strip_newlines_in_place(
         # If there was newlines, compute the contiguous span without newlines
         var end_pos = disk if span_rel == -1 else read_pos + span_rel
         var span_len = end_pos - read_pos
+        # We only need to copy if there are newlines that would made gaps resulting in write_pos != read_pos
+        # See read_pos and write_pos comments above
         if span_len > 0 and write_pos != read_pos:
             memcpy(bs.ptr.offset(write_pos), bs.ptr.offset(read_pos), span_len)
         write_pos += span_len
@@ -81,6 +88,8 @@ fn strip_newlines_in_place(
 
 
 # This is long way of https://lemire.me/blog/2022/01/21/swar-explained-parsing-eight-digits/
+# not directly used, read_fastxpp uses cur = cur * 10 + Int(ch - UInt8(ord("0"))) directly
+# Keeping here for comparison to SWAR implementation
 fn ascii_to_int[O: Origin](buf: Span[UInt8, O], s: Int, e: Int) -> Int:
     var v: Int = 0
     for i in range(s, e):
