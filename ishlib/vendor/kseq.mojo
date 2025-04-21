@@ -20,6 +20,7 @@ def main():
     print(count, slen, qlen, sep="\t")
 ```
 """
+import sys
 from memory import UnsafePointer, memcpy
 from utils import StringSlice
 
@@ -35,6 +36,59 @@ alias ASCII_SPACE = ord(" ")
 alias ASCII_FASTA_RECORD_START = ord(">")
 alias ASCII_FASTQ_RECORD_START = ord("@")
 alias ASCII_FASTQ_SEPARATOR = ord("+")
+
+# ──────────────────────────────────────────────────────────────
+#  Helpers for reading in fastx++ files
+# ──────────────────────────────────────────────────────────────
+
+
+@always_inline
+fn strip_newlines_in_place(
+    mut bs: ByteString, disk: Int, expected: Int
+) -> Bool:
+    """Compact `bs` by removing every `\n` byte in‑place; return True if the
+    resulting length equals `expected`.
+    SIMD search for newline, shifts the bytes to the left, and resizes the buffer.
+    Avoids allocating a new buffer and copying the data.
+
+    bs:     Mutable buffer that already holds the raw FASTQ/FASTA chunk just read from disk
+    disk:   The number of bytes that were actually read into bs
+    expected:   how many bases/quality bytes should remain after stripping newlines;
+        used as a quick integrity check.
+
+    Returns:
+        True if the resulting buffer's length equals `expected`, False otherwise.
+    """
+    var read_pos: Int = 0
+    var write_pos: Int = 0
+    while read_pos < disk:
+        var span_rel = memchr[do_alignment=True](
+            Span[UInt8, __origin_of(bs.ptr)](
+                ptr=bs.ptr.offset(read_pos), length=disk - read_pos
+            ),
+            UInt8(ASCII_NEWLINE),
+        )
+        # If there are no new lines we dont have to adjust buffer
+        # If there was newlines, compute the contiguous span without newlines
+        var end_pos = disk if span_rel == -1 else read_pos + span_rel
+        var span_len = end_pos - read_pos
+        if span_len > 0 and write_pos != read_pos:
+            memcpy(bs.ptr.offset(write_pos), bs.ptr.offset(read_pos), span_len)
+        write_pos += span_len
+        read_pos = end_pos + 1  # skip the '\n' (or exit loop if none)
+    bs.resize(write_pos)
+    return write_pos == expected
+
+
+# This is long way of https://lemire.me/blog/2022/01/21/swar-explained-parsing-eight-digits/
+fn ascii_to_int[O: Origin](buf: Span[UInt8, O], s: Int, e: Int) -> Int:
+    var v: Int = 0
+    for i in range(s, e):
+        v = v * 10 + Int(buf[i] - ord("0"))
+    return v
+
+
+# ──────────────────────────────────────────────────────────────
 
 
 @value
@@ -384,7 +438,7 @@ struct FastxReader[R: KRead, read_comment: Bool = True](Movable):
             if c < 0:
                 return Int(c)  # EOF Error
 
-        # Reset all members
+        # Reset all buffers for reuse
         self.seq.clear()
         self.qual.clear()
         self.comment.clear()
@@ -455,3 +509,121 @@ struct FastxReader[R: KRead, read_comment: Bool = True](Movable):
         if len(self.qual) != len(self.seq):
             return -2  # error: qual string is of different length
         return len(self.seq)
+
+    fn read_fastxpp(mut self) raises -> Int:
+        # Locate next header
+        if self.last_char == 0:
+            var c = self.reader.read_byte()
+            while (
+                c >= 0
+                and c != ASCII_FASTA_RECORD_START
+                and c != ASCII_FASTQ_RECORD_START
+            ):
+                c = self.reader.read_byte()
+            if c < 0:
+                return Int(c)  # EOF
+        else:
+            var c = self.last_char
+            self.last_char = 0
+
+        # Clear buffers for this record
+        self.seq.clear()
+        self.qual.clear()
+        self.comment.clear()
+        self.name.clear()
+
+        # Read header line (without copying '\n')
+        var r = self.reader.read_until[SearchChar.Newline](self.name, 0, False)
+        if r < 0:
+            return Int(r)
+
+        var hdr = self.name.as_span()
+        if len(hdr) == 0 or hdr[0] != UInt8(ord("`")):
+            return -3  # not FASTX++ header
+
+        # Find closing back‑tick with one memchr
+        var after = Span[UInt8, __origin_of(hdr)](
+            ptr=hdr.unsafe_ptr().offset(1), length=len(hdr) - 1
+        )
+        var rel = memchr(after, UInt8(ord("`")))
+        if rel == -1:
+            return -3
+        var pos2 = rel + 1
+
+        # Parse hlen, slen, lcnt in one pass
+        var hlen: Int = 0
+        var slen: Int = 0
+        var lcnt: Int = 0
+        var cur: Int = 0
+        var which: Int = 0
+        for i in range(1, pos2):
+            var ch = hdr[i]
+            if ch == UInt8(ord(":")):
+                if which == 0:
+                    hlen = cur
+                elif which == 1:
+                    slen = cur
+                cur = 0
+                which += 1
+            else:
+                cur = cur * 10 + Int(ch - UInt8(ord("0")))
+        lcnt = cur
+
+        # Validate header length and resize name
+        if len(hdr) - (pos2 + 1) != hlen:
+            return -3
+        self.name.resize(hlen)
+
+        # ── Sequence block ────────────────────────────────────────────
+        var disk = slen + lcnt  # bytes on disk (bases+LFs)
+        var need = disk  # local copy; will be mutated
+        self.seq.clear()
+        self.seq.reserve(need)
+        var got = self.reader.read_bytes(self.seq, need)
+        if got != disk:
+            return -3
+        if not strip_newlines_in_place(self.seq, disk, slen):
+            return -2
+
+        # ── Quality block (FASTQ) ─────────────────────────────────────
+        if hdr[0] == UInt8(ASCII_FASTQ_RECORD_START):
+            if (
+                self.reader.read_byte() != ASCII_NEWLINE
+            ):  # consume LF after '+' line
+                return -3
+            var needq = disk  # separate mutable copy
+            self.qual.clear()
+            self.qual.reserve(needq)
+            var gotq = self.reader.read_bytes(self.qual, needq)
+            if gotq != disk:
+                return -3
+            if not strip_newlines_in_place(self.qual, disk, slen):
+                return -2
+
+        return len(self.seq)
+
+
+# ──────────────────────────────────────────────────────────────
+# Main for debugging
+# ──────────────────────────────────────────────────────────────
+#
+# fn main() raises:
+#     var argv = sys.argv()
+#     if len(argv) != 2:
+#         print("Usage: mojo run kseq.mojo <file.fastxpp>")
+#         return
+
+#     var fh = open(String(argv[1]), "r")
+#     var reader = FastxReader[read_comment=False](
+#         BufferedReader(FileReader(fh^))  # move FileHandle into FileReader
+#     )
+
+#     var code = reader.read_fastxpp()
+#     print("first‑read returned", code)
+#     var count = 0
+#     while True:
+#         var n = reader.read_fastxpp()
+#         if n < 0:
+#             break
+#         count += 1
+#         print("rec#", count, "seq_len", n, "hdr_len", len(reader.name))
