@@ -2,6 +2,7 @@ from ExtraMojo.io.buffered import BufferedWriter
 
 from time.time import perf_counter
 
+from ishlib import RED, PURPLE, GREEN
 from ishlib.formats.fasta import (
     FastaReader,
     BorrowedFastaRecord,
@@ -134,13 +135,14 @@ struct ParallelFastaSearchRunner[M: Matcher]:
                             r[].seq.seq[0 : m.value().result.start]
                         )
                         writer.write("\033[1;31m")
+                        writer.write(RED)
                         writer.write_bytes(
                             r[].seq.seq[
                                 m.value().result.start : m.value().result.end
                             ]
                         )
                         writer.write()
-                        writer.write("\033[0m")
+                        writer.write(RESET)
                         writer.write_bytes(r[].seq.seq[m.value().result.end :])
                     else:
                         writer.write_bytes(r[].seq.seq)
@@ -296,9 +298,9 @@ struct GpuParallelFastaSearchRunner[
             writer.write("\n")
             if self.settings.tty_info.is_a_tty:
                 writer.write_bytes(r[].seq[0 : m.result.start])
-                writer.write("\033[1;31m")
+                writer.write(RED)
                 writer.write_bytes(r[].seq[m.result.start : m.result.end])
-                writer.write("\033[0m")
+                writer.write(RESET)
                 writer.write_bytes(r[].seq[m.result.end :])
             else:
                 writer.write_bytes(r[].seq)

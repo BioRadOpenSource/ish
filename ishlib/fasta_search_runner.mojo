@@ -1,6 +1,7 @@
 from ExtraMojo.io.buffered import BufferedWriter
 
 from ishlib import ByteSpanWriter
+from ishlib import RED, PURPLE, GREEN
 from ishlib.matcher import Matcher
 from ishlib.searcher_settings import SearcherSettings
 from ishlib.vendor.kseq import FastxReader, BufferedReader
@@ -51,12 +52,12 @@ struct FastaSearchRunner[M: Matcher]:
                     writer.write_bytes(
                         reader.seq.as_span()[0 : m.value().start]
                     )
-                    writer.write("\033[1;31m")
+                    writer.write(RED)
                     writer.write_bytes(
                         reader.seq.as_span()[m.value().start : m.value().end]
                     )
                     writer.write()
-                    writer.write("\033[0m")
+                    writer.write(RESET)
                     writer.write_bytes(reader.seq.as_span()[m.value().end :])
                 else:
                     writer.write_bytes(reader.seq.as_span())

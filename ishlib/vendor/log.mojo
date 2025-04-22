@@ -2,6 +2,7 @@ import sys
 from sys.param_env import env_get_string
 from utils import write_args, StringSlice
 
+
 @value
 struct LogLevel:
     var value: Int
@@ -51,6 +52,7 @@ struct LogLevel:
 alias RED = "\x1b[31m"
 alias GREEN = "\x1b[32m"
 alias YELLOW = "\x1b[33m"
+alias PURPLE = "\x1b[35m"
 alias BLUE = "\x1b[34m"
 alias RESET = "\x1b[0m"
 
