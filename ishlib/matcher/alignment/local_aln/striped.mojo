@@ -14,6 +14,7 @@ from ishlib.matcher.alignment.striped_utils import (
     AlignmentEnd,
     AlignmentResult,
 )
+from ishlib.vendor.log import Logger
 
 
 @value
@@ -176,7 +177,6 @@ fn ssw_align[
     var used_word = False
 
     if profile.profile_byte:
-        # print("Doing Byte SW")
         bests = sw[DType.uint8, SIMD_U8_WIDTH](
             reference,
             ReferenceDirection.Forward,
@@ -189,7 +189,10 @@ fn ssw_align[
             profile.bias,
             mask_length,
         )
-        if profile.profile_word and bests.best.score == 255:
+        if (
+            profile.profile_word
+            and bests.best.score + profile.bias.cast[DType.int32]() >= 255
+        ):
             bests = sw[DType.uint16, SIMD_U16_WIDTH](
                 reference,
                 ReferenceDirection.Forward,
@@ -203,8 +206,8 @@ fn ssw_align[
                 mask_length,
             )
             used_word = True
-        elif bests.best.score == 255:
-            print(
+        elif bests.best.score + profile.bias.cast[DType.int32]() >= 255:
+            Logger.warn(
                 "Please overflow in alignments detected, please provide a"
                 " larger query profile"
             )
@@ -226,18 +229,16 @@ fn ssw_align[
 
         used_word = True
     else:
-        print("Failed to provide a valid query profile")
+        Logger.warn("Failed to provide a valid query profile")
         return None
 
     if bests.best.score <= score_cutoff:
+        Logger.debug("Worse than cutoff")
         return None
 
     var score1 = bests.best.score
     var ref_end1 = bests.best.reference
     var read_end1 = bests.best.query
-
-    var score2: UInt16 = 0
-    var ref_end2: Int32 = -1
 
     if return_only_alignment_end or ref_end1 <= 0 or read_end1 <= 0:
         return Alignment(
@@ -253,7 +254,8 @@ fn ssw_align[
     if not used_word:
         # print("Running rev align")
         bests_rev = sw[DType.uint8, SIMD_U8_WIDTH](
-            reference,
+            reference[0 : Int(ref_end1)],
+            # reference,
             ReferenceDirection.Reverse,
             reverse_profile.query_len,
             gap_open_penalty,
@@ -266,7 +268,8 @@ fn ssw_align[
         )
     else:
         bests_rev = sw[DType.uint16, SIMD_U16_WIDTH](
-            reference,
+            reference[0 : Int(ref_end1)],
+            # reference,
             ReferenceDirection.Reverse,
             reverse_profile.query_len,
             gap_open_penalty.cast[DType.uint16](),
@@ -517,7 +520,6 @@ fn sw[
             if temp > max_score:
                 max_score = temp
                 if (max_score + bias) >= SIMD[dt, 1].MAX:
-                    # print("OVERFLOW")
                     break
                 end_reference = i
 

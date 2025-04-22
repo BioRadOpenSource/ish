@@ -1,7 +1,7 @@
 from bit.bit import is_power_of_two, next_power_of_two
 from collections import Optional
 from sys.info import num_physical_cores
-from pathlib.path import Path
+from pathlib.path import Path, cwd
 
 from ExtraMojo.cli.parser import OptParser, OptConfig, OptKind
 
@@ -22,6 +22,8 @@ struct SearcherSettings:
     """The scorign matrix to use."""
     var score_threshold: Float32
     """The minimum score needed to return a match."""
+    var output_file: Path
+    """The file to write the output to."""
 
     var gap_open_penalty: Int
     var gap_extension_penalty: Int
@@ -33,19 +35,15 @@ struct SearcherSettings:
     var max_gpus: UInt
     var tty_info: TTYInfoResult
 
+    fn is_output_stdout(read self) -> Bool:
+        return self.output_file == "/dev/stdout"
+
     @staticmethod
     fn from_args() raises -> Optional[Self]:
         var parser = OptParser(
             name="ish", description="Search for inexact patterns in files."
         )
-        parser.add_opt(
-            OptConfig(
-                "pattern",
-                OptKind.StringLike,
-                default_value=None,
-                description="The pattern to search for.",
-            )
-        )
+
         parser.add_opt(
             OptConfig(
                 "scoring-matrix",
@@ -69,7 +67,9 @@ struct SearcherSettings:
                 default_value=String("0.8"),
                 description=(
                     "The min score needed to return a match. Results >= this"
-                    " value will be returned."
+                    " value will be returned. The score is the found alignment"
+                    " score / the optimal score for the given scoring matrix"
+                    " and gap-open / gap-extend penalty."
                 ),
             )
         )
@@ -137,19 +137,33 @@ struct SearcherSettings:
             OptConfig(
                 "max-gpus",
                 OptKind.IntLike,
-                default_value=String("1"),
+                default_value=String("0"),
                 description=(
                     "The max number of GPUs to try to use. If set to 0 this"
                     " will ignore any found GPUs. In general, if you have only"
                     " one query then there won't be much using more than 1 GPU."
                     " GPUs won't always be faster than CPU parallelization"
-                    " depeding on the profile of data you are working with."
+                    " depending on the profile of data you are working with."
+                ),
+            )
+        )
+        parser.add_opt(
+            OptConfig(
+                "output-file",
+                OptKind.StringLike,
+                default_value=String("/dev/stdout"),
+                description=(
+                    "The file to write the output to, defaults to stdout."
                 ),
             )
         )
 
         parser.expect_at_least_n_args(
-            1, "Files to search for the given pattern."
+            1,
+            (
+                "Pattern to search for, then any number of files or directories"
+                " to search."
+            ),
         )
 
         try:
@@ -158,7 +172,11 @@ struct SearcherSettings:
                 print(opts.get_help_message()[])
                 return None
 
-            var pattern = List(opts.get_string("pattern").as_bytes())
+            if len(opts.args) == 0:
+                raise "Missing pattern argument."
+            var pattern = List(opts.args[0].as_bytes())
+
+            var output = Path(opts.get_string("output-file"))
             var matrix_kind = MatrixKind.from_str(
                 opts.get_string("scoring-matrix")
             )
@@ -178,9 +196,12 @@ struct SearcherSettings:
                 )
             if batch_size < 1024 * 10:
                 raise "Batch size too small, try"
-            var files = opts.args
-            if len(files) == 0:
-                raise "Expected files, found none."
+            var files = List[String]()
+            if len(opts.args) == 1:
+                files.append(String(cwd()))
+            else:
+                for i in range(1, len(opts.args)):
+                    files.append(opts.args[i])
 
             var expanded_files = expand_files_to_search(files)
 
@@ -193,6 +214,7 @@ struct SearcherSettings:
                 pattern,
                 matrix_kind,
                 Float32(score),
+                output,
                 gap_open,
                 gap_extend,
                 match_algo,

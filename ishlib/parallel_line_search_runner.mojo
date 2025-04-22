@@ -1,3 +1,4 @@
+from ExtraMojo.io import MovableWriter
 from ExtraMojo.io.buffered import BufferedWriter
 
 from ishlib import RED, PURPLE, GREEN
@@ -54,7 +55,9 @@ struct ParallelLineSearchRunner[M: Matcher]:
     var settings: SearcherSettings
     var matcher: M
 
-    fn run_search(mut self) raises:
+    fn run_search[
+        W: MovableWriter
+    ](mut self, mut writer: BufferedWriter[W]) raises:
         # Simple thing first?
         for file in self.settings.files:
             var f = file[]  # force copy
@@ -63,13 +66,13 @@ struct ParallelLineSearchRunner[M: Matcher]:
             if peek.is_binary:
                 Logger.warn("Skipping binary file:", file[])
                 continue
-            self.run_search_on_file(f)
+            self.run_search_on_file(f, writer)
 
-    fn run_search_on_file(mut self, path: Path) raises:
+    fn run_search_on_file[
+        W: MovableWriter
+    ](mut self, path: Path, mut writer: BufferedWriter[W]) raises:
         var file = String(path)
-        # TODO: pass an enocoder to the FastaReader
         var reader = BufferedReader(GZFile(file, "rb"))
-        var writer = BufferedWriter(stdout)
 
         var lines = List[LineAndIndex]()
         var bytes_saved = 0
@@ -82,7 +85,7 @@ struct ParallelLineSearchRunner[M: Matcher]:
         var do_work = True
         while do_work:
             buffer.clear()
-            if reader.read_until[delim = SearchChar.Newline](buffer) <= 0:
+            if reader.read_until[delim = SearchChar.Newline](buffer) < 0:
                 do_work = False
             else:
                 var line = List[UInt8](capacity=len(buffer))
@@ -118,7 +121,10 @@ struct ParallelLineSearchRunner[M: Matcher]:
                         r[].line[i] = self.matcher.convert_encoding_to_ascii(
                             r[].line[i]
                         )
-                    if self.settings.tty_info.is_a_tty:
+                    if (
+                        self.settings.tty_info.is_a_tty
+                        and self.settings.is_output_stdout()
+                    ):
                         writer.write(
                             PURPLE,
                             file,
@@ -171,7 +177,9 @@ struct GpuParallelLineSearchRunner[
         self.settings = settings
         self.matcher = matcher
 
-    fn run_search(mut self) raises:
+    fn run_search[
+        W: MovableWriter
+    ](mut self, mut writer: BufferedWriter[W]) raises:
         # Peek the first file to get the suggested size, then use that for all of them.
         # Still peek each for binary
 
@@ -191,33 +199,33 @@ struct GpuParallelLineSearchRunner[
         if first_peek.suggested_max_length <= 128:
             var ctxs = self.create_ctxs[max_query_length, 128]()
             self.search_files[
-                max_query_length=max_query_length, max_target_length=128
-            ](files, ctxs)
+                W, max_query_length=max_query_length, max_target_length=128
+            ](files, ctxs, writer)
         elif first_peek.suggested_max_length <= 256:
             var ctxs = self.create_ctxs[max_query_length, 256]()
             self.search_files[
-                max_query_length=max_query_length, max_target_length=256
-            ](files, ctxs)
+                W, max_query_length=max_query_length, max_target_length=256
+            ](files, ctxs, writer)
         elif first_peek.suggested_max_length <= 512:
             var ctxs = self.create_ctxs[max_query_length, 512]()
             self.search_files[
-                max_query_length=max_query_length, max_target_length=512
-            ](files, ctxs)
+                W, max_query_length=max_query_length, max_target_length=512
+            ](files, ctxs, writer)
         elif first_peek.suggested_max_length <= 1024:
             var ctxs = self.create_ctxs[max_query_length, 1024]()
             self.search_files[
-                max_query_length=max_query_length, max_target_length=1024
-            ](files, ctxs)
+                W, max_query_length=max_query_length, max_target_length=1024
+            ](files, ctxs, writer)
         elif first_peek.suggested_max_length <= 2048:
             var ctxs = self.create_ctxs[max_query_length, 2048]()
             self.search_files[
-                max_query_length=max_query_length, max_target_length=2048
-            ](files, ctxs)
+                W, max_query_length=max_query_length, max_target_length=2048
+            ](files, ctxs, writer)
         elif first_peek.suggested_max_length <= 4096:
             var ctxs = self.create_ctxs[max_query_length, 4096]()
             self.search_files[
-                max_query_length=max_query_length, max_target_length=4096
-            ](files, ctxs)
+                W, max_query_length=max_query_length, max_target_length=4096
+            ](files, ctxs, writer)
         else:
             # TODO: do we actually have an upper limit?
             Logger.warn(
@@ -226,8 +234,8 @@ struct GpuParallelLineSearchRunner[
             )
             var ctxs = self.create_ctxs[max_query_length, 4096]()
             self.search_files[
-                max_query_length=max_query_length, max_target_length=4096
-            ](files, ctxs)
+                W, max_query_length=max_query_length, max_target_length=4096
+            ](files, ctxs, writer)
 
     fn create_ctxs[
         max_query_length: UInt = 200, max_target_length: UInt = 1024
@@ -248,7 +256,9 @@ struct GpuParallelLineSearchRunner[
         return ctxs
 
     fn search_files[
-        max_query_length: UInt = 200, max_target_length: UInt = 1024
+        W: MovableWriter,
+        max_query_length: UInt = 200,
+        max_target_length: UInt = 1024,
     ](
         mut self,
         paths: List[Path],
@@ -257,6 +267,7 @@ struct GpuParallelLineSearchRunner[
                 M.batch_match_coarse[max_query_length, max_target_length]
             ]
         ],
+        mut writer: BufferedWriter[W],
     ) raises:
         for i in range(0, len(paths)):
             var f = paths[i]  # force copy
@@ -269,12 +280,14 @@ struct GpuParallelLineSearchRunner[
                 if peek.is_binary:
                     Logger.warn("Skipping binary file:", paths[i])
                     continue
-            self.run_search_on_file[max_query_length, max_target_length](
-                f, ctxs
+            self.run_search_on_file[W, max_query_length, max_target_length](
+                f, ctxs, writer
             )
 
     fn run_search_on_file[
-        max_query_length: UInt = 200, max_target_length: UInt = 1024
+        W: MovableWriter,
+        max_query_length: UInt = 200,
+        max_target_length: UInt = 1024,
     ](
         mut self,
         path: Path,
@@ -283,17 +296,20 @@ struct GpuParallelLineSearchRunner[
                 M.batch_match_coarse[max_query_length, max_target_length]
             ]
         ],
+        mut writer: BufferedWriter[W],
     ) raises:
         var file = String(path)
         var reader = BufferedReader(GZFile(file, "rb"))
-        var writer = BufferedWriter(stdout)
 
         fn write_match[
             mut: Bool, //, o: Origin[mut]
         ](
             r: Pointer[List[UInt8], o], m: ComputedMatchResult, orig_index: Int
         ) capturing raises:
-            if self.settings.tty_info.is_a_tty:
+            if (
+                self.settings.tty_info.is_a_tty
+                and self.settings.is_output_stdout()
+            ):
                 writer.write(
                     PURPLE,
                     file,
@@ -331,7 +347,7 @@ struct GpuParallelLineSearchRunner[
         var buffer = ByteString()
         while do_work:
             buffer.clear()
-            if reader.read_until[delim = SearchChar.Newline](buffer) <= 0:
+            if reader.read_until[delim = SearchChar.Newline](buffer) < 0:
                 do_work = False
             else:
                 var line = List[UInt8](capacity=len(buffer))

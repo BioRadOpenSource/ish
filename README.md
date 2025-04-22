@@ -128,3 +128,10 @@ Novel things:
 ```sh
 
 ```
+
+## Bugs
+
+- If there are multiple matches in a sequence, when we reverse the target to find the start, it will find a different match than the first match.
+        - Fix: do what ssw did from the start and start the search from match end.
+        - This probably means recomputing something?
+        - Remove basic local matcher??

@@ -31,8 +31,8 @@ struct NaiveExactMatcher(Matcher):
 
         for h in range(0, len(haystack)):
             var matched = True
-            for p in range(0, len(pattern)):
-                if pattern[p] != haystack[h + p]:
+            for p in range(0, len(self.pattern)):
+                if self.pattern[p] != haystack[h + p]:
                     matched = False
                     break
             if matched:

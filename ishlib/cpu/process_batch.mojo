@@ -54,7 +54,10 @@ fn parallel_starts[
         ):
             return
         var start = matcher.find_start(
-            seqs[index].buffer_to_search(), matcher.encoded_pattern()
+            seqs[index].buffer_to_search()[
+                0 : Int(target_ends[index])
+            ],  # Search only from the target end backwards
+            matcher.encoded_pattern(),
         )
         outputs[seqs[index].original_index()] = ComputedMatchResult(
             MatchResult(start, Int(target_ends[index])),
