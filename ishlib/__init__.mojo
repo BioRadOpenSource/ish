@@ -5,6 +5,7 @@ from memory import Span
 alias RED = "\x1b[31m"
 alias GREEN = "\x1b[32m"
 alias YELLOW = "\x1b[33m"
+alias PURPLE = "\x1b[35m"
 alias BLUE = "\x1b[34m"
 alias RESET = "\x1b[0m"
 

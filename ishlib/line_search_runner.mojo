@@ -1,5 +1,6 @@
 from ExtraMojo.io.buffered import BufferedWriter
 
+from ishlib import RED, PURPLE, GREEN
 from ishlib.vendor.kseq import BufferedReader, SearchChar, ByteString
 from ishlib.vendor.zlib import GZFile
 from ishlib.vendor.log import Logger
@@ -47,14 +48,18 @@ struct LineSearchRunner[M: Matcher]:
             if m:
                 var b = buffer.as_span()
                 if self.settings.tty_info.is_a_tty:
+                    writer.write(PURPLE)
                     writer.write_bytes(file.as_bytes())
+                    writer.write(RESET)
                     writer.write_bytes(":".as_bytes())
+                    writer.write(GREEN)
                     writer.write(line_number)
-                    writer.write(" ")
+                    writer.write(RESET)
+                    writer.write(": ")
                     writer.write_bytes(b[0 : m.value().start])
-                    writer.write("\033[1;31m")
+                    writer.write(RED)
                     writer.write_bytes(b[m.value().start : m.value().end])
-                    writer.write("\033[0m")
+                    writer.write(RESET)
                     writer.write_bytes(b[m.value().end :])
                     writer.write("\n")
                 else:

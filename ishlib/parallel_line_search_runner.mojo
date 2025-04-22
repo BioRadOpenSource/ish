@@ -1,5 +1,6 @@
 from ExtraMojo.io.buffered import BufferedWriter
 
+from ishlib import RED, PURPLE, GREEN
 from ishlib import ByteSpanWriter, RecordType
 from ishlib.peek_file import peek_file, PeekFindings
 from ishlib.cpu.process_batch import (
@@ -119,14 +120,18 @@ struct ParallelLineSearchRunner[M: Matcher]:
                         )
                     if self.settings.tty_info.is_a_tty:
                         writer.write(
+                            PURPLE,
                             file,
+                            RESET,
                             ":",
+                            GREEN,
                             r[].orig_index + global_lines_seen + 1,
-                            " ",
+                            RESET,
+                            ": ",
                             ByteSpanWriter(
                                 r[].line[0 : m.value().result.start]
                             ),
-                            "\033[1;31m",
+                            RED,
                             ByteSpanWriter(
                                 r[].line[
                                     m.value()
@@ -134,7 +139,7 @@ struct ParallelLineSearchRunner[M: Matcher]:
                                     .result.end
                                 ]
                             ),
-                            "\033[0m",
+                            RESET,
                             ByteSpanWriter(r[].line[m.value().result.end :]),
                             "\n",
                         )
@@ -290,15 +295,19 @@ struct GpuParallelLineSearchRunner[
         ) capturing raises:
             if self.settings.tty_info.is_a_tty:
                 writer.write(
+                    PURPLE,
                     file,
+                    RESET,
                     ":",
+                    GREEN,
                     orig_index + 1,
-                    " ",
+                    RESET,
+                    ": ",
                     # ByteSpanWriter(buffer[:]),
                     ByteSpanWriter(r[][0 : m.result.start]),
-                    "\033[1;31m",
+                    RED,
                     ByteSpanWriter(r[][m.result.start : m.result.end]),
-                    "\033[0m",
+                    RESET,
                     ByteSpanWriter(r[][m.result.end :]),
                     "\n",
                 )
