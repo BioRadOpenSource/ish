@@ -370,7 +370,7 @@ struct FastxReader[R: KRead, read_comment: Bool = True](Movable):
             >=0  length of the sequence (normal)
             -1   end-of-file
             -2   truncated quality string
-            -3   error reading stream
+            -3   error reading stream.
         """
         # Jump to next header line, or if false, the first header char was read by the last call
         if self.last_char == 0:

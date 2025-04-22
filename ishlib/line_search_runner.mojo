@@ -1,3 +1,4 @@
+from ExtraMojo.io import MovableWriter
 from ExtraMojo.io.buffered import BufferedWriter
 
 from ishlib import RED, PURPLE, GREEN
@@ -18,27 +19,28 @@ struct LineSearchRunner[M: Matcher]:
     var settings: SearcherSettings
     var matcher: M
 
-    fn run_search(mut self) raises:
+    fn run_search[
+        W: MovableWriter
+    ](mut self, mut writer: BufferedWriter[W]) raises:
         # Simple thing first?
         for file in self.settings.files:
             var f = file[]  # force copy
             Logger.debug("Processing", f)
-            self.run_search_on_file(f)
+            self.run_search_on_file(f, writer)
 
-    fn run_search_on_file(mut self, path: Path) raises:
+    fn run_search_on_file[
+        W: MovableWriter
+    ](mut self, path: Path, mut writer: BufferedWriter[W]) raises:
         var file = String(path)
         var reader = BufferedReader(GZFile(file, "r"))
-        # var buffer = List[UInt8]()
         var buffer = ByteString()
         var encoded = ByteString()
-
-        var writer = BufferedWriter(stdout)
 
         var line_number = 1
         while True:
             buffer.clear()
             encoded.clear()
-            if reader.read_until[SearchChar.Newline](buffer) == 0:
+            if reader.read_until[SearchChar.Newline](buffer) < 0:
                 break
             for i in range(0, len(buffer)):
                 encoded.push(self.matcher.convert_ascii_to_encoding(buffer[i]))
@@ -47,7 +49,10 @@ struct LineSearchRunner[M: Matcher]:
             )
             if m:
                 var b = buffer.as_span()
-                if self.settings.tty_info.is_a_tty:
+                if (
+                    self.settings.tty_info.is_a_tty
+                    and self.settings.is_output_stdout()
+                ):
                     writer.write(PURPLE)
                     writer.write_bytes(file.as_bytes())
                     writer.write(RESET)

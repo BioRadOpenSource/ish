@@ -164,7 +164,9 @@ fn semi_global_aln_start_end[
     if forward.best.score < score_cutoff:
         return None
 
-    var rev_reference = create_reversed(reference)
+    var rev_reference = create_reversed(
+        reference[0 : Int(forward.best.reference)]
+    )
     var reverse = semi_global_aln[
         dt, width, do_saturation_check=do_saturation_check
     ](

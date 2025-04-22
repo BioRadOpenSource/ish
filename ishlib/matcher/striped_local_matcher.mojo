@@ -1,6 +1,7 @@
 """Smith-Waterman local alignment."""
 from gpu.host import DeviceContext
 from sys.info import simdwidthof
+from utils import StringSlice
 
 from ishlib.vendor.log import Logger
 from ishlib.matcher import Matcher, MatchResult
@@ -60,6 +61,7 @@ struct StripedLocalMatcher[mut: Bool, //, origin: Origin[mut]](Matcher):
         read self, haystack: Span[UInt8], _pattern: Span[UInt8]
     ) -> Optional[MatchResult]:
         """Find the first match in the haystack."""
+
         var result = ssw_align(
             self.profile,
             self.matrix,
@@ -68,7 +70,7 @@ struct StripedLocalMatcher[mut: Bool, //, origin: Origin[mut]](Matcher):
             gap_open_penalty=self.gap_open,
             gap_extension_penalty=self.gap_extend,
             reverse_profile=self.reverse_profile,
-            score_cutoff=Int32(len(self.pattern)) - 1,
+            score_cutoff=-1,
         )
 
         if (
