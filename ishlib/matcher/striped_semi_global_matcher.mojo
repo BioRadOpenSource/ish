@@ -3,16 +3,17 @@ from gpu.host import DeviceContext
 from sys.info import simdwidthof
 from utils import StringSlice
 
+from ishlib.gpu.kernels.semi_global import gpu_align_coarse
 from ishlib.matcher import Matcher, MatchResult
 from ishlib.matcher.alignment import create_reversed
 from ishlib.matcher.alignment.scoring_matrix import ScoringMatrix, MatrixKind
-from ishlib.gpu.kernels.semi_global import gpu_align_coarse
 from ishlib.matcher.alignment.semi_global_aln.striped import (
     Profile,
     ScoreSize,
     semi_global_aln_start_end,
     semi_global_aln,
 )
+from ishlib.searcher_settings import SemiGlobalEndsFreeness
 from ishlib.vendor.log import Logger
 
 
@@ -35,11 +36,13 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
     var gap_open: UInt
     var gap_extend: UInt
     var _score_threshold: Float32
+    var sg_ends_free: SemiGlobalEndsFreeness
 
     fn __init__(
         out self,
         pattern: List[UInt8],
         score_threshold: Float32,
+        sg_ends_free: SemiGlobalEndsFreeness,
         matrix_kind: MatrixKind = MatrixKind.ASCII,
         gap_open: UInt = 3,
         gap_extend: UInt = 1,
@@ -50,6 +53,7 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
         self._score_threshold = score_threshold
         self.matrix = matrix_kind.matrix()
         self._matrix_kind = matrix_kind
+        self.sg_ends_free = sg_ends_free
         (
             self.pattern,
             self.max_score,
@@ -79,10 +83,10 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
             bias=self.profile.bias.cast[DType.uint16](),
             max_score=self.profile.max_score,
             min_score=self.profile.min_score,
-            free_query_start_gaps=True,
-            free_query_end_gaps=True,
-            free_target_start_gaps=True,
-            free_target_end_gaps=True,
+            free_query_start_gaps=self.sg_ends_free.query_start,
+            free_query_end_gaps=self.sg_ends_free.query_end,
+            free_target_start_gaps=self.sg_ends_free.target_start,
+            free_target_end_gaps=self.sg_ends_free.target_end,
             score_cutoff=Int32(len(self.pattern)),
         )
         if (
@@ -110,10 +114,10 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
             bias=self.profile.bias.cast[DType.uint16](),
             max_score=self.profile.max_score,
             min_score=self.profile.min_score,
-            free_query_start_gaps=True,
-            free_query_end_gaps=True,
-            free_target_start_gaps=True,
-            free_target_end_gaps=True,
+            free_query_start_gaps=self.sg_ends_free.query_end,
+            free_query_end_gaps=self.sg_ends_free.query_start,
+            free_target_start_gaps=self.sg_ends_free.target_end,
+            free_target_end_gaps=self.sg_ends_free.target_start,
         )
         return len(haystack) - Int(result.best.reference) - 1
 
@@ -156,7 +160,8 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
 
     @staticmethod
     fn batch_match_coarse[
-        max_query_length: UInt, max_target_length: UInt
+        max_query_length: UInt,
+        max_target_length: UInt,
     ](
         query: DeviceBuffer[DType.uint8],
         ref_buffer: DeviceBuffer[DType.uint8],
@@ -172,6 +177,7 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
         thread_count: Int,
         gap_open: UInt,
         gap_extend: UInt,
+        ends_free: SemiGlobalEndsFreeness,
     ):
         # TODO: make this a param?
         if matrix_kind == MatrixKind.ASCII:
@@ -191,6 +197,10 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
                 thread_count,
                 gap_open,
                 gap_extend,
+                ends_free.query_start,
+                ends_free.query_end,
+                ends_free.target_start,
+                ends_free.target_end,
             )
         elif matrix_kind == MatrixKind.ACTGN:
             gpu_align_coarse[
@@ -209,6 +219,10 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
                 thread_count,
                 gap_open,
                 gap_extend,
+                ends_free.query_start,
+                ends_free.query_end,
+                ends_free.target_start,
+                ends_free.target_end,
             )
         elif matrix_kind == MatrixKind.BLOSUM62:
             gpu_align_coarse[
@@ -227,6 +241,10 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
                 thread_count,
                 gap_open,
                 gap_extend,
+                ends_free.query_start,
+                ends_free.query_end,
+                ends_free.target_start,
+                ends_free.target_end,
             )
         else:
             Logger.warn(
@@ -249,4 +267,8 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
                 thread_count,
                 gap_open,
                 gap_extend,
+                ends_free.query_start,
+                ends_free.query_end,
+                ends_free.target_start,
+                ends_free.target_end,
             )

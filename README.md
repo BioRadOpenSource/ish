@@ -117,21 +117,8 @@ Novel things:
 - the ish tool itself, doing index-free alignments
 
 ## TODO 
-- Allow for specifying ends-free-ness of semi-global
-- Choose a better default between cpu and gpu / think about more. GPU crushes on big files / long running / many files, cpu is faster for small jobs
-- Fix tests
-- Fixup SIMD widths in case we hit avx512
+
 - FASTQ support
+- Support muliple queries
+- Choose a better default between cpu and gpu / think about more. GPU crushes on big files / long running / many files, cpu is faster for small jobs
 - Add ability to not skip dotfiles
-- Support muliple quries
-
-```sh
-
-```
-
-## Bugs
-
-- If there are multiple matches in a sequence, when we reverse the target to find the start, it will find a different match than the first match.
-        - Fix: do what ssw did from the start and start the search from match end.
-        - This probably means recomputing something?
-        - Remove basic local matcher??

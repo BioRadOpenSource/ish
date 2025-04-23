@@ -52,8 +52,6 @@ struct Profile[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
 
     var profile_byte: Optional[Self.ByteVProfile]
     var profile_word: Optional[Self.WordVProfile]
-    # var byte_vectors: ProfileVectors[DType.uint8, SIMD_U8_WIDTH]
-    # var word_vectors: ProfileVectors[DType.uint16, SIMD_U16_WIDTH]
     var query_len: Int32
     var alphabet_size: UInt32
     var bias: UInt8
@@ -73,10 +71,6 @@ struct Profile[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
         var profile_word: Optional[Self.WordVProfile] = None
         var bias: UInt8 = 0
         if score_size == ScoreSize.Byte or score_size == ScoreSize.Adaptive:
-            # print("Score size is byte")
-            # print(
-            #     len(score_matrix.values)
-            # )  # Problem is around here, score matrix is garbage
             # Find the bias to use in the substitution matrix
             # The bias will be smallest value in the scoring matrix
             var bias_tmp: Int8 = 0
@@ -84,13 +78,11 @@ struct Profile[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
                 if score_matrix.values[i] < bias_tmp:
                     bias_tmp = score_matrix.values[i]
             bias = abs(bias_tmp).cast[DType.uint8]()
-            # print("Calling generate profile")
             profile_byte = Self.generate_query_profile[
                 DType.uint8, SIMD_U8_WIDTH
             ](query, score_matrix, bias)
 
         if score_size == ScoreSize.Word or score_size == ScoreSize.Adaptive:
-            # print("Score size is adaptive")
             # Find the bias to use in the substitution matrix
             # The bias will be smallest value in the scoring matrix
             var bias_tmp: Int8 = 0
@@ -105,8 +97,6 @@ struct Profile[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
         return Self(
             profile_byte,
             profile_word,
-            # ProfileVectors[DType.uint8, SIMD_U8_WIDTH](len(query)),
-            # ProfileVectors[DType.uint16, SIMD_U16_WIDTH](len(query)),
             len(query),
             score_matrix.size,
             bias,
@@ -119,10 +109,7 @@ struct Profile[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
         query: Span[UInt8], read score_matrix: ScoringMatrix, bias: UInt8
     ) -> List[SIMD[T, size]]:
         """Divide the query into segments."""
-        # print("Generating query profile")
         var segment_length = (len(query) + size - 1) // size
-        # for i in range(0, len(score_matrix.values)):
-        #     print(score_matrix.values[i])
         var profile = List[SIMD[T, size]](
             capacity=Int(score_matrix.size * segment_length)
         )
@@ -254,35 +241,30 @@ fn ssw_align[
     if not used_word:
         # print("Running rev align")
         bests_rev = sw[DType.uint8, SIMD_U8_WIDTH](
-            reference[0 : Int(ref_end1)],
-            # reference,
+            reference[0 : Int(ref_end1) + 1],
             ReferenceDirection.Reverse,
             reverse_profile.query_len,
             gap_open_penalty,
             gap_extension_penalty,
             reverse_profile.profile_byte.value(),
-            # reverse_profile.byte_vectors,
             -1,
             reverse_profile.bias,
             mask_length,
         )
     else:
         bests_rev = sw[DType.uint16, SIMD_U16_WIDTH](
-            reference[0 : Int(ref_end1)],
-            # reference,
+            reference[0 : Int(ref_end1) + 1],
             ReferenceDirection.Reverse,
             reverse_profile.query_len,
             gap_open_penalty.cast[DType.uint16](),
             gap_extension_penalty.cast[DType.uint16](),
             reverse_profile.profile_word.value(),
-            # reverse_profile.word_vectors,
             -1,
             reverse_profile.bias.cast[DType.uint16](),
             mask_length,
         )
     var ref_begin1 = bests_rev.best.reference
     var read_begin1 = read_end1 - bests_rev.best.query
-    # if fwd score  > rev score, we might be missing something?
 
     # Skipping CIGAR for now
     return Alignment(
@@ -316,41 +298,16 @@ fn sw[
 
     """
     var p_vecs = ProfileVectors[dt, width](query_len)
-    # p_vecs.zero_out()
     p_vecs.init_columns(len(reference))
     var max_score = UInt8(0).cast[dt]()
     var end_query: Int32 = query_len - 1
     var end_reference: Int32 = -1  # 0 based best alignment ending point; initialized as isn't aligned -1
-    # var segment_length = (query_len + width - 1) // width
     var segment_length = p_vecs.segment_length
 
     # Note:
     # H - Score for match / mismatch (diagonal move)
     # E - Score for gap in query (horizontal move)
     # F - Score for gap in reference (vertical move)
-    # print("Segment length:", segment_length)
-    # print("RefLen: ", len(reference))
-    # print("querylen: ", query_len)
-    # print("SIMD DType", dt)
-    # print("SIMD WIDTH", width)
-    # print("bias", bias)
-    # for i in range(
-    #     0, ScoringMatrix.blosm50().size
-    # ):  # TODO: hardcoded, should be length alphabet
-    #     print(chr(Int(NUM_TO_AA[i])), ": ", sep="", end="")
-    #     for j in range(0, segment_length):
-    #         print(profile[i * segment_length + j], ", ", end="")
-    #     print()
-    # print("Initializing")
-
-    # List to record the largest score of each reference position
-    # var max_column = List[SIMD[dt, 1]](capacity=len(reference))
-    # List to record the alignment query ending position of the largest score of each reference position
-    # var end_query_column = List[Int32](capacity=len(reference))
-
-    # for _ in range(0, len(reference)):
-    #     p_vecs.max_column.append(UInt8(0).cast[dt]())
-    #     p_vecs.end_query_column.append(0)
 
     var zero = SIMD[dt, width](0)
 
@@ -371,12 +328,9 @@ fn sw[
         begin = len(reference) - 1
         end = -1
         step = -1
-    # print("Done with init")
+
     var i = begin
     while i != end:
-        # print(
-        #     "Outer loop:", i, "-"
-        # )  # , chr(Int(NUM_TO_AA[Int(reference[i])])))
         # Initialize to 0, any errors in vH will be corrected in lazy_f
         var e = zero
         # Represents scores for alignments that end with gaps in the reference seq
@@ -392,58 +346,18 @@ fn sw[
 
         # Swap the two score buffers
         swap(p_vecs.pv_h_load, p_vecs.pv_h_store)
-        # print("vH State:", v_h)
-        # print("pvHLoad State:", end="")
-        # for i in range(0, segment_length):
-        #     print(p_vecs.pv_h_load[i], ", ", end="")
-        # print()
-
-        # print("pvHStore State:", end="")
-        # for i in range(0, segment_length):
-        #     print(p_vecs.pv_h_store[i], ", ", end="")
-        # print()
-
-        # print("pvE State:", end="")
-        # for i in range(0, segment_length):
-        #     print(p_vecs.pv_e[i], ", ", end="")
-        # print()
-
-        # print("pvHMax State:", end="")
-        # for i in range(0, segment_length):
-        #     print(p_vecs.pv_h_max[i], ", ", end="")
-        # print()
-
-        # print("max_column State:", end="")
-        # for i in range(0, len(reference)):
-        #     print(p_vecs.max_column[i], ", ", end="")
-        # print()
-
-        # print("end_read_column State:", end="")
-        # for i in range(0, len(reference)):
-        #     print(p_vecs.end_query_column[i], ", ", end="")
-        # print()
 
         # Inner loop to process the query sequence
         for j in range(0, segment_length):
-            # print("\tInner loop for query sequence, checcking segment:", j)
-            # print("\tSegement J's query profile:", profile[profile_idx + j])
             # Add profile score to
             v_h = saturating_add(v_h, profile[profile_idx + j])
             v_h = saturating_sub(v_h, v_bias)  # adjust for bias
-            # print(
-            #     "\t\tState of vH after adding profile and subtracting bias: ",
-            #     v_h,
-            # )
 
             # Get max from current_cell_score, horizontal gap, and vertical gap score
-            # print("\t\t", "Get max from current cell / hgap / vgap")
             e = p_vecs.pv_e[j]
             v_h = max(v_h, e)
             v_h = max(v_h, v_f)
             v_max_column = max(v_max_column, v_h)
-            # print("\t\te State: ", e)
-            # print("\t\tvMaxColumn State: ", v_max_column)
-            # print("\t\tvH State after getting max: ", v_h)
 
             # Save current_cell_score
             p_vecs.pv_h_store[j] = v_h
@@ -453,61 +367,35 @@ fn sw[
             e = saturating_sub(e, v_gap_ext)
             e = max(e, v_h)
             p_vecs.pv_e[j] = e
-            # print("\t\te State after update: ", e)
 
             # update vF
             v_f = saturating_sub(v_f, v_gap_ext)
             v_f = max(v_f, v_h)
-            # print("\t\tvF State after update:", v_f)
 
             # load the next vH
             v_h = p_vecs.pv_h_load[j]
-            # print("\t\tnext vH:", v_h)
 
-        # print("\tStarting LazyF")
         # Lazy_F loop, disallows adjacent insertion and then deletion from SWPS3
-        # Possible speedup - check if v_f has any updates to start with
-        # var break_out = (v_f == zero).reduce_and()
-        # var k = 0
-        # while not break_out and k < width:
-        # k += 1
         var break_out = False
 
         @parameter
         for _k in range(0, width):
             v_f = v_f.shift_right[1]()
-            # print("\tLeft Shift vF:", v_f)
-            # print("\tWalking Segments")
             for j in range(0, segment_length):
-                # print("\t\tvF:               ", v_f)
                 v_h = p_vecs.pv_h_store[j]
-                # print("\t\tvH from store:    ", v_h)
                 v_h = max(v_h, v_f)
-                # print("\t\tvH post max store:", v_h)
-                # print("\t\tvH after left shift and max vF", v_h)
                 v_max_column = max(v_max_column, v_h)
-                # print("\t\t vMaxColumn State:", v_max_column)
                 p_vecs.pv_h_store[j] = v_h
 
                 v_h = saturating_sub(v_h, v_gap_open)
                 v_f = saturating_sub(v_f, v_gap_ext)
-                # print("\t\tnew vH: ", v_h)
-                # print("\t\tnew vF: ", v_f)
 
                 # Early termination check
                 if not (v_f > v_h).reduce_or():
                     break_out = True
                     break
-                # var v_temp = saturating_sub(v_f, v_h)
-                # # print("\t\tnew v_temp: ", v_temp)
-                # var packed = v_temp == zero
-                # if packed.reduce_and():
-                #     # print("\t\tCan terminate early")
-                #     break_out = True
-                #     break
             if break_out:
                 break
-        # print("\t Done with main loops")
 
         # Check for new max score
         v_max_score = max(v_max_score, v_max_column)
@@ -544,51 +432,8 @@ fn sw[
                 if temp < Int(end_query):
                     end_query = temp
 
-    # print("pvHMax State:", end="")
-    # for i in range(0, segment_length):
-    #     print(p_vecs.pv_h_max[i], ", ", end="")
-    # print()
-
-    # print("max_column State:", end="")
-    # for i in range(0, len(reference)):
-    #     print(p_vecs.max_column[i], ", ", end="")
-    # print()
-
-    # print("end_read_column State:", end="")
-    # for i in range(0, len(reference)):
-    #     print(p_vecs.end_query_column[i], ", ", end="")
-    # print()
-    # Find the most possible 2nd alignment
-    # var score_0 = max_score + bias if max_score + bias >= 255 else max_score
-    # var score_0 = saturating_add(max_score, bias)
     var bests = AlignmentResult(
         AlignmentEnd(max_score.cast[DType.int32](), end_reference, end_query),
     )
 
-    # Candidate for SIMD?
-    # edge = (end_reference - mask_length) if (
-    #     end_reference - mask_length
-    # ) > 0 else 0
-    # for i in range(0, edge):
-    #     if p_vecs.max_column[i] > bests.second_best.score.cast[dt]():
-    #         bests.second_best.score = p_vecs.max_column[i].cast[DType.uint16]()
-    #         bests.second_best.reference = i
-
-    # edge = (
-    #     len(reference) if (end_reference + mask_length)
-    #     > len(reference) else end_reference + mask_length
-    # )
-    # for i in range(edge + 1, len(reference)):
-    #     if p_vecs.max_column[i] > bests.second_best.score.cast[dt]():
-    #         bests.second_best.score = p_vecs.max_column[i].cast[DType.uint16]()
-    #         bests.second_best.reference = i
-
-    # print(
-    #     "BEST: score:",
-    #     bests.best.score,
-    #     "ref:",
-    #     bests.best.reference,
-    #     "read:",
-    #     bests.best.query,
-    # )
     return bests

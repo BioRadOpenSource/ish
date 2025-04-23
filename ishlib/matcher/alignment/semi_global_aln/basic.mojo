@@ -243,10 +243,6 @@ fn semi_global_parasail_gpu[
     max_query_length: UInt,
     address_space: AddressSpace = AddressSpace(0),
     target_address_space: AddressSpace = AddressSpace(0),
-    free_query_start_gaps: Bool = False,
-    free_query_end_gaps: Bool = False,
-    free_target_start_gaps: Bool = False,
-    free_target_end_gaps: Bool = False,
     matrix_skip_lookup: Bool = False,
 ](
     query_ptr: UnsafePointer[UInt8, address_space=address_space],
@@ -261,6 +257,10 @@ fn semi_global_parasail_gpu[
     ],
     gap_open_penalty: Scalar[DT] = -3,
     gap_extension_penalty: Scalar[DT] = -1,
+    free_query_start_gaps: Bool = False,
+    free_query_end_gaps: Bool = False,
+    free_target_start_gaps: Bool = False,
+    free_target_end_gaps: Bool = False,
 ) -> SGResult:
     """Semi-global alignment to find the end points of the query and target.
 
@@ -310,7 +310,7 @@ fn semi_global_parasail_gpu[
     var end_target = target_len
 
     # First Row
-    @parameter
+    # @parameter
     if not free_query_start_gaps:
         for j in range(1, cols):
             H[j] = gap_open_penalty + ((j - 1) * gap_extension_penalty)
@@ -324,7 +324,7 @@ fn semi_global_parasail_gpu[
         NH = H[0]
         WH = NUM(0)
 
-        @parameter
+        # @parameter
         if not free_target_start_gaps:
             WH = gap_open_penalty + ((i - 1) * gap_extension_penalty)
 
@@ -351,7 +351,7 @@ fn semi_global_parasail_gpu[
             WH = max(max(H_dag, E), F[j])
             H[j] = WH
 
-        @parameter
+        # @parameter
         if free_target_end_gaps:
             if WH > score:
                 score = WH
@@ -362,7 +362,7 @@ fn semi_global_parasail_gpu[
     NH = H[0]
     WH = NUM(0)
 
-    @parameter
+    # @parameter
     if not free_target_start_gaps:
         WH = gap_open_penalty + ((target_len - 1) * gap_extension_penalty)
     var E = HALF_MIN
@@ -387,7 +387,7 @@ fn semi_global_parasail_gpu[
         WH = max(max(H_dag, E), F[j])
         H[j] = WH
 
-        @parameter
+        # @parameter
         if free_target_end_gaps and free_query_end_gaps:
             if WH > score:
                 score = WH
@@ -402,7 +402,7 @@ fn semi_global_parasail_gpu[
                 end_target = target_len - 1
                 end_query = j - 1
 
-    @parameter
+    # @parameter
     if free_target_end_gaps:
         if WH > score:
             score = WH
