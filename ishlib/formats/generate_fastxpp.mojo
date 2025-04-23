@@ -31,6 +31,7 @@ fn generate_fastxpp(
     seq_lines: List[String],
     qualities: Optional[List[String]] = None,
 ) -> String:
+    var bpl = string_count(seq_lines[0]) + 1  # bases + LF
     var seq_len: Int = 0
     for i in range(len(seq_lines)):
         seq_len = seq_len + string_count(seq_lines[i])
@@ -50,6 +51,29 @@ fn generate_fastxpp(
         for i in range(len(q)):
             rec.write(q[i], "\n")
 
+    return rec
+
+
+fn generate_fastxpp_bpl(
+    marker: String,
+    header: String,
+    seq_lines: List[String],
+    qualities: Optional[List[String]] = None,
+) -> String:
+    var bpl = string_count(seq_lines[0]) + 1          # bases + LF
+    var slen = (bpl - 1) * (len(seq_lines) - 1) +     # (bases per full line)
+               string_count(seq_lines[-1])            # + last (ragged) line
+    var meta = String(string_count(header)) + ":" +
+               String(slen) + ":" +
+               String(len(seq_lines)) + ":" +
+               String(bpl)
+    var rec = marker + "`" + meta + "`" + header + "\n"
+    for i in range(len(seq_lines)):
+        rec.write(seq_lines[i], "\n")
+    if qualities:
+        var q = qualities.value()
+        for i in range(len(q)):
+            rec.write(q[i], "\n")
     return rec
 
 
@@ -109,7 +133,7 @@ fn main() raises:
                 qlines.append(read_line(reader))
             qual = Optional[List[String]](qlines)
 
-        writer.write(generate_fastxpp(marker, header, seq, qual))
+        writer.write(generate_fastxpp_bpl(marker, header, seq, qual))
 
     writer.flush()
     writer.close()
