@@ -188,7 +188,6 @@ fn test_sw_byte() raises:
         gap_open,
         gap_extend,
         profile.profile_byte.value(),
-        profile.byte_vectors,
         -1,  # No early termination
         profile.bias,
         4,  # Small mask length
@@ -234,7 +233,6 @@ fn test_sw_byte() raises:
         gap_open,
         gap_extend,
         profile.profile_byte.value(),
-        profile.byte_vectors,
         -1,
         profile.bias,
         4,
@@ -262,7 +260,6 @@ fn test_sw_byte() raises:
         gap_open,
         gap_extend,
         profile.profile_byte.value(),
-        profile.byte_vectors,
         0,
         profile.bias,
         4,
@@ -328,7 +325,6 @@ fn test_sw_byte_comprehensive() raises:
         gap_open,
         gap_extend,
         profile1.profile_byte.value(),
-        profile1.byte_vectors,
         -1,
         profile1.bias,
         4,
@@ -355,7 +351,6 @@ fn test_sw_byte_comprehensive() raises:
         gap_open,
         gap_extend,
         profile2.profile_byte.value(),
-        profile2.byte_vectors,
         -1,
         profile2.bias,
         4,
@@ -378,7 +373,6 @@ fn test_sw_byte_comprehensive() raises:
         gap_open,
         gap_extend,
         profile3.profile_byte.value(),
-        profile3.byte_vectors,
         -1,
         profile3.bias,
         4,
@@ -416,7 +410,6 @@ fn test_compare_vs_c() raises:
         gap_open,
         gap_extend,
         profile.profile_byte.value(),
-        profile.byte_vectors,
         -1,  # No early termination
         profile.bias,
         15,  # Small mask length

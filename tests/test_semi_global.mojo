@@ -2,7 +2,7 @@ from testing import assert_equal, assert_true
 from ishlib.matcher.alignment import AlignmentResult
 from ishlib.matcher.alignment.semi_global_aln.basic import (
     semi_global_parasail,
-    semi_global_parasail_start_end_end,
+    semi_global_parasail_start_end,
 )
 from ishlib.matcher.alignment.scoring_matrix import ScoringMatrix
 from ishlib.matcher.alignment.striped_utils import ScoreSize
@@ -175,7 +175,7 @@ fn test_query_substring() raises:
     assert_equal(result.target, 5, "Target end should be at index 5")
 
     # Test with start/end detection
-    var alignment = semi_global_parasail_start_end_end(
+    var alignment = semi_global_parasail_start_end(
         query,
         target,
         rev_query,
@@ -188,17 +188,17 @@ fn test_query_substring() raises:
     )
 
     assert_equal(
-        alignment.score,
+        alignment.value().score,
         8,
         "Query as substring with start/end detection should score 8",
     )
     assert_equal(
-        alignment.coords.value().start,
+        alignment.value().coords.value().start,
         2,
         "Alignment should start at target index 2",
     )
     assert_equal(
-        alignment.coords.value().end,
+        alignment.value().coords.value().end,
         5,
         "Alignment should end at target index 5",
     )
@@ -243,7 +243,6 @@ fn test_query_substring_striped() raises:
     # Test with start/end detection
     var alignment = semi_global_aln_start_end[DType.uint16, 8](
         reference=target,
-        rev_reference=rev_target,
         query_len=len(query),
         gap_open_penalty=3,
         gap_extension_penalty=1,
@@ -259,17 +258,17 @@ fn test_query_substring_striped() raises:
     )
 
     assert_equal(
-        alignment.score,
+        alignment.value().score,
         8,
         "Query as substring with start/end detection should score 8",
     )
     assert_equal(
-        alignment.target_start,
+        alignment.value().target_start,
         2,
         "Alignment should start at target index 2",
     )
     assert_equal(
-        alignment.target_end,
+        alignment.value().target_end,
         5,
         "Alignment should end at target index 5",
     )
@@ -314,7 +313,6 @@ fn test_target_substring() raises:
     # Test with start/end detection
     var alignment = semi_global_aln_start_end[DType.uint16, 8](
         reference=target,
-        rev_reference=rev_target,
         query_len=len(query),
         gap_open_penalty=3,
         gap_extension_penalty=1,
@@ -330,17 +328,17 @@ fn test_target_substring() raises:
     )
 
     assert_equal(
-        alignment.score,
+        alignment.value().score,
         8,
         "Target as substring with start/end detection should score 8",
     )
     assert_equal(
-        alignment.target_start,
+        alignment.value().target_start,
         0,
         "Alignment should start at target index 0",
     )
     assert_equal(
-        alignment.target_end,
+        alignment.value().target_end,
         3,
         "Alignment should end at target index 3",
     )
@@ -372,7 +370,7 @@ fn test_target_substring_striped() raises:
     assert_equal(result.target, 3, "Target end should be at index 3")
 
     # Test with start/end detection
-    var alignment = semi_global_parasail_start_end_end(
+    var alignment = semi_global_parasail_start_end(
         query,
         target,
         rev_query,
@@ -385,17 +383,17 @@ fn test_target_substring_striped() raises:
     )
 
     assert_equal(
-        alignment.score,
+        alignment.value().score,
         8,
         "Target as substring with start/end detection should score 8",
     )
     assert_equal(
-        alignment.coords.value().start,
+        alignment.value().coords.value().start,
         0,
         "Alignment should start at target index 0",
     )
     assert_equal(
-        alignment.coords.value().end,
+        alignment.value().coords.value().end,
         3,
         "Alignment should end at target index 3",
     )
@@ -472,7 +470,7 @@ fn test_alignment_with_gap() raises:
     assert_equal(result.score, 5, "Alignment with gap should score 5")
 
     # Test with start/end detection
-    var alignment = semi_global_parasail_start_end_end(
+    var alignment = semi_global_parasail_start_end(
         query,
         target,
         rev_query,
@@ -484,7 +482,9 @@ fn test_alignment_with_gap() raises:
         free_target_end_gaps=False,
     )
 
-    assert_equal(alignment.score, 5, "Alignment with gap should score 5")
+    assert_equal(
+        alignment.value().score, 5, "Alignment with gap should score 5"
+    )
 
 
 fn test_no_match() raises:
@@ -627,7 +627,7 @@ fn test_complex_case() raises:
             and not config.t_start
             and not config.t_end
         ):
-            var alignment = semi_global_parasail_start_end_end(
+            var alignment = semi_global_parasail_start_end(
                 query,
                 target,
                 rev_query,
@@ -640,20 +640,21 @@ fn test_complex_case() raises:
             )
 
             assert_equal(
-                alignment.score,
+                alignment.value().score,
                 config.score,
                 "Complex case start/end should match score",
             )
             assert_true(
-                alignment.coords.value().start >= 0,
+                alignment.value().coords.value().start >= 0,
                 "Start position should be valid",
             )
             assert_true(
-                alignment.coords.value().end <= len(target),
+                alignment.value().coords.value().end <= len(target),
                 "End position should be valid",
             )
             assert_true(
-                alignment.coords.value().start <= alignment.coords.value().end,
+                alignment.value().coords.value().start
+                <= alignment.value().coords.value().end,
                 "Start should be <= end",
             )
 
@@ -669,7 +670,7 @@ fn test_reversed_alignment() raises:
     rev_target.reverse()
 
     # The alignment should find target within query
-    var alignment = semi_global_parasail_start_end_end(
+    var alignment = semi_global_parasail_start_end(
         query,
         target,
         rev_query,
@@ -681,14 +682,18 @@ fn test_reversed_alignment() raises:
         free_target_end_gaps=False,
     )
     # reminder: all coords are relative to the target
-    assert_equal(alignment.score, 8, "Reversed alignment should score 8")
     assert_equal(
-        alignment.coords.value().start,
+        alignment.value().score, 8, "Reversed alignment should score 8"
+    )
+    assert_equal(
+        alignment.value().coords.value().start,
         0,
         "Alignment should start at query index 0",
     )
     assert_equal(
-        alignment.coords.value().end, 3, "Alignment should end at query index 5"
+        alignment.value().coords.value().end,
+        3,
+        "Alignment should end at query index 5",
     )
 
 
@@ -727,7 +732,7 @@ fn test_biological_example() raises:
 
     # ATGGCGTGCAATGCCCGGTACGT
     # -------------CCCGGT----
-    var alignment = semi_global_parasail_start_end_end(
+    var alignment = semi_global_parasail_start_end(
         gene,
         genome,
         rev_gene,
@@ -738,14 +743,16 @@ fn test_biological_example() raises:
         free_target_start_gaps=True,
         free_target_end_gaps=True,
     )
-    assert_equal(alignment.score, 12, "Middle gene should score 12")
+    assert_equal(alignment.value().score, 12, "Middle gene should score 12")
     assert_equal(
-        alignment.coords.value().start,
+        alignment.value().coords.value().start,
         13,
         "Middle gene should start at index 13",
     )
     assert_equal(
-        alignment.coords.value().end, 18, "Middle gene should end at index 18"
+        alignment.value().coords.value().end,
+        18,
+        "Middle gene should end at index 18",
     )
 
     # Find gene at end of genome
@@ -753,7 +760,7 @@ fn test_biological_example() raises:
     rev_gene = gene.copy()
     rev_gene.reverse()
 
-    alignment = semi_global_parasail_start_end_end(
+    alignment = semi_global_parasail_start_end(
         gene,
         genome,
         rev_gene,
@@ -766,12 +773,16 @@ fn test_biological_example() raises:
     )
     # ATGGCGTGCAATGCCCGGTACGT
     # ------------------TACGT
-    assert_equal(alignment.score, 10, "End gene should score 10")
+    assert_equal(alignment.value().score, 10, "End gene should score 10")
     assert_equal(
-        alignment.coords.value().start, 18, "End gene should start at index 18"
+        alignment.value().coords.value().start,
+        18,
+        "End gene should start at index 18",
     )
     assert_equal(
-        alignment.coords.value().end, 22, "End gene should end at index 22"
+        alignment.value().coords.value().end,
+        22,
+        "End gene should end at index 22",
     )
 
 
@@ -943,7 +954,6 @@ fn test_alignment_with_gap_striped() raises:
     # Test with start/end detection
     var alignment = semi_global_aln_start_end[DType.uint16, 8](
         reference=target,
-        rev_reference=rev_target,
         query_len=len(query),
         gap_open_penalty=3,
         gap_extension_penalty=1,
@@ -958,7 +968,9 @@ fn test_alignment_with_gap_striped() raises:
         free_target_end_gaps=False,
     )
 
-    assert_equal(alignment.score, 5, "Alignment with gap should score 5")
+    assert_equal(
+        alignment.value().score, 5, "Alignment with gap should score 5"
+    )
 
 
 fn test_no_match_striped() raises:
@@ -1139,7 +1151,6 @@ fn test_complex_case_striped() raises:
         ):
             var alignment = semi_global_aln_start_end[DType.uint16, 8](
                 reference=target,
-                rev_reference=rev_target,
                 query_len=len(query),
                 gap_open_penalty=3,
                 gap_extension_penalty=1,
@@ -1155,20 +1166,20 @@ fn test_complex_case_striped() raises:
             )
 
             assert_equal(
-                alignment.score,
+                alignment.value().score,
                 config.score,
                 "Complex case start/end should match score",
             )
             assert_true(
-                alignment.target_start >= 0,
+                alignment.value().target_start >= 0,
                 "Start position should be valid",
             )
             assert_true(
-                alignment.target_end <= len(target),
+                alignment.value().target_end <= len(target),
                 "End position should be valid",
             )
             assert_true(
-                alignment.target_start <= alignment.target_end,
+                alignment.value().target_start <= alignment.value().target_end,
                 "Start should be <= end",
             )
 
@@ -1248,7 +1259,6 @@ fn test_complex_case_striped_small() raises:
         ):
             var alignment = semi_global_aln_start_end[DType.uint8, 16](
                 reference=target,
-                rev_reference=rev_target,
                 query_len=len(query),
                 gap_open_penalty=3,
                 gap_extension_penalty=1,
@@ -1264,20 +1274,20 @@ fn test_complex_case_striped_small() raises:
             )
 
             assert_equal(
-                alignment.score,
+                alignment.value().score,
                 config.score,
                 "Complex case start/end should match score",
             )
             assert_true(
-                alignment.target_start >= 0,
+                alignment.value().target_start >= 0,
                 "Start position should be valid",
             )
             assert_true(
-                alignment.target_end <= len(target),
+                alignment.value().target_end <= len(target),
                 "End position should be valid",
             )
             assert_true(
-                alignment.target_start <= alignment.target_end,
+                alignment.value().target_start <= alignment.value().target_end,
                 "Start should be <= end",
             )
 
@@ -1288,9 +1298,7 @@ fn test_reversed_alignment_striped() raises:
     var query = score_matrix.convert_ascii_to_encoding("TTACGTCC".as_bytes())
     var target = score_matrix.convert_ascii_to_encoding("ACGT".as_bytes())
     var rev_query = query.copy()
-    var rev_target = target.copy()
     rev_query.reverse()
-    rev_target.reverse()
     var profile = Profile[
         16, 8, SmallType = DType.uint8, LargeType = DType.uint16
     ](query, score_matrix, ScoreSize.Adaptive)
@@ -1301,7 +1309,6 @@ fn test_reversed_alignment_striped() raises:
     # The alignment should find target within query
     var alignment = semi_global_aln_start_end[DType.uint16, 8](
         reference=target,
-        rev_reference=rev_target,
         query_len=len(query),
         gap_open_penalty=3,
         gap_extension_penalty=1,
@@ -1316,14 +1323,18 @@ fn test_reversed_alignment_striped() raises:
         free_target_end_gaps=False,
     )
 
-    assert_equal(alignment.score, 8, "Reversed alignment should score 8")
     assert_equal(
-        alignment.target_start,
-        0,
-        "Alignment should start at target index 0",
+        alignment.value().score, 8, "Reversed alignment should score 8"
     )
     assert_equal(
-        alignment.target_end, 3, "Alignment should end at target index 3"
+        alignment.value().target_end,
+        3,
+        "Alignment should end at target index 3",
+    )
+    assert_equal(
+        alignment.value().target_start,
+        0,
+        "Alignment should start at target index 0",
     )
 
 
@@ -1378,7 +1389,6 @@ fn test_biological_example_striped() raises:
     # -------------CCCGGT----
     var alignment = semi_global_aln_start_end[DType.uint16, 8](
         reference=genome,
-        rev_reference=rev_genome,
         query_len=len(gene),
         gap_open_penalty=3,
         gap_extension_penalty=1,
@@ -1392,13 +1402,15 @@ fn test_biological_example_striped() raises:
         free_target_start_gaps=True,
         free_target_end_gaps=True,
     )
-    assert_equal(alignment.score, 12, "Middle gene should score 12")
+    assert_equal(alignment.value().score, 12, "Middle gene should score 12")
     assert_equal(
-        alignment.target_start,
+        alignment.value().target_end, 18, "Middle gene should end at index 18"
+    )
+    assert_equal(
+        alignment.value().target_start,
         13,
         "Middle gene should start at index 13",
     )
-    assert_equal(alignment.target_end, 18, "Middle gene should end at index 18")
 
     # Find gene at end of genome
     gene = score_matrix.convert_ascii_to_encoding("TACGT".as_bytes())
@@ -1413,7 +1425,6 @@ fn test_biological_example_striped() raises:
 
     alignment = semi_global_aln_start_end[DType.uint16, 8](
         reference=genome,
-        rev_reference=rev_genome,
         query_len=len(gene),
         gap_open_penalty=3,
         gap_extension_penalty=1,
@@ -1429,11 +1440,13 @@ fn test_biological_example_striped() raises:
     )
     # ATGGCGTGCAATGCCCGGTACGT
     # ------------------TACGT
-    assert_equal(alignment.score, 10, "End gene should score 10")
+    assert_equal(alignment.value().score, 10, "End gene should score 10")
     assert_equal(
-        alignment.target_start, 18, "End gene should start at index 18"
+        alignment.value().target_start, 18, "End gene should start at index 18"
     )
-    assert_equal(alignment.target_end, 22, "End gene should end at index 22")
+    assert_equal(
+        alignment.value().target_end, 22, "End gene should end at index 22"
+    )
 
 
 fn run_striped_tests() raises:
