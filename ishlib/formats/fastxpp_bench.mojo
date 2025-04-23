@@ -1,6 +1,7 @@
 import sys
 from time.time import perf_counter
 from ishlib.vendor.kseq import FastxReader, BufferedReader, KRead
+from ExtraMojo.utils.ir import dump_ir
 
 
 # ── thin wrapper so FileHandle implements KRead ─────────────────────────
@@ -49,24 +50,78 @@ fn bench_fastxpp(path: String) raises -> (Int, Int, Float64):
     return (rec, seq, perf_counter() - t0)
 
 
+fn bench_fastxpp_bpl(path: String) raises -> (Int, Int, Float64):
+    var fh = open(path, "r")
+    var rdr = FastxReader[read_comment=False](BufferedReader(FileReader(fh^)))
+    var rec = 0
+    var seq = 0
+    var t0 = perf_counter()
+    while True:
+        var n = rdr.read_fastxpp_bpl()
+        if n < 0:
+            break
+        rec += 1
+        seq += n
+    return (rec, seq, perf_counter() - t0)
+
+
+fn bench_fastxpp_bpl2(path: String) raises -> (Int, Int, Float64):
+    var fh = open(path, "r")
+    var rdr = FastxReader[read_comment=False](BufferedReader(FileReader(fh^)))
+    var rec = 0
+    var seq = 0
+    var t0 = perf_counter()
+    while True:
+        var n = rdr.read_fastxpp_bpl()
+        if n < 0:
+            break
+        rec += 1
+        seq += n
+    return (rec, seq, perf_counter() - t0)
+
+
 fn main() raises:
     var argv = sys.argv()
     if len(argv) < 2 or len(argv) > 3:
-        print("Usage: mojo run fastxpp_bench.mojo <file> [fastxpp]")
+        print("Usage: mojo run fastxpp_bench.mojo <file> [orig|fastxpp|bpl]")
         return
 
     var path = String(argv[1])
-    var use_fast = (len(argv) == 3) and (String(argv[2]) == "fastxpp")
+    var mode: String = "orig"  # default when no flag given
+    if len(argv) == 3:
+        mode = String(argv[2])
 
-    if use_fast:
-        var tup = bench_fastxpp(path)  # (Int, Int, Float64)
-        var r = tup[0]  # records
-        var s = tup[1]  # bases
-        var t = tup[2]  # seconds
-        print("mode=fastxpp  records=", r, "  bases=", s, "  time=", t, "s")
-    else:
+    if mode == "orig":
         var tup = bench_original(path)
         var r = tup[0]
         var s = tup[1]
         var t = tup[2]
-        print("mode=orig     records=", r, "  bases=", s, "  time=", t, "s")
+        print(
+            "mode=orig          records=", r, "  bases=", s, "  time=", t, "s"
+        )
+    elif mode == "fastxpp":
+        var tup = bench_fastxpp(path)
+        var r = tup[0]
+        var s = tup[1]
+        var t = tup[2]
+        print(
+            "mode=fastxpp       records=", r, "  bases=", s, "  time=", t, "s"
+        )
+    elif mode == "bpl":
+        var tup = bench_fastxpp_bpl(path)
+        var r = tup[0]
+        var s = tup[1]
+        var t = tup[2]
+        print(
+            "mode=fastxpp_bpl   records=", r, "  bases=", s, "  time=", t, "s"
+        )
+    elif mode == "filler":
+        var tup = bench_fastxpp_bpl2(path)
+        var r = tup[0]
+        var s = tup[1]
+        var t = tup[2]
+        print(
+            "mode=fastxpp_bpl   records=", r, "  bases=", s, "  time=", t, "s"
+        )
+    else:
+        print("Unknown mode:", mode)
