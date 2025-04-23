@@ -19,6 +19,7 @@ from ishlib.matcher import (
     WhereComputed,
     ComputedMatchResult,
 )
+from ishlib.matcher.alignment.scoring_matrix import MatrixKind
 from ishlib.searcher_settings import SearcherSettings
 from ishlib.vendor.log import Logger
 
@@ -70,6 +71,7 @@ fn parallel_starts_ends[
             matcher.matrix_kind(),
             settings.gap_open_penalty,
             settings.gap_extension_penalty,
+            settings.sg_ends_free,
             max_target_length=max_target_length,
         )
         ctx[].host_create_input_buffers()

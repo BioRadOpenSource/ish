@@ -36,6 +36,10 @@ fn gpu_align_coarse[
     thread_count: UInt,
     gap_open: UInt,
     gap_extend: UInt,
+    free_query_start_gaps: Bool = True,
+    free_query_end_gaps: Bool = True,
+    free_target_start_gaps: Bool = True,
+    free_target_end_gaps: Bool = True,
 ):
     alias matrix_skip_lookup = matrix_kind.skip_lookup()
     # Load scoring matrix into shared memory
@@ -78,13 +82,10 @@ fn gpu_align_coarse[
         var target_len = Int(target_ends[idx])
 
         # Perform the alignment
+        # TODO: shift the ends back to being a param?
         var result = semi_global_parasail_gpu[
             DType.int16,
             max_query_length=max_query_length,
-            free_query_start_gaps=True,
-            free_query_end_gaps=True,
-            free_target_start_gaps=True,
-            free_target_end_gaps=True,
             matrix_skip_lookup=matrix_skip_lookup,
         ](
             query_seq_ptr,
@@ -97,6 +98,10 @@ fn gpu_align_coarse[
             basic_matrix,
             gap_open_penalty=-Int(gap_open),
             gap_extension_penalty=-Int(gap_extend),
+            free_query_start_gaps=free_query_start_gaps,
+            free_query_end_gaps=free_query_end_gaps,
+            free_target_start_gaps=free_target_start_gaps,
+            free_target_end_gaps=free_target_end_gaps,
         )
 
         barrier()

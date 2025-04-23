@@ -3,6 +3,7 @@ from gpu.host import DeviceBuffer
 from memory import Span, UnsafePointer
 
 from ishlib.matcher.alignment.scoring_matrix import MatrixKind
+from ishlib.searcher_settings import SemiGlobalEndsFreeness
 
 
 @value
@@ -70,7 +71,8 @@ trait GpuMatcher(Matcher):
 
     @staticmethod
     fn batch_match_coarse[
-        max_query_length: UInt, max_target_length: UInt
+        max_query_length: UInt,
+        max_target_length: UInt,
     ](
         query: DeviceBuffer[DType.uint8],
         ref_buffer: DeviceBuffer[DType.uint8],
@@ -86,6 +88,7 @@ trait GpuMatcher(Matcher):
         thread_count: Int,
         gap_open: UInt,
         gap_extend: UInt,
+        ends_free: SemiGlobalEndsFreeness,
     ):
         """A coarse grain mono-directional match function to be used as a GPU kernel.
 

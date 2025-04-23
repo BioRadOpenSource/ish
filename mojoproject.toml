@@ -20,7 +20,7 @@ build-bench-gpu = "magic run mojo build -D SIMD_MOD=1 --march native  -I ./ishli
 build = "magic run mojo build -D ISH_LOG_LEVEL=info --march native -o ish main.mojo"
 debug = "magic run mojo build -D ISH_LOG_LEVEL=debug --debug-level line-tables --march native -o ish main.mojo"
 pkglib = "magic run mojo package ./ishlib"
-testlib = "magic run mojo test -I ishlib"
+testlib = "magic run mojo test -I ishlib --co && magic run mojo test -I ishlib"
 
 [dependencies]
 max = "=25.2.0"

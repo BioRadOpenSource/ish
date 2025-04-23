@@ -4,9 +4,10 @@ from gpu.memory import AddressSpace
 from math import ceildiv
 from memory import UnsafePointer, stack_allocation, memcpy
 
+from ishlib.gpu.dynamic_2d_matrix import Dynamic2DMatrix, StorageFormat
 from ishlib.matcher import Searchable
 from ishlib.matcher.alignment.scoring_matrix import MatrixKind
-from ishlib.gpu.dynamic_2d_matrix import Dynamic2DMatrix, StorageFormat
+from ishlib.searcher_settings import SemiGlobalEndsFreeness
 from ishlib.vendor.log import Logger
 
 
@@ -21,6 +22,7 @@ struct BlockInfo:
     var matrix_kind: MatrixKind
     var gap_open: UInt
     var gap_extend: UInt
+    var sg_ends_free: SemiGlobalEndsFreeness
 
 
 @value
@@ -150,6 +152,7 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
         matrix_kind: MatrixKind,
         gap_open: UInt,
         gap_extend: UInt,
+        sg_ends_free: SemiGlobalEndsFreeness,
         max_target_length: UInt = 1024,
     ):
         self.block_info = BlockInfo(
@@ -161,6 +164,7 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
             matrix_kind,
             gap_open,
             gap_extend,
+            sg_ends_free,
         )
 
     fn _create_some_input_buffers(
@@ -481,6 +485,7 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
             threads_to_launch,
             self.block_info.value().gap_open,
             self.block_info.value().gap_extend,
+            self.block_info.value().sg_ends_free,
             grid_dim=num_blocks,
             block_dim=block_size,
         )

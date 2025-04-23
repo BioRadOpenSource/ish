@@ -34,6 +34,7 @@ struct SearcherSettings:
     var batch_size: UInt
     var max_gpus: UInt
     var tty_info: TTYInfoResult
+    var sg_ends_free: SemiGlobalEndsFreeness
 
     fn is_output_stdout(read self) -> Bool:
         return self.output_file == "/dev/stdout"
@@ -157,6 +158,20 @@ struct SearcherSettings:
                 ),
             )
         )
+        parser.add_opt(
+            OptConfig(
+                "sg-ends-free",
+                OptKind.StringLike,
+                default_value=String("FFTT"),
+                description=(
+                    "The ends-free for semi-global alignment, if used. The free"
+                    " ends are: (query_start, query_end, target_start,"
+                    " target_end). These must be specified with a T or F, all"
+                    " four must be specified. By default this target ends are"
+                    " free."
+                ),
+            )
+        )
 
         parser.expect_at_least_n_args(
             1,
@@ -185,6 +200,11 @@ struct SearcherSettings:
             var gap_extend = abs(opts.get_int("gap-extend"))
             var match_algo = opts.get_string("match-algo")
             var record_type = opts.get_string("record-type")
+
+            var sg_ends_free = SemiGlobalEndsFreeness.from_str(
+                opts.get_string("sg-ends-free")
+            )
+
             var threads = opts.get_int("threads")
             if threads <= 0:
                 raise "Threads must be >= 1."
@@ -223,6 +243,7 @@ struct SearcherSettings:
                 batch_size,
                 max_gpus,
                 tty.info(STDOUT_FD),
+                sg_ends_free,
             )
         except e:
             print(parser.help_msg())
@@ -241,3 +262,132 @@ fn expand_files_to_search(files: List[String]) raises -> List[Path]:
         else:
             out.append(path)
     return out
+
+
+@value
+@register_passable
+struct SemiGlobalEndsFreeness:
+    var query_start: Bool
+    var query_end: Bool
+    var target_start: Bool
+    var target_end: Bool
+
+    alias TTTT = Self(
+        True,
+        True,
+        True,
+        True,
+    )
+    alias TTTF = Self(
+        True,
+        True,
+        True,
+        False,
+    )
+    alias TTFT = Self(
+        True,
+        True,
+        False,
+        True,
+    )
+    alias TTFF = Self(
+        True,
+        True,
+        False,
+        False,
+    )
+    alias TFTT = Self(
+        True,
+        False,
+        True,
+        True,
+    )
+    alias TFTF = Self(
+        True,
+        False,
+        True,
+        False,
+    )
+    alias TFFT = Self(
+        True,
+        False,
+        False,
+        True,
+    )
+    alias TFFF = Self(
+        True,
+        False,
+        False,
+        False,
+    )
+    alias FTTT = Self(
+        False,
+        True,
+        True,
+        True,
+    )
+    alias FTTF = Self(
+        False,
+        True,
+        True,
+        False,
+    )
+    alias FTFT = Self(
+        False,
+        True,
+        False,
+        True,
+    )
+    alias FTFF = Self(
+        False,
+        True,
+        False,
+        False,
+    )
+    alias FFTT = Self(
+        False,
+        False,
+        True,
+        True,
+    )
+    alias FFTF = Self(
+        False,
+        False,
+        True,
+        False,
+    )
+    alias FFFT = Self(
+        False,
+        False,
+        False,
+        True,
+    )
+    alias FFFF = Self(
+        False,
+        False,
+        False,
+        False,
+    )
+
+    @staticmethod
+    fn from_str(read value: String) raises -> Self:
+        if len(value) != 4:
+            raise "Invalid SemiGlobalEndsFreeness specified. Must consist of 4 values like FFTT."
+
+        var upper = value.upper()
+        for c in range(0, len(upper)):
+            var ch = upper[c]
+            if ch != "T" and ch != "F":
+                raise "Invalid SemiGlobalEndsFreeness specified. All values must be T or F"
+
+        var query_start = upper[0] == "T"
+        var query_end = upper[1] == "T"
+        var target_start = upper[2] == "T"
+        var target_end = upper[3] == "T"
+
+        return Self(
+            query_start=query_start,
+            query_end=query_end,
+            target_start=target_start,
+            target_end=target_end,
+        )

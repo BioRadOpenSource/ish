@@ -1,6 +1,8 @@
 """Smith-Waterman local alignment."""
 from gpu.host import DeviceContext
-from sys.info import simdwidthof
+from sys.info import (
+    simdwidthof,
+)
 from utils import StringSlice
 
 from ishlib.vendor.log import Logger
@@ -18,8 +20,9 @@ from ishlib.matcher.alignment.local_aln.striped import (
 struct StripedLocalMatcher[mut: Bool, //, origin: Origin[mut]](Matcher):
     alias SIMD_U8_WIDTH = simdwidthof[
         UInt8
-    ]() // 1  # TODO: needs tuning on wider machines (avx512) for example
+    ]() // 1  # TODO: needs tuning based on query length
     alias SIMD_U16_WIDTH = simdwidthof[UInt16]() // 1
+
     var pattern: List[UInt8]
     var rev_pattern: List[UInt8]
     var max_score: Int

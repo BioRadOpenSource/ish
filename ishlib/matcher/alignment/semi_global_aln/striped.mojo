@@ -165,7 +165,7 @@ fn semi_global_aln_start_end[
         return None
 
     var rev_reference = create_reversed(
-        reference[0 : Int(forward.best.reference)]
+        reference[0 : Int(forward.best.reference) + 1]
     )
     var reverse = semi_global_aln[
         dt, width, do_saturation_check=do_saturation_check
@@ -189,7 +189,7 @@ fn semi_global_aln_start_end[
         score=forward.best.score,
         query_start=query_len - reverse.best.query - 1,
         query_end=forward.best.query,
-        target_start=len(reference) - reverse.best.reference - 1,
+        target_start=len(rev_reference) - reverse.best.reference - 1,
         target_end=forward.best.reference,
     )
 
