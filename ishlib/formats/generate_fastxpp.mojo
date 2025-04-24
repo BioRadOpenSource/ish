@@ -105,7 +105,7 @@ fn generate_fastxpp_bpl_fixed(
 
     # --- fixed-width metadata block ------------------------------------
     var meta = "`" +
-        to_ascii_padded(string_count(header), 6) +      # hlen
+        #to_ascii_padded(string_count(header), 6) +      # hlen
         to_ascii_padded(slen,                 9) +      # slen
         to_ascii_padded(len(seq_lines),        7) +      # nlin
         to_ascii_padded(bpl,                   3) +      # bpl
