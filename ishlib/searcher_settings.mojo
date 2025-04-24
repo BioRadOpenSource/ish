@@ -35,6 +35,7 @@ struct SearcherSettings:
     var max_gpus: UInt
     var tty_info: TTYInfoResult
     var sg_ends_free: SemiGlobalEndsFreeness
+    var verbose: Bool
 
     fn is_output_stdout(read self) -> Bool:
         return self.output_file == "/dev/stdout"
@@ -172,6 +173,15 @@ struct SearcherSettings:
                 ),
             )
         )
+        parser.add_opt(
+            OptConfig(
+                "verbose",
+                OptKind.BoolLike,
+                default_value=String("False"),
+                is_flag=True,
+                description="Verbose logging output.",
+            )
+        )
 
         parser.expect_at_least_n_args(
             1,
@@ -200,11 +210,10 @@ struct SearcherSettings:
             var gap_extend = abs(opts.get_int("gap-extend"))
             var match_algo = opts.get_string("match-algo")
             var record_type = opts.get_string("record-type")
-
             var sg_ends_free = SemiGlobalEndsFreeness.from_str(
                 opts.get_string("sg-ends-free")
             )
-
+            var verbose = opts.get_bool("verbose")
             var threads = opts.get_int("threads")
             if threads <= 0:
                 raise "Threads must be >= 1."
@@ -244,6 +253,7 @@ struct SearcherSettings:
                 max_gpus,
                 tty.info(STDOUT_FD),
                 sg_ends_free,
+                verbose,
             )
         except e:
             print(parser.help_msg())
