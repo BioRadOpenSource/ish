@@ -1,9 +1,9 @@
 from ExtraMojo.io import MovableWriter
 from ExtraMojo.io.buffered import BufferedWriter
 
-from ishlib import ByteSpanWriter
-from ishlib import RED, PURPLE, GREEN
+from ishlib import RED, PURPLE, GREEN, ByteSpanWriter, RecordType
 from ishlib.matcher import Matcher
+from ishlib.peek_file import peek_file
 from ishlib.searcher_settings import SearcherSettings
 from ishlib.vendor.kseq import FastxReader, BufferedReader
 from ishlib.vendor.zlib import GZFile
@@ -25,6 +25,9 @@ struct FastaSearchRunner[M: Matcher]:
         # Simple thing first?
         for file in self.settings.files:
             var f = file[]  # force copy
+            var peek = peek_file[record_type = RecordType.FASTA](f)
+            if peek.is_binary and self.settings.verbose:
+                Logger.warn("Skipping binary file:", file[])
             Logger.debug("Processing", f)
             self.run_search_on_file(f, writer)
 

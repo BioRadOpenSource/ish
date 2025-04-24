@@ -69,7 +69,7 @@ struct ParallelFastaSearchRunner[M: Matcher]:
             var f = file[]  # force copy
             var peek = peek_file[record_type = RecordType.FASTA](f)
             Logger.debug("Suggested length:", peek.suggested_max_length)
-            if peek.is_binary:
+            if peek.is_binary and self.settings.verbose:
                 Logger.warn("Skipping binary file:", file[])
             Logger.debug("Processing", f)
             self.run_search_on_file(f, writer)
