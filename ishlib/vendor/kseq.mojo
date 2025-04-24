@@ -28,7 +28,6 @@ from time.time import perf_counter
 
 from ExtraMojo.bstr.memchr import memchr
 
-
 alias ASCII_NEWLINE = ord("\n")
 alias ASCII_CARRIAGE_RETURN = ord("\r")
 alias ASCII_TAB = ord("\t")
@@ -37,10 +36,63 @@ alias ASCII_FASTA_RECORD_START = ord(">")
 alias ASCII_FASTQ_RECORD_START = ord("@")
 alias ASCII_FASTQ_SEPARATOR = ord("+")
 
+alias U8x8  = SIMD[DType.uint8 , 8]
+alias U16x8 = SIMD[DType.uint16, 8]
+alias U32x8 = SIMD[DType.uint32, 8]
+
+@always_inline
+fn to_simd(p: UnsafePointer[UInt8]) ->
+           UnsafePointer[SIMD[DType.uint8, 1]]:
+    return p.bitcast[SIMD[DType.uint8, 1]]()
+
+# 8 ASCII digits
+@always_inline
+fn decode_8(ptr: UnsafePointer[UInt8]) -> Int:
+    var v  = to_simd(ptr).load[width=8](0) - UInt8(ord("0"))
+    var w  = v.cast[DType.uint32]()
+    var mul = U32x8(10_000_000, 1_000_000, 100_000, 10_000,
+                    1_000,       100,       10,       1)
+    return Int((w * mul).reduce_add())
+
+# 6 digits (still load 8 lanes)
+@always_inline
+fn decode_6(ptr: UnsafePointer[UInt8]) -> Int:
+    var v  = to_simd(ptr).load[width=8](0) - UInt8(ord("0"))
+    var w  = v.cast[DType.uint32]()
+    var mul = U32x8(100_000, 10_000, 1_000, 100, 10, 1, 0, 0)
+    return Int((w * mul).reduce_add())
+
+# 7 digits: scalar last digit
+@always_inline
+fn decode_7(ptr: UnsafePointer[UInt8]) -> Int:
+    # Read the 7th digit at ptr[6] (offset 6)
+    var last_digit = Int(to_simd(ptr.offset(6)).load[width=1](0) - UInt8(ord("0")))
+    # decode_6 handles ptr[0] through ptr[5]
+    return decode_6(ptr) * 10 + last_digit
+
+
+# 9 digits: scalar last digit
+@always_inline
+fn decode_9(ptr: UnsafePointer[UInt8]) -> Int:
+    # Read the 9th digit at ptr[8] (offset 8)
+    var last_digit = Int(to_simd(ptr.offset(8)).load[width=1](0) - UInt8(ord("0")))
+    # decode_8 handles ptr[0] through ptr[7]
+    return decode_8(ptr) * 10 + last_digit
+
+# 3-digit fallback
+@always_inline
+fn decode_3(ptr: UnsafePointer[UInt8]) -> Int:
+    var sp = to_simd(ptr)
+
+    var d0 = Int(sp.load[width = 1](0) - UInt8(ord("0")))
+    var d1 = Int(sp.load[width = 1](1) - UInt8(ord("0")))
+    var d2 = Int(sp.load[width = 1](2) - UInt8(ord("0")))
+
+    return d0 * 100 + d1 * 10 + d2
+
 # ──────────────────────────────────────────────────────────────
 #  Helpers for reading in fastx++ files
 # ──────────────────────────────────────────────────────────────
-
 
 @always_inline
 fn strip_newlines_in_place(
@@ -599,21 +651,6 @@ struct FastxReader[R: KRead, read_comment: Bool = True](Movable):
         if not strip_newlines_in_place(self.seq, disk, slen):
             return -2
 
-        # ── Quality block (FASTQ) ─────────────────────────────────────
-        if marker == UInt8(ASCII_FASTQ_RECORD_START):
-            if (
-                self.reader.read_byte() != ASCII_NEWLINE
-            ):  # consume LF after '+' line
-                return -3
-            var needq = disk  # separate mutable copy
-            self.qual.clear()
-            self.qual.reserve(needq)
-            var gotq = self.reader.read_bytes(self.qual, needq)
-            if gotq != disk:
-                return -3
-            if not strip_newlines_in_place(self.qual, disk, slen):
-                return -2
-
         return len(self.seq)
 
     fn read_fastxpp_bpl(mut self) raises -> Int:
@@ -708,11 +745,91 @@ struct FastxReader[R: KRead, read_comment: Bool = True](Movable):
             write_pos += bpl - 1
             read_pos += bpl  # jump over the LF
         self.seq.resize(write_pos)  # write_pos == slen
-
-        # ── 5 Copy the QUALITY block (FASTQ only) ----------------------------
-
+        # This is cold code that seems to preven inlining, it improve performance.
+        if 1 == False:
+            print(
+                "ERROR: Sequence read failed. got_seq != disk_seq",
+                "write_pos", write_pos, "disk_seq", disk_seq,
+                "bpl", bpl, "slen", len(self.seq)
+            )
+            pass
         return len(self.seq)
 
+    fn read_fastxpp_swar(mut self) raises -> Int:
+        # ── 0 Locate the next header byte ('>' or '@') ──────────────────────
+        var marker: UInt8  # remember which flavour we’re on
+        if self.last_char == 0:
+            var c = self.reader.read_byte()
+            while (
+                c >= 0
+                and c != ASCII_FASTA_RECORD_START
+                and c != ASCII_FASTQ_RECORD_START
+            ):
+                c = self.reader.read_byte()
+            if c < 0:
+                return Int(c)  # EOF / stream error (-1 / -2)
+            marker = UInt8(c)
+        else:
+            marker = UInt8(self.last_char)
+            var c = self.last_char
+            self.last_char = 0
+
+        # ── 1 Reset buffers reused across records ───────────────────────────
+        self.seq.clear()
+        self.qual.clear()
+        self.comment.clear()
+        self.name.clear()
+
+        # ── 2 Read the back‑tick header line --------------------------------
+        var r = self.reader.read_until[SearchChar.Newline](self.name, 0, False)
+        if r < 0:
+            return Int(r)
+
+        var hdr = self.name.as_span()
+        if len(hdr) == 0 or hdr[0] != UInt8(ord("`")):
+            print("ERROR: Opening backtick check failed. hdr[0]")
+            return -3  # not a FASTX++ BPL header
+
+        #for i in range(len(hdr)):
+        #    var code = Int(hdr[i])
+        #    print(i, hdr[i], code, chr(code))
+
+        # ── 3 Find closing back‑tick and parse hlen:slen:lcnt:bpl -----------
+        var base = hdr.unsafe_ptr().offset(1)
+
+        var hlen = decode_6(base)            # bytes 0–5
+        var slen = decode_9(base.offset(6))  # bytes 6–14
+        var lcnt = decode_7(base.offset(15)) # bytes 15–21
+        var bpl  = decode_3(base.offset(22)) # bytes 22–24
+
+        if base.offset(25)[0] != UInt8(ord("`")):
+            print("ERROR: Closing backtick check failed. base[25]")
+            return -3
+
+        # ── 4 SEQUENCE block ---------------------------------------
+        var disk_seq = slen + lcnt  # immutable reference
+        var rest_seq = disk_seq  # mutable copy for read_bytes
+
+        self.seq.reserve(disk_seq)
+        var got_seq = self.reader.read_bytes(self.seq, rest_seq)
+        if got_seq != disk_seq:
+            print("ERROR: Sequence read failed. got_seq != disk_seq")
+            return -3  # truncated record
+
+        # compact in‑place: copy (bpl‑1) bases, skip the LF, repeat
+        var write_pos: Int = 0
+        var read_pos: Int = 0
+        while read_pos < disk_seq:
+            memcpy(
+                self.seq.addr(write_pos),  # destination
+                self.seq.addr(read_pos),  # source
+                bpl - 1,
+            )  # copy only the bases
+            write_pos += bpl - 1
+            read_pos += bpl  # jump over the LF
+        self.seq.resize(write_pos)  # write_pos == slen
+
+        return len(self.seq)
 
 struct FileReader(KRead):
     var fh: FileHandle
@@ -744,12 +861,12 @@ fn main() raises:
         BufferedReader(FileReader(fh^))
     )
 
-    var first = reader.read_fastxpp_bpl()
+    var first = reader.read_fastxpp_swar()
     print("first‑read returned", first)
 
     var count = 0
     while True:
-        var n = reader.read_fastxpp_bpl()
+        var n = reader.read_fastxpp_swar()
         if n < 0:
             break
         count += 1

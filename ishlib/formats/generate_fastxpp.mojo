@@ -1,6 +1,8 @@
 import sys
 from collections import Optional
 from ExtraMojo.io.buffered import BufferedReader, BufferedWriter
+from collections import List                # dynamic grow-able buffer
+from memory import Span                     # view into the List for zero-copy writes
 
 # ---------- helpers -------------------------------------------------
 
@@ -76,6 +78,48 @@ fn generate_fastxpp_bpl(
             rec.write(q[i], "\n")
     return rec
 
+# Helper: encode an unsigned ≤9-digit value as zero-padded ASCII.
+fn to_ascii_padded(value: Int, width: Int) -> String:
+    # build the decimal text first …
+    var digits = String(value)                       # e.g. "123"
+    var pad     = width - string_count(digits)       # how many zeros needed
+
+    # … then emit into a single pre-sized String
+    var out = String(capacity=width)
+    for _ in range(pad):
+        out.write("0")
+    out.write(digits)                                # concat is zero-copy
+    return out                                       # length == width
+
+fn generate_fastxpp_bpl_fixed(
+        marker: String,
+        header: String,
+        seq_lines: List[String],
+        qualities: Optional[List[String]] = None,
+) -> String:
+
+    # --- numeric fields ------------------------------------------------
+    var bpl  = string_count(seq_lines[0]) + 1                       # incl. LF
+    var slen = (bpl - 1) * (len(seq_lines) - 1) +
+               string_count(seq_lines[-1])
+
+    # --- fixed-width metadata block ------------------------------------
+    var meta = "`" +
+        to_ascii_padded(string_count(header), 6) +      # hlen
+        to_ascii_padded(slen,                 9) +      # slen
+        to_ascii_padded(len(seq_lines),        7) +      # nlin
+        to_ascii_padded(bpl,                   3) +      # bpl
+        "`"
+
+    # --- assemble record -----------------------------------------------
+    var rec = marker + meta + header + "\n"
+    for i in range(len(seq_lines)):
+        rec.write(seq_lines[i], "\n")
+    if qualities:
+        var q = qualities.value()
+        for i in range(len(q)):
+            rec.write(q[i], "\n")
+    return rec
 
 # ---------- main ----------------------------------------------------
 
@@ -133,7 +177,7 @@ fn main() raises:
                 qlines.append(read_line(reader))
             qual = Optional[List[String]](qlines)
 
-        writer.write(generate_fastxpp_bpl(marker, header, seq, qual))
+        writer.write(generate_fastxpp_bpl_fixed(marker, header, seq, qual))
 
     writer.flush()
     writer.close()

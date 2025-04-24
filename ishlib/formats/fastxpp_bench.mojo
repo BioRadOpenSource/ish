@@ -65,6 +65,21 @@ fn bench_fastxpp_bpl(path: String) raises -> (Int, Int, Float64):
     return (rec, seq, perf_counter() - t0)
 
 
+fn bench_fastxpp_swar(path: String) raises -> (Int, Int, Float64):
+    var fh = open(path, "r")
+    var rdr = FastxReader[read_comment=False](BufferedReader(FileReader(fh^)))
+    var rec = 0
+    var seq = 0
+    var t0 = perf_counter()
+    while True:
+        var n = rdr.read_fastxpp_swar()
+        if n < 0:
+            break
+        rec += 1
+        seq += n
+    return (rec, seq, perf_counter() - t0)
+
+
 fn bench_fastxpp_bpl2(path: String) raises -> (Int, Int, Float64):
     var fh = open(path, "r")
     var rdr = FastxReader[read_comment=False](BufferedReader(FileReader(fh^)))
@@ -92,34 +107,27 @@ fn main() raises:
         mode = String(argv[2])
 
     if mode == "orig":
-        var tup = bench_original(path)
-        var r = tup[0]
-        var s = tup[1]
-        var t = tup[2]
+        r, s, t = bench_original(path)
         print(
             "mode=orig          records=", r, "  bases=", s, "  time=", t, "s"
         )
-    elif mode == "fastxpp":
-        var tup = bench_fastxpp(path)
-        var r = tup[0]
-        var s = tup[1]
-        var t = tup[2]
-        print(
-            "mode=fastxpp       records=", r, "  bases=", s, "  time=", t, "s"
-        )
     elif mode == "bpl":
-        var tup = bench_fastxpp_bpl(path)
-        var r = tup[0]
-        var s = tup[1]
-        var t = tup[2]
+        r, s, t = bench_fastxpp_bpl(path)
         print(
             "mode=fastxpp_bpl   records=", r, "  bases=", s, "  time=", t, "s"
         )
+    elif mode == "fastxpp":
+        r, s, t = bench_fastxpp(path)
+        print(
+            "mode=fastxpp       records=", r, "  bases=", s, "  time=", t, "s"
+        )
+    elif mode == "swar":
+        r, s, t = bench_fastxpp_swar(path)
+        print(
+            "mode=fastxpp_swar   records=", r, "  bases=", s, "  time=", t, "s"
+        )
     elif mode == "filler":
-        var tup = bench_fastxpp_bpl2(path)
-        var r = tup[0]
-        var s = tup[1]
-        var t = tup[2]
+        r, s, t = bench_fastxpp_bpl2(path)
         print(
             "mode=fastxpp_bpl   records=", r, "  bases=", s, "  time=", t, "s"
         )
