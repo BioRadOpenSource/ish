@@ -35,38 +35,35 @@ alias ASCII_SPACE = ord(" ")
 alias ASCII_FASTA_RECORD_START = ord(">")
 alias ASCII_FASTQ_RECORD_START = ord("@")
 alias ASCII_FASTQ_SEPARATOR = ord("+")
+alias ASCII_ZERO = UInt8(ord("0"))
 
-alias U8x8  = SIMD[DType.uint8 , 8]
-alias U16x8 = SIMD[DType.uint16, 8]
+alias U8x8 = SIMD[DType.uint8, 8]
 alias U32x8 = SIMD[DType.uint32, 8]
 
-@always_inline
-fn to_simd(p: UnsafePointer[UInt8]) ->
-           UnsafePointer[SIMD[DType.uint8, 1]]:
-    return p.bitcast[SIMD[DType.uint8, 1]]()
 
 # 8 ASCII digits
 @always_inline
 fn decode_8(ptr: UnsafePointer[UInt8]) -> Int:
-    var v  = to_simd(ptr).load[width=8](0) - UInt8(ord("0"))
-    var w  = v.cast[DType.uint32]()
-    var mul = U32x8(10_000_000, 1_000_000, 100_000, 10_000,
-                    1_000,       100,       10,       1)
+    var v = ptr.load[width=8](0) - ASCII_ZERO
+    var w = v.cast[DType.uint32]()
+    var mul = U32x8(10_000_000, 1_000_000, 100_000, 10_000, 1_000, 100, 10, 1)
     return Int((w * mul).reduce_add())
+
 
 # 6 digits (still load 8 lanes)
 @always_inline
 fn decode_6(ptr: UnsafePointer[UInt8]) -> Int:
-    var v  = to_simd(ptr).load[width=8](0) - UInt8(ord("0"))
-    var w  = v.cast[DType.uint32]()
+    var v = ptr.load[width=8](0) - ASCII_ZERO
+    var w = v.cast[DType.uint32]()
     var mul = U32x8(100_000, 10_000, 1_000, 100, 10, 1, 0, 0)
     return Int((w * mul).reduce_add())
+
 
 # 7 digits: scalar last digit
 @always_inline
 fn decode_7(ptr: UnsafePointer[UInt8]) -> Int:
     # Read the 7th digit at ptr[6] (offset 6)
-    var last_digit = Int(to_simd(ptr.offset(6)).load[width=1](0) - UInt8(ord("0")))
+    var last_digit = Int(ptr.offset(6).load[width=1](0) - ASCII_ZERO)
     # decode_6 handles ptr[0] through ptr[5]
     return decode_6(ptr) * 10 + last_digit
 
@@ -75,24 +72,46 @@ fn decode_7(ptr: UnsafePointer[UInt8]) -> Int:
 @always_inline
 fn decode_9(ptr: UnsafePointer[UInt8]) -> Int:
     # Read the 9th digit at ptr[8] (offset 8)
-    var last_digit = Int(to_simd(ptr.offset(8)).load[width=1](0) - UInt8(ord("0")))
+    var last_digit = Int(ptr.offset(8).load[width=1](0) - ASCII_ZERO)
     # decode_8 handles ptr[0] through ptr[7]
     return decode_8(ptr) * 10 + last_digit
+
 
 # 3-digit fallback
 @always_inline
 fn decode_3(ptr: UnsafePointer[UInt8]) -> Int:
-    var sp = to_simd(ptr)
-
-    var d0 = Int(sp.load[width = 1](0) - UInt8(ord("0")))
-    var d1 = Int(sp.load[width = 1](1) - UInt8(ord("0")))
-    var d2 = Int(sp.load[width = 1](2) - UInt8(ord("0")))
+    var d0 = Int(ptr.load[width=1](0) - ASCII_ZERO)
+    var d1 = Int(ptr.load[width=1](1) - ASCII_ZERO)
+    var d2 = Int(ptr.load[width=1](2) - ASCII_ZERO)
 
     return d0 * 100 + d1 * 10 + d2
+
+
+@always_inline
+fn decode[size: UInt](bstr: Span[UInt8]) -> Int:
+    constrained[
+        size >= 3 and size <= 9, "size outside allowed range of 3 to 9"
+    ]()
+
+    @parameter
+    if size == 3:
+        return decode_3(bstr.unsafe_ptr())
+    elif size == 6:
+        return decode_6(bstr.unsafe_ptr())
+    elif size == 7:
+        return decode_7(bstr.unsafe_ptr())
+    elif size == 8:
+        return decode_8(bstr.unsafe_ptr())
+    elif size == 9:
+        return decode_9(bstr.unsafe_ptr())
+    else:
+        return -1
+
 
 # ──────────────────────────────────────────────────────────────
 #  Helpers for reading in fastx++ files
 # ──────────────────────────────────────────────────────────────
+
 
 @always_inline
 fn strip_newlines_in_place(
@@ -137,16 +156,6 @@ fn strip_newlines_in_place(
         read_pos = end_pos + 1  # skip the '\n' (or exit loop if none)
     bs.resize(write_pos)
     return write_pos == expected
-
-
-# This is long way of https://lemire.me/blog/2022/01/21/swar-explained-parsing-eight-digits/
-# not directly used, read_fastxpp uses cur = cur * 10 + Int(ch - UInt8(ord("0"))) directly
-# Keeping here for comparison to SWAR implementation
-fn ascii_to_int[O: Origin](buf: Span[UInt8, O], s: Int, e: Int) -> Int:
-    var v: Int = 0
-    for i in range(s, e):
-        v = v * 10 + Int(buf[i] - ord("0"))
-    return v
 
 
 # ──────────────────────────────────────────────────────────────
@@ -458,6 +467,7 @@ struct FastxReader[R: KRead, read_comment: Bool = True](Movable):
         self.seq = ByteString(256)
         self.qual = ByteString()
         self.comment = ByteString()
+        # Special comment field is 26 bytes long +1 from backtick
         self.last_char = 0
 
     fn __moveinit__(out self, owned other: Self):
@@ -632,7 +642,7 @@ struct FastxReader[R: KRead, read_comment: Bool = True](Movable):
                 cur = 0
                 which += 1
             else:
-                cur = cur * 10 + Int(ch - UInt8(ord("0")))
+                cur = cur * 10 + Int(ch - ASCII_ZERO)
         lcnt = cur
 
         # Validate header length and resize name
@@ -714,7 +724,7 @@ struct FastxReader[R: KRead, read_comment: Bool = True](Movable):
                 cur = 0
                 which += 1
             else:
-                cur = cur * 10 + Int(ch - UInt8(ord("0")))
+                cur = cur * 10 + Int(ch - ASCII_ZERO)
         bpl = cur  # fourth number
 
         # Validate and keep only the header
@@ -749,8 +759,14 @@ struct FastxReader[R: KRead, read_comment: Bool = True](Movable):
         if 1 == False:
             print(
                 "ERROR: Sequence read failed. got_seq != disk_seq",
-                "write_pos", write_pos, "disk_seq", disk_seq,
-                "bpl", bpl, "slen", len(self.seq)
+                "write_pos",
+                write_pos,
+                "disk_seq",
+                disk_seq,
+                "bpl",
+                bpl,
+                "slen",
+                len(self.seq),
             )
             pass
         return len(self.seq)
@@ -790,19 +806,16 @@ struct FastxReader[R: KRead, read_comment: Bool = True](Movable):
             print("ERROR: Opening backtick check failed. hdr[0]")
             return -3  # not a FASTX++ BPL header
 
-        #for i in range(len(hdr)):
-        #    var code = Int(hdr[i])
-        #    print(i, hdr[i], code, chr(code))
+        # for i in range(len(hdr)):
+        #     var code = Int(hdr[i])
+        #     print(i, hdr[i], code, chr(code))
 
-        # ── 3 Find closing back‑tick and parse hlen:slen:lcnt:bpl -----------
-        var base = hdr.unsafe_ptr().offset(1)
+        # ── 3 Find closing back‑tick and parse slen:lcnt:bpl -----------
+        var slen = decode[9](hdr[1:10])  # bytes 1–9
+        var lcnt = decode[7](hdr[10:17])  # bytes 10–16
+        var bpl = decode[3](hdr[17:20])  # bytes 17–19
 
-        var hlen = decode_6(base)            # bytes 0–5
-        var slen = decode_9(base.offset(6))  # bytes 6–14
-        var lcnt = decode_7(base.offset(15)) # bytes 15–21
-        var bpl  = decode_3(base.offset(22)) # bytes 22–24
-
-        if base.offset(25)[0] != UInt8(ord("`")):
+        if hdr[20] != UInt8(ord("`")):
             print("ERROR: Closing backtick check failed. base[25]")
             return -3
 
@@ -830,6 +843,7 @@ struct FastxReader[R: KRead, read_comment: Bool = True](Movable):
         self.seq.resize(write_pos)  # write_pos == slen
 
         return len(self.seq)
+
 
 struct FileReader(KRead):
     var fh: FileHandle
