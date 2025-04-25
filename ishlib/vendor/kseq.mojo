@@ -23,6 +23,7 @@ def main():
 import sys
 from memory import UnsafePointer, memcpy
 from utils import StringSlice
+from ishlib.vendor.swar_decode import decode
 
 from time.time import perf_counter
 
@@ -37,75 +38,16 @@ alias ASCII_FASTQ_RECORD_START = ord("@")
 alias ASCII_FASTQ_SEPARATOR = ord("+")
 alias ASCII_ZERO = UInt8(ord("0"))
 
-alias U8x8 = SIMD[DType.uint8, 8]
-alias U32x8 = SIMD[DType.uint32, 8]
 
-
-# 8 ASCII digits
-@always_inline
-fn decode_8(ptr: UnsafePointer[UInt8]) -> Int:
-    var v = ptr.load[width=8](0) - ASCII_ZERO
-    var w = v.cast[DType.uint32]()
-    var mul = U32x8(10_000_000, 1_000_000, 100_000, 10_000, 1_000, 100, 10, 1)
-    return Int((w * mul).reduce_add())
-
-
-# 6 digits (still load 8 lanes)
-@always_inline
-fn decode_6(ptr: UnsafePointer[UInt8]) -> Int:
-    var v = ptr.load[width=8](0) - ASCII_ZERO
-    var w = v.cast[DType.uint32]()
-    var mul = U32x8(100_000, 10_000, 1_000, 100, 10, 1, 0, 0)
-    return Int((w * mul).reduce_add())
-
-
-# 7 digits: scalar last digit
-@always_inline
-fn decode_7(ptr: UnsafePointer[UInt8]) -> Int:
-    # Read the 7th digit at ptr[6] (offset 6)
-    var last_digit = Int(ptr.offset(6).load[width=1](0) - ASCII_ZERO)
-    # decode_6 handles ptr[0] through ptr[5]
-    return decode_6(ptr) * 10 + last_digit
-
-
-# 9 digits: scalar last digit
-@always_inline
-fn decode_9(ptr: UnsafePointer[UInt8]) -> Int:
-    # Read the 9th digit at ptr[8] (offset 8)
-    var last_digit = Int(ptr.offset(8).load[width=1](0) - ASCII_ZERO)
-    # decode_8 handles ptr[0] through ptr[7]
-    return decode_8(ptr) * 10 + last_digit
-
-
-# 3-digit fallback
-@always_inline
-fn decode_3(ptr: UnsafePointer[UInt8]) -> Int:
-    var d0 = Int(ptr.load[width=1](0) - ASCII_ZERO)
-    var d1 = Int(ptr.load[width=1](1) - ASCII_ZERO)
-    var d2 = Int(ptr.load[width=1](2) - ASCII_ZERO)
-
-    return d0 * 100 + d1 * 10 + d2
-
-
-@always_inline
-fn decode[size: UInt](bstr: Span[UInt8]) -> Int:
-    constrained[
-        size >= 3 and size <= 9, "size outside allowed range of 3 to 9"
-    ]()
-
-    @parameter
-    if size == 3:
-        return decode_3(bstr.unsafe_ptr())
-    elif size == 6:
-        return decode_6(bstr.unsafe_ptr())
-    elif size == 7:
-        return decode_7(bstr.unsafe_ptr())
-    elif size == 8:
-        return decode_8(bstr.unsafe_ptr())
-    elif size == 9:
-        return decode_9(bstr.unsafe_ptr())
-    else:
-        return -1
+fn read_chunk(mut self) raises -> Span[UInt8]:
+    if self.start >= self.end:
+        self.start = 0
+        self.end = self.reader.unbuffered_read(self.buffer.as_span())
+        if self.end < 0:
+            raise IOError
+    var out = self.buffer.as_span()[self.start : self.end]
+    self.start = self.end  # mark consumed
+    return out
 
 
 # ──────────────────────────────────────────────────────────────
@@ -844,6 +786,76 @@ struct FastxReader[R: KRead, read_comment: Bool = True](Movable):
 
         return len(self.seq)
 
+    fn read_fastxpp_read_once(mut self) raises -> Int:
+        # ── 0 Locate the next header byte ('>' or '@') ──────────────────────
+        var marker: UInt8
+        if self.last_char == 0:
+            var c = self.reader.read_byte()
+            while (
+                c >= 0
+                and c != ASCII_FASTA_RECORD_START
+                and c != ASCII_FASTQ_RECORD_START
+            ):
+                c = self.reader.read_byte()
+            if c < 0:
+                return Int(c)
+            marker = UInt8(c)
+        else:
+            marker = UInt8(self.last_char)
+            self.last_char = 0
+
+        # ── 1 Reset buffers reused across records ───────────────────────────
+        self.seq.clear()
+        self.qual.clear()
+        self.comment.clear()
+        self.name.clear()
+
+        # ── 2 Read the back‑tick header line --------------------------------
+        var r = self.reader.read_until[SearchChar.Newline](self.name, 0, False)
+        if r < 0:
+            return Int(r)
+
+        var hdr = self.name.as_span()
+        # ── 3 Find closing back‑tick and parse slen:lcnt:bpl -----------
+        if len(hdr) == 0 or hdr[0] != UInt8(ord("`")):
+            print("ERROR: header lacks opening back-tick")
+            return -3
+
+        var slen = decode[9](hdr[1:10])
+        var lcnt = decode[7](hdr[10:17])
+        var bpl = decode[3](hdr[17:20])
+
+        if hdr[20] != UInt8(ord("`")):
+            print("ERROR: header lacks closing back-tick")
+            return -3
+
+        # ── 4 SEQUENCE block ---------------------------------------
+        self.seq.reserve(UInt32(slen))
+        var copied: Int = 0
+        while copied < slen:
+            var want = min(bpl - 1, slen - copied)
+
+            # track length before and after
+            var before = len(self.seq)
+            var _want = want
+            var _total = self.reader.read_bytes(self.seq, _want)
+            if _total < 0:
+                print("ERROR: read_bytes returned error", _total)
+                return -3
+            var got = Int(_total) - before  # true delta
+
+            if got != want:
+                return -3
+
+            copied += got
+
+            # consume newline (or CRLF pair)
+            var nl = self.reader.read_byte()
+            if nl != ASCII_NEWLINE:
+                print("ERROR: expected newline after sequence chunk, found", nl)
+                return -3
+        return slen
+
 
 struct FileReader(KRead):
     var fh: FileHandle
@@ -875,12 +887,12 @@ fn main() raises:
         BufferedReader(FileReader(fh^))
     )
 
-    var first = reader.read_fastxpp_swar()
+    var first = reader.read_fastxpp_read_once()
     print("first‑read returned", first)
 
     var count = 0
     while True:
-        var n = reader.read_fastxpp_swar()
+        var n = reader.read_fastxpp_read_once()
         if n < 0:
             break
         count += 1
