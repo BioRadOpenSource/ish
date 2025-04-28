@@ -512,91 +512,9 @@ struct FastxReader[R: KRead, read_comment: Bool = True](Movable):
             return -2  # error: qual string is of different length
         return len(self.seq)
 
-    fn read_fastxpp(mut self) raises -> Int:
-        # Locate next header
-        var marker: UInt8
-
-        if self.last_char == 0:
-            var c = self.reader.read_byte()
-            while (
-                c >= 0
-                and c != ASCII_FASTA_RECORD_START
-                and c != ASCII_FASTQ_RECORD_START
-            ):
-                c = self.reader.read_byte()
-            if c < 0:
-                # print("[DBG] EOF before header, c=", c)
-                return Int(c)
-            marker = UInt8(c)  # NEW – store the marker
-        else:
-            marker = UInt8(self.last_char)  # NEW
-            var c = self.last_char
-            self.last_char = 0
-
-        # Clear buffers for this record
-        self.seq.clear()
-        self.qual.clear()
-        self.comment.clear()
-        self.name.clear()
-
-        # Read header line (without copying '\n')
-        var r = self.reader.read_until[SearchChar.Newline](self.name, 0, False)
-        if r < 0:
-            return Int(r)
-
-        var hdr = self.name.as_span()
-        if len(hdr) == 0 or hdr[0] != UInt8(ord("`")):
-            return -3  # not FASTX++ header
-
-        # Find closing back‑tick with one memchr
-        var after = Span[UInt8, __origin_of(hdr)](
-            ptr=hdr.unsafe_ptr().offset(1), length=len(hdr) - 1
-        )
-        var rel = memchr(after, UInt8(ord("`")))
-        if rel == -1:
-            return -3
-        var pos2 = rel + 1
-
-        # Parse hlen, slen, lcnt in one pass
-        var hlen: Int = 0
-        var slen: Int = 0
-        var lcnt: Int = 0
-        var cur: Int = 0
-        var which: Int = 0
-        for i in range(1, pos2):
-            var ch = hdr[i]
-            if ch == UInt8(ord(":")):
-                if which == 0:
-                    hlen = cur
-                elif which == 1:
-                    slen = cur
-                cur = 0
-                which += 1
-            else:
-                cur = cur * 10 + Int(ch - ASCII_ZERO)
-        lcnt = cur
-
-        # Validate header length and resize name
-        if len(hdr) - (pos2 + 1) != hlen:
-            return -3
-        self.name.resize(hlen)
-
-        # ── Sequence block ────────────────────────────────────────────
-        var disk = slen + lcnt  # bytes on disk (bases+LFs)
-        var need = disk  # local copy; will be mutated
-        self.seq.clear()
-        self.seq.reserve(need)
-        var got = self.reader.read_bytes(self.seq, need)
-        if got != disk:
-            return -3
-        if not strip_newlines_in_place(self.seq, disk, slen):
-            return -2
-
-        return len(self.seq)
-
-    fn read_fastxpp_bpl(mut self) raises -> Int:
+    fn read_fastxpp_strip_newline(mut self) raises -> Int:
         # ── 0 Locate the next header byte ('>' or '@') ──────────────────────
-        var marker: UInt8  # remember which flavour we’re on
+        var marker: UInt8
         if self.last_char == 0:
             var c = self.reader.read_byte()
             while (
@@ -606,11 +524,11 @@ struct FastxReader[R: KRead, read_comment: Bool = True](Movable):
             ):
                 c = self.reader.read_byte()
             if c < 0:
-                return Int(c)  # EOF / stream error (-1 / -2)
+                # EOF or stream error
+                return Int(c)
             marker = UInt8(c)
         else:
             marker = UInt8(self.last_char)
-            var c = self.last_char
             self.last_char = 0
 
         # ── 1 Reset buffers reused across records ───────────────────────────
@@ -626,80 +544,31 @@ struct FastxReader[R: KRead, read_comment: Bool = True](Movable):
 
         var hdr = self.name.as_span()
         if len(hdr) == 0 or hdr[0] != UInt8(ord("`")):
-            return -3  # not a FASTX++ BPL header
+            # We need at least 21 bytes: 1 backtick + 9 + 7 + 3 + 1 backtick
+            return -3  # Not a proper FASTX++ header
 
-        # ── 3 Find closing back‑tick and parse hlen:slen:lcnt:bpl -----------
-        var after = Span[UInt8, __origin_of(hdr)](
-            ptr=hdr.unsafe_ptr().offset(1), length=len(hdr) - 1
-        )
-        var rel = memchr(after, UInt8(ord("`")))
-        if rel == -1:
+        # ── 3 Decode slen:lcnt:bpl from the fixed fields --------------------
+        var slen = decode[9](hdr[1:10])  # 9‑digit field at positions [1..9]
+        var lcnt = decode[7](hdr[10:17])  # 7‑digit field at positions [10..16]
+        var bpl = decode[3](hdr[17:20])  # 3‑digit field at positions [17..19]
+
+        # Confirm the second backtick is at hdr[20]
+        if hdr[20] != UInt8(ord("`")):
             return -3
-        var pos2 = rel + 1  # index of 2nd back‑tick
 
-        var hlen: Int = 0
-        var slen: Int = 0
-        var lcnt: Int = 0
-        var bpl: Int = 0
-        var cur: Int = 0
-        var which: Int = 0
-        for i in range(1, pos2):
-            var ch = hdr[i]
-            if ch == UInt8(ord(":")):
-                if which == 0:
-                    hlen = cur
-                elif which == 1:
-                    slen = cur
-                elif which == 2:
-                    lcnt = cur
-                cur = 0
-                which += 1
-            else:
-                cur = cur * 10 + Int(ch - ASCII_ZERO)
-        bpl = cur  # fourth number
-
-        # Validate and keep only the header
-        # var imputed_len = len(hdr) - (pos2 + 1)
-        # if imputed_len != hlen:
-        #    return -3
-        memcpy(self.name.ptr, self.name.ptr.offset(pos2 + 1), hlen)
-        self.name.resize(hlen)
-
-        # ── 4 SEQUENCE block ---------------------------------------
-        var disk_seq = slen + lcnt  # immutable reference
-        var rest_seq = disk_seq  # mutable copy for read_bytes
-
+        # ── 4 Read the sequence block (slen + lcnt bytes on disk) -----------
+        var disk_seq = slen + lcnt
         self.seq.reserve(disk_seq)
-        var got_seq = self.reader.read_bytes(self.seq, rest_seq)
+        var _disk_seq = disk_seq
+        var got_seq = self.reader.read_bytes(self.seq, _disk_seq)
         if got_seq != disk_seq:
             return -3  # truncated record
 
-        # compact in‑place: copy (bpl‑1) bases, skip the LF, repeat
-        var write_pos: Int = 0
-        var read_pos: Int = 0
-        while read_pos < disk_seq:
-            memcpy(
-                self.seq.addr(write_pos),  # destination
-                self.seq.addr(read_pos),  # source
-                bpl - 1,
-            )  # copy only the bases
-            write_pos += bpl - 1
-            read_pos += bpl  # jump over the LF
-        self.seq.resize(write_pos)  # write_pos == slen
-        # This is cold code that seems to preven inlining, it improve performance.
-        if 1 == False:
-            print(
-                "ERROR: Sequence read failed. got_seq != disk_seq",
-                "write_pos",
-                write_pos,
-                "disk_seq",
-                disk_seq,
-                "bpl",
-                bpl,
-                "slen",
-                len(self.seq),
-            )
-            pass
+        # ── 5  Remove newline characters in‑place using the helper -----------
+        var ok = strip_newlines_in_place(self.seq, disk_seq, slen)
+        if not ok:
+            return -2  # mismatch: not the expected base count
+
         return len(self.seq)
 
     fn read_fastxpp_swar(mut self) raises -> Int:
@@ -877,12 +746,12 @@ fn main() raises:
         BufferedReader(FileReader(fh^))
     )
 
-    var first = reader.read_fastxpp_read_once()
+    var first = reader.read_fastxpp()
     print("first‑read returned", first)
 
     var count = 0
     while True:
-        var n = reader.read_fastxpp_read_once()
+        var n = reader.read_fastxpp()
         if n < 0:
             break
         count += 1

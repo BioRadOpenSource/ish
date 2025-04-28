@@ -16,27 +16,13 @@ fn bench_original(path: String) raises -> (Int, Int, Float64):
     return (rec, seq, perf_counter() - t0)
 
 
-fn bench_fastxpp(path: String) raises -> (Int, Int, Float64):
+fn bench_fastxpp_strip_newline(path: String) raises -> (Int, Int, Float64):
     var rdr = FastxReader[read_comment=False](BufferedReader(GZFile(path, "r")))
     var rec = 0
     var seq = 0
     var t0 = perf_counter()
     while True:
-        var n = rdr.read_fastxpp()
-        if n < 0:
-            break
-        rec += 1
-        seq += n
-    return (rec, seq, perf_counter() - t0)
-
-
-fn bench_fastxpp_bpl(path: String) raises -> (Int, Int, Float64):
-    var rdr = FastxReader[read_comment=False](BufferedReader(GZFile(path, "r")))
-    var rec = 0
-    var seq = 0
-    var t0 = perf_counter()
-    while True:
-        var n = rdr.read_fastxpp_bpl()
+        var n = rdr.read_fastxpp_strip_newline()
         if n < 0:
             break
         rec += 1
@@ -72,20 +58,6 @@ fn bench_fastxpp_read_once(path: String) raises -> (Int, Int, Float64):
     return (rec, seq, perf_counter() - t0)
 
 
-fn bench_fastxpp_bpl2(path: String) raises -> (Int, Int, Float64):
-    var rdr = FastxReader[read_comment=False](BufferedReader(GZFile(path, "r")))
-    var rec = 0
-    var seq = 0
-    var t0 = perf_counter()
-    while True:
-        var n = rdr.read_fastxpp_bpl()
-        if n < 0:
-            break
-        rec += 1
-        seq += n
-    return (rec, seq, perf_counter() - t0)
-
-
 fn main() raises:
     var argv = sys.argv()
     if len(argv) < 2 or len(argv) > 3:
@@ -102,15 +74,16 @@ fn main() raises:
         print(
             "mode=orig          records=", r, "  bases=", s, "  time=", t, "s"
         )
-    elif mode == "bpl":
-        r, s, t = bench_fastxpp_bpl(path)
+    elif mode == "strip_newline":
+        r, s, t = bench_fastxpp_strip_newline(path)
         print(
-            "mode=fastxpp_bpl   records=", r, "  bases=", s, "  time=", t, "s"
-        )
-    elif mode == "fastxpp":
-        r, s, t = bench_fastxpp(path)
-        print(
-            "mode=fastxpp       records=", r, "  bases=", s, "  time=", t, "s"
+            "mode=read_fastxpp_strip_newline   records=",
+            r,
+            "  bases=",
+            s,
+            "  time=",
+            t,
+            "s",
         )
     elif mode == "swar":
         r, s, t = bench_fastxpp_swar(path)
@@ -121,9 +94,15 @@ fn main() raises:
         r, s, t = bench_fastxpp_read_once(path)
         print("mode=read_once   records=", r, "  bases=", s, "  time=", t, "s")
     elif mode == "filler":
-        r, s, t = bench_fastxpp_bpl2(path)
+        r, s, t = bench_fastxpp_read_once(path)
         print(
-            "mode=fastxpp_bpl   records=", r, "  bases=", s, "  time=", t, "s"
+            "mode=bench_fastxpp_read_once   records=",
+            r,
+            "  bases=",
+            s,
+            "  time=",
+            t,
+            "s",
         )
     else:
         print("Unknown mode:", mode)
