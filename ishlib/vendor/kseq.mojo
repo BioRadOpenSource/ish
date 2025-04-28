@@ -39,17 +39,6 @@ alias ASCII_FASTQ_SEPARATOR = ord("+")
 alias ASCII_ZERO = UInt8(ord("0"))
 
 
-fn read_chunk(mut self) raises -> Span[UInt8]:
-    if self.start >= self.end:
-        self.start = 0
-        self.end = self.reader.unbuffered_read(self.buffer.as_span())
-        if self.end < 0:
-            raise IOError
-    var out = self.buffer.as_span()[self.start : self.end]
-    self.start = self.end  # mark consumed
-    return out
-
-
 # ──────────────────────────────────────────────────────────────
 #  Helpers for reading in fastx++ files
 # ──────────────────────────────────────────────────────────────
