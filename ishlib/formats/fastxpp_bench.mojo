@@ -5,25 +5,6 @@ from ishlib.vendor.zlib import GZFile
 from ExtraMojo.utils.ir import dump_ir
 
 
-# ── thin wrapper so FileHandle implements KRead ─────────────────────────
-# struct FileReader(KRead):
-#     var fh: FileHandle
-
-#     fn __init__(out self, owned fh: FileHandle):
-#         self.fh = fh^
-
-#     fn __moveinit__(out self, owned other: Self):
-#         self.fh = other.fh^
-
-#     fn unbuffered_read[
-#         o: MutableOrigin
-#     ](mut self, buffer: Span[UInt8, o]) raises -> Int:
-#         return Int(self.fh.read(buffer.unsafe_ptr(), len(buffer)))
-
-
-# ────────────────────────────────────────────────────────────────────────
-
-
 fn bench_original(path: String) raises -> (Int, Int, Float64):
     var rdr = FastxReader[read_comment=False](BufferedReader(GZFile(path, "r")))
     var rec = 0
