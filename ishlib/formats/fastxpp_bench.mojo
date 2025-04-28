@@ -77,6 +77,20 @@ fn bench_fastxpp_swar(path: String) raises -> (Int, Int, Float64):
     return (rec, seq, perf_counter() - t0)
 
 
+fn bench_fastxpp_read_once(path: String) raises -> (Int, Int, Float64):
+    var rdr = FastxReader[read_comment=False](BufferedReader(GZFile(path, "r")))
+    var rec = 0
+    var seq = 0
+    var t0 = perf_counter()
+    while True:
+        var n = rdr.read_fastxpp_read_once()
+        if n < 0:
+            break
+        rec += 1
+        seq += n
+    return (rec, seq, perf_counter() - t0)
+
+
 fn bench_fastxpp_bpl2(path: String) raises -> (Int, Int, Float64):
     var rdr = FastxReader[read_comment=False](BufferedReader(GZFile(path, "r")))
     var rec = 0
@@ -122,6 +136,9 @@ fn main() raises:
         print(
             "mode=fastxpp_swar   records=", r, "  bases=", s, "  time=", t, "s"
         )
+    elif mode == "read_once":
+        r, s, t = bench_fastxpp_read_once(path)
+        print("mode=read_once   records=", r, "  bases=", s, "  time=", t, "s")
     elif mode == "filler":
         r, s, t = bench_fastxpp_bpl2(path)
         print(

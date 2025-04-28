@@ -748,6 +748,7 @@ struct FastxReader[R: KRead, read_comment: Bool = True](Movable):
             print("ERROR: Opening backtick check failed. hdr[0]")
             return -3  # not a FASTX++ BPL header
 
+        # useful debugging
         # for i in range(len(hdr)):
         #     var code = Int(hdr[i])
         #     print(i, hdr[i], code, chr(code))
@@ -822,7 +823,7 @@ struct FastxReader[R: KRead, read_comment: Bool = True](Movable):
             return -3
 
         var slen = decode[9](hdr[1:10])
-        var lcnt = decode[7](hdr[10:17])
+        var lcnt = decode[7](hdr[10:17])  # not needed in this approach
         var bpl = decode[3](hdr[17:20])
 
         if hdr[20] != UInt8(ord("`")):
@@ -849,7 +850,7 @@ struct FastxReader[R: KRead, read_comment: Bool = True](Movable):
 
             copied += got
 
-            # consume newline (or CRLF pair)
+            # consume newline
             var nl = self.reader.read_byte()
             if nl != ASCII_NEWLINE:
                 print("ERROR: expected newline after sequence chunk, found", nl)
