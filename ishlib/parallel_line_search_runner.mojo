@@ -363,7 +363,8 @@ struct GpuParallelLineSearchRunner[
 
             seq_index += 1
             if (
-                bytes_saved >= (self.settings.batch_size - max_target_length)
+                bytes_saved
+                >= (self.settings.readable_batch_size() - max_target_length)
                 or not do_work
             ):
                 var done_reading = perf_counter()

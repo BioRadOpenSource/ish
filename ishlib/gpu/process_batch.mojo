@@ -50,7 +50,7 @@ fn parallel_starts_ends[
     )
 
     var targets_per_device = ceildiv(len(seqs), len(ctxs))
-    Logger.debug(
+    Logger.timing(
         "Targets per device:",
         targets_per_device,
         "for ",
@@ -65,7 +65,7 @@ fn parallel_starts_ends[
     var gpu_buffer_create_start = perf_counter()
     for ctx in ctxs:
         ctx[].set_block_info(
-            len(seqs),
+            targets_per_device,
             len(matcher.encoded_pattern()),
             matcher.matrix_len(),
             matcher.matrix_kind(),
@@ -88,58 +88,60 @@ fn parallel_starts_ends[
     # fill in input data
     var buffer_fill_start = perf_counter()
 
-    var total_items = 0
-    for ctx in ctxs:
-        var end = min(
-            total_items + ctx[].block_info.value().num_targets, len(seqs)
-        )
-        ctx[].device_create_input_buffers()
-        ctx[].set_host_inputs(
+    var amounts = List[Tuple[Int, Int]]()
+    for i in range(0, len(seqs), targets_per_device):
+        amounts.append((i, min(i + targets_per_device, len(seqs))))
+
+    @parameter
+    fn copy_data(i: Int):
+        s, e = amounts[i]
+        # Tried sorting here, but it's slower than just processing it
+        ctxs[i].set_host_inputs(
             matcher.encoded_pattern(),
             matcher.matrix_bytes(),
             matcher.matrix_len(),
-            seqs[total_items:end],
+            seqs[s:e],
         )
-        ctx[].copy_inputs_to_device()
-        total_items += end
 
-    var buffer_fill_end = perf_counter()
-    Logger.timing(
-        "Time to fill host buffer:", buffer_fill_end - buffer_fill_start
-    )
+    parallelize[copy_data](len(ctxs))
+
+    # var total_items = 0
+    # for ctx in ctxs:
 
     # This is the slowest part by far, moving it around doesn't seem to help much. I wish we had threads.
-    var cpu_start = perf_counter()
-    cpu_parallel_starts_ends(matcher, settings, cpu_seqs, outputs)
-    var cpu_end = perf_counter()
-    Logger.timing("Long seqs cpu time: ", cpu_end - cpu_start)
 
-    for ctx in ctxs:
-        ctx[].synchronize()
+    # for ctx in ctxs:
+    #     ctx[].synchronize()
     var buffers_filled = perf_counter()
     Logger.timing("Buffer fill time:", buffers_filled - buffers_created)
 
     # Launch Kernel
     for ctx in ctxs:
+        ctx[].device_create_input_buffers()
+        ctx[].copy_inputs_to_device()
         ctx[].device_create_output_buffers()
         Logger.debug("Created device output buffers")
         ctx[].launch_kernel()
         Logger.debug("Launched kernel")
         ctx[].host_create_output_buffers()
         Logger.debug("Created host output buffers")
+        ctx[].copy_outputs_to_host()
 
     # Process the long seqs
-    # TODO: work on ordering these correctly
+    var cpu_start = perf_counter()
+    cpu_parallel_starts_ends(matcher, settings, cpu_seqs, outputs)
+    var cpu_end = perf_counter()
+    Logger.timing("Long seqs cpu time: ", cpu_end - cpu_start)
 
     # Get outputs
     for ctx in ctxs:
         ctx[].synchronize()
-        ctx[].copy_outputs_to_host()
+        # ctx[].copy_outputs_to_host()
     var gpu_done = perf_counter()
     Logger.timing("GPU processing time (with cpu):", gpu_done - buffers_filled)
 
-    for ctx in ctxs:
-        ctx[].synchronize()
+    # for ctx in ctxs:
+    #     ctx[].synchronize()
     var copy_down = perf_counter()
     Logger.timing("Copy down time:", copy_down - gpu_done)
 

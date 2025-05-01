@@ -36,6 +36,7 @@ from ishlib.matcher.alignment.semi_global_aln.basic import (
     semi_global_parasail_gpu,
     SGResult,
 )
+from ishlib.vendor.log import Logger
 
 
 # GPU
@@ -133,6 +134,14 @@ fn parse_args() raises -> ParsedOpts:
                 "Score for a extending a gap, as a positive number that will be"
                 " subtracted."
             ),
+        )
+    )
+    parser.add_opt(
+        OptConfig(
+            "devices",
+            OptKind.IntLike,
+            default_value=String("1"),
+            description="Num GPUs to use.",
         )
     )
     parser.add_opt(
@@ -469,6 +478,7 @@ fn main() raises:
     var output_file = opts.get_string("output-file")
     var metrics_file = opts.get_string("metrics-file")
     var iterations = opts.get_int("iterations")
+    var devices = opts.get_int("devices")
 
     # Get the algorithm to use
     var algo = opts.get_string("algo")
@@ -584,6 +594,7 @@ fn main() raises:
             matrix_name,
             gap_open_score,
             gap_extension_score,
+            devices,
         )
     elif algorithm == "striped-semi-global-parallel":
         bench_striped_semi_global_parallel(
@@ -1497,7 +1508,7 @@ struct AlignerDevice:
         self.targets = BufferPair[DType.uint8](
             self.ctx, num_targets * max_target_length
         )
-        print("Creating buffers for", num_targets, "targets")
+        Logger.info("Creating buffers for", num_targets, "targets")
         self.target_lengths = BufferPair[DType.uint32](self.ctx, num_targets)
         self.scoring_matrix = BufferPair[DType.int8](self.ctx, matrix_len)
         self.scores = BufferPair[DType.int32](self.ctx, num_targets, 0)
@@ -1581,6 +1592,7 @@ fn bench_basic_semi_global_gpu_parallel(
     matrix_name: String,
     gap_open_score: Int,
     gap_extension_score: Int,
+    devices: Int,
 ) raises:
     alias NUM_SEQS = 533591
     ################
@@ -1598,10 +1610,13 @@ fn bench_basic_semi_global_gpu_parallel(
     fn cmp_lens(lhs: FastaRecord, rhs: FastaRecord) capturing -> Bool:
         return len(lhs.seq) > len(rhs.seq)
 
+    fn bcmp_lens(lhs: ByteFastaRecord, rhs: ByteFastaRecord) capturing -> Bool:
+        return len(lhs.seq) < len(rhs.seq)
+
     # TODO: be better
     # Try to group like-lengths together
-    sort[cmp_lens](target_seqs)
-    target_seqs.reverse()
+    # sort[cmp_lens](target_seqs)
+    # target_seqs.reverse()
 
     var targets = List[ByteFastaRecord](capacity=len(target_seqs))
     var target_ends = List[Int]()
@@ -1616,13 +1631,13 @@ fn bench_basic_semi_global_gpu_parallel(
         #     " PE=3 SV=1"
         # ):
         #     continue
-        # print(t.name)
+        # Logger.timing(t.name)
         # I should be able to pass with ^ here, not sure why I can't
         var r = ByteFastaRecord(t.name, t.seq, matrix)
         target_ends.append(len(t.seq))
-        # print("start, end, seq: ", start, end, t.seq)
+        # Logger.timing("start, end, seq: ", start, end, t.seq)
         targets.append(r^)
-        # print("Remove break here")
+        # Logger.timing("Remove break here")
         # break
     # targets.reverse()
     # ref_coords.reverse()
@@ -1636,7 +1651,7 @@ fn bench_basic_semi_global_gpu_parallel(
 
     # Create query profiles
     var prep_end = perf_counter()
-    print("Setup Time:", prep_end - prep_start, file=stderr)
+    Logger.timing("Setup Time:", prep_end - prep_start)
     var writer = DelimWriter(
         BufferedWriter(open(output_file, "w")),
         write_header=True,
@@ -1646,16 +1661,16 @@ fn bench_basic_semi_global_gpu_parallel(
     ################
     # Copy to GPU
     ################
-    var num_devices = DeviceContext.number_of_devices()
-    # num_devices = 1
+    # var num_devices = DeviceContext.number_of_devices()
+    var num_devices = devices
     var ctxs = List[AlignerDevice](capacity=num_devices)
     for i in range(0, num_devices):
         ctxs.append(AlignerDevice(DeviceContext(i)))
 
     var targets_per_device = ceildiv(len(target_ends), num_devices)
-    print("Devices:", num_devices)
-    print("Total targets:", len(target_ends))
-    print("Targets per device:", targets_per_device)
+    Logger.timing("Devices:", num_devices)
+    Logger.timing("Total targets:", len(target_ends))
+    Logger.timing("Targets per device:", targets_per_device)
 
     # Create Buffers
     for ctx_id in range(0, num_devices):
@@ -1670,43 +1685,66 @@ fn bench_basic_semi_global_gpu_parallel(
         ctxs[ctx_id].synchronize()
 
     # Fill in input data
-    var device_id = 0
+    var amounts = List[Tuple[Int, Int]]()
     for i in range(0, len(target_ends), targets_per_device):
-        ctxs[device_id].set_host_inputs(
+        amounts.append((i, min(i + targets_per_device, len(targets))))
+
+    @parameter
+    fn copy_data(i: Int):
+        start, end = amounts[i]
+        var local_targets = targets[start:end]
+        sort[bcmp_lens](local_targets)
+
+        ctxs[i].set_host_inputs(
             Span(queries[0].seq),
             basic_matrix.values,
             len(basic_matrix),
-            targets[i : min(i + targets_per_device, len(targets))],
+            # targets[start:end],
+            local_targets,
             max_target_length=1024,
         )
-        ctxs[device_id].copy_inputs_to_device()
-        device_id += 1
+
+    parallelize[copy_data](num_devices)
+
+    # var device_id = 0
+    # for i in range(0, len(target_ends), targets_per_device):
+    #     ctxs[device_id].set_host_inputs(
+    #         Span(queries[0].seq),
+    #         basic_matrix.values,
+    #         len(basic_matrix),
+    #         targets[i : min(i + targets_per_device, len(targets))],
+    #         max_target_length=1024,
+    #     )
+    #     ctxs[device_id].copy_inputs_to_device()
+    #     device_id += 1
 
     # Don't count the data setup time, but do count the transfer time
     var gpu_start = perf_counter()
-    for ctx_id in range(0, num_devices):
-        ctxs[ctx_id].synchronize()
+    # for ctx_id in range(0, num_devices):
+    #     ctxs[ctx_id].synchronize()
     var copy_up_done = perf_counter()
     var copy_up_time = copy_up_done - gpu_start
-    print("Copy up time:", copy_up_done - gpu_start)
+    Logger.timing("Copy up time:", copy_up_done - gpu_start)
 
     # Launch kernels
     var kernel_start_time = perf_counter()
     for ctx_id in range(0, num_devices):
+        ctxs[ctx_id].copy_inputs_to_device()
         ctxs[ctx_id].launch_kernel(threads_to_launch=15000)
-
-    for ctx_id in range(0, num_devices):
-        ctxs[ctx_id].synchronize()
         ctxs[ctx_id].copy_outputs_to_host()
+
+    # for ctx_id in range(0, num_devices):
+    #     # ctxs[ctx_id].synchronize()
+    #     ctxs[ctx_id].copy_outputs_to_host()
     var kernel_done = perf_counter()
     var kernel_time = kernel_done - kernel_start_time
-    print("Kenrel runtime only:", kernel_done - kernel_start_time)
+    Logger.timing("Kenrel runtime only:", kernel_done - kernel_start_time)
 
     for ctx_id in range(0, num_devices):
         ctxs[ctx_id].synchronize()
     var copy_down_done = perf_counter()
     var copy_down_time = copy_down_done - kernel_done
-    print("Copy down time:", copy_down_done - kernel_done)
+    Logger.timing("Copy down time:", copy_down_done - kernel_done)
 
     # Write output
     var work = 0
@@ -1736,18 +1774,18 @@ fn bench_basic_semi_global_gpu_parallel(
             items += 1
 
     var gpu_end = perf_counter()
-    print("Write time:", gpu_end - write_start)
+    Logger.timing("Write time:", gpu_end - write_start)
     writer.flush()
     var elapsed = gpu_end - gpu_start
     var cells_per_second = work / elapsed
-    print("Num Devices:", num_devices, file=stderr)
-    print("GPU TOOK:", elapsed, file=stderr)
-    print("Algo: basic-semi-global-gpu", file=stderr)
-    print("Ran in", elapsed, "seconds", file=stderr)
-    print("Total cells updated :", work, file=stderr)
-    print("Cells per second:", cells_per_second, file=stderr)
-    print("GCUPs:", cells_per_second / 1000000000, file=stderr)
-    print(
+    Logger.timing("Num Devices:", num_devices)
+    Logger.timing("GPU TOOK:", elapsed)
+    Logger.timing("Algo: basic-semi-global-gpu")
+    Logger.timing("Ran in", elapsed, "seconds")
+    Logger.timing("Total cells updated :", work)
+    Logger.timing("Cells per second:", cells_per_second)
+    Logger.timing("GCUPs:", cells_per_second / 1000000000)
+    Logger.timing(
         "gpu GCUPs:",
         (work / (kernel_time + copy_up_time + copy_down_time) / 1000000000),
     )
@@ -1936,14 +1974,7 @@ fn gpu_align_batched(
     # Get the start/end coords for this ref seq
     var target_len = Int(target_ends[idx])
 
-    var result = semi_global_parasail_gpu[
-        DType.int16,
-        max_query_length=200,
-        free_query_start_gaps=True,
-        free_query_end_gaps=True,
-        free_target_start_gaps=True,
-        free_target_end_gaps=True,
-    ](
+    var result = semi_global_parasail_gpu[DType.int16, max_query_length=200,](
         query_seq_ptr,
         query_len,
         ref_buffer.unsafe_ptr(),
@@ -1954,6 +1985,10 @@ fn gpu_align_batched(
         basic_matrix,
         gap_open_penalty=gap_open_penalty,
         gap_extension_penalty=gap_ext_penalty,
+        free_query_start_gaps=True,
+        free_query_end_gaps=True,
+        free_target_start_gaps=True,
+        free_target_end_gaps=True,
     )
 
     # Store results
@@ -1978,34 +2013,252 @@ fn process_with_coarse_graining(
 ) raises:
     alias BLOCK_SIZE = 32  # Align with warp size
     var num_blocks = ceildiv(threads_to_launch, BLOCK_SIZE)
-    print("Launching kernel!")
 
-    # alias BLOCK_SIZE = 1
+    if query_len <= 25:
+        var aligner = ctx.compile_function[gpu_align_coarse[25]]()
+        ctx.enqueue_function(
+            aligner,
+            dev_query,
+            dev_ref_buffer,
+            dev_target_ends,
+            dev_score_result_buffer,
+            dev_query_end_result_buffer,
+            dev_ref_end_result_buffer,
+            dev_basic_matrix,
+            basic_matrix_len,
+            query_len,
+            target_ends_len,
+            threads_to_launch,
+            grid_dim=num_blocks,
+            block_dim=BLOCK_SIZE,
+        )
+    elif query_len <= 50:
+        var aligner = ctx.compile_function[gpu_align_coarse[50]]()
+        ctx.enqueue_function(
+            aligner,
+            dev_query,
+            dev_ref_buffer,
+            dev_target_ends,
+            dev_score_result_buffer,
+            dev_query_end_result_buffer,
+            dev_ref_end_result_buffer,
+            dev_basic_matrix,
+            basic_matrix_len,
+            query_len,
+            target_ends_len,
+            threads_to_launch,
+            grid_dim=num_blocks,
+            block_dim=BLOCK_SIZE,
+        )
+    elif query_len <= 100:
+        var aligner = ctx.compile_function[gpu_align_coarse[100]]()
+        ctx.enqueue_function(
+            aligner,
+            dev_query,
+            dev_ref_buffer,
+            dev_target_ends,
+            dev_score_result_buffer,
+            dev_query_end_result_buffer,
+            dev_ref_end_result_buffer,
+            dev_basic_matrix,
+            basic_matrix_len,
+            query_len,
+            target_ends_len,
+            threads_to_launch,
+            grid_dim=num_blocks,
+            block_dim=BLOCK_SIZE,
+        )
+    elif query_len <= 200:
+        var aligner = ctx.compile_function[gpu_align_coarse[200]]()
+        ctx.enqueue_function(
+            aligner,
+            dev_query,
+            dev_ref_buffer,
+            dev_target_ends,
+            dev_score_result_buffer,
+            dev_query_end_result_buffer,
+            dev_ref_end_result_buffer,
+            dev_basic_matrix,
+            basic_matrix_len,
+            query_len,
+            target_ends_len,
+            threads_to_launch,
+            grid_dim=num_blocks,
+            block_dim=BLOCK_SIZE,
+        )
+    elif query_len <= 300:
+        var aligner = ctx.compile_function[gpu_align_coarse[300]]()
+        ctx.enqueue_function(
+            aligner,
+            dev_query,
+            dev_ref_buffer,
+            dev_target_ends,
+            dev_score_result_buffer,
+            dev_query_end_result_buffer,
+            dev_ref_end_result_buffer,
+            dev_basic_matrix,
+            basic_matrix_len,
+            query_len,
+            target_ends_len,
+            threads_to_launch,
+            grid_dim=num_blocks,
+            block_dim=BLOCK_SIZE,
+        )
+    elif query_len <= 400:
+        var aligner = ctx.compile_function[gpu_align_coarse[400]]()
+        ctx.enqueue_function(
+            aligner,
+            dev_query,
+            dev_ref_buffer,
+            dev_target_ends,
+            dev_score_result_buffer,
+            dev_query_end_result_buffer,
+            dev_ref_end_result_buffer,
+            dev_basic_matrix,
+            basic_matrix_len,
+            query_len,
+            target_ends_len,
+            threads_to_launch,
+            grid_dim=num_blocks,
+            block_dim=BLOCK_SIZE,
+        )
+    elif query_len <= 500:
+        var aligner = ctx.compile_function[gpu_align_coarse[500]]()
+        ctx.enqueue_function(
+            aligner,
+            dev_query,
+            dev_ref_buffer,
+            dev_target_ends,
+            dev_score_result_buffer,
+            dev_query_end_result_buffer,
+            dev_ref_end_result_buffer,
+            dev_basic_matrix,
+            basic_matrix_len,
+            query_len,
+            target_ends_len,
+            threads_to_launch,
+            grid_dim=num_blocks,
+            block_dim=BLOCK_SIZE,
+        )
+    elif query_len <= 600:
+        var aligner = ctx.compile_function[gpu_align_coarse[600]]()
+        ctx.enqueue_function(
+            aligner,
+            dev_query,
+            dev_ref_buffer,
+            dev_target_ends,
+            dev_score_result_buffer,
+            dev_query_end_result_buffer,
+            dev_ref_end_result_buffer,
+            dev_basic_matrix,
+            basic_matrix_len,
+            query_len,
+            target_ends_len,
+            threads_to_launch,
+            grid_dim=num_blocks,
+            block_dim=BLOCK_SIZE,
+        )
+    elif query_len <= 700:
+        var aligner = ctx.compile_function[gpu_align_coarse[700]]()
+        ctx.enqueue_function(
+            aligner,
+            dev_query,
+            dev_ref_buffer,
+            dev_target_ends,
+            dev_score_result_buffer,
+            dev_query_end_result_buffer,
+            dev_ref_end_result_buffer,
+            dev_basic_matrix,
+            basic_matrix_len,
+            query_len,
+            target_ends_len,
+            threads_to_launch,
+            grid_dim=num_blocks,
+            block_dim=BLOCK_SIZE,
+        )
 
-    var aligner = ctx.compile_function[gpu_align_coarse]()
-
-    ctx.enqueue_function(
-        aligner,
-        dev_query,
-        dev_ref_buffer,
-        dev_target_ends,
-        dev_score_result_buffer,
-        dev_query_end_result_buffer,
-        dev_ref_end_result_buffer,
-        dev_basic_matrix,
-        basic_matrix_len,
-        query_len,
-        target_ends_len,
-        threads_to_launch,
-        grid_dim=num_blocks,
-        block_dim=BLOCK_SIZE,
-    )
+    elif query_len <= 800:
+        var aligner = ctx.compile_function[gpu_align_coarse[800]]()
+        ctx.enqueue_function(
+            aligner,
+            dev_query,
+            dev_ref_buffer,
+            dev_target_ends,
+            dev_score_result_buffer,
+            dev_query_end_result_buffer,
+            dev_ref_end_result_buffer,
+            dev_basic_matrix,
+            basic_matrix_len,
+            query_len,
+            target_ends_len,
+            threads_to_launch,
+            grid_dim=num_blocks,
+            block_dim=BLOCK_SIZE,
+        )
+    elif query_len <= 1600:
+        var aligner = ctx.compile_function[gpu_align_coarse[1600]]()
+        ctx.enqueue_function(
+            aligner,
+            dev_query,
+            dev_ref_buffer,
+            dev_target_ends,
+            dev_score_result_buffer,
+            dev_query_end_result_buffer,
+            dev_ref_end_result_buffer,
+            dev_basic_matrix,
+            basic_matrix_len,
+            query_len,
+            target_ends_len,
+            threads_to_launch,
+            grid_dim=num_blocks,
+            block_dim=BLOCK_SIZE,
+        )
+    elif query_len <= 3200:
+        var aligner = ctx.compile_function[gpu_align_coarse[3200]]()
+        ctx.enqueue_function(
+            aligner,
+            dev_query,
+            dev_ref_buffer,
+            dev_target_ends,
+            dev_score_result_buffer,
+            dev_query_end_result_buffer,
+            dev_ref_end_result_buffer,
+            dev_basic_matrix,
+            basic_matrix_len,
+            query_len,
+            target_ends_len,
+            threads_to_launch,
+            grid_dim=num_blocks,
+            block_dim=BLOCK_SIZE,
+        )
+    elif query_len <= 6400:
+        var aligner = ctx.compile_function[gpu_align_coarse[6400]]()
+        ctx.enqueue_function(
+            aligner,
+            dev_query,
+            dev_ref_buffer,
+            dev_target_ends,
+            dev_score_result_buffer,
+            dev_query_end_result_buffer,
+            dev_ref_end_result_buffer,
+            dev_basic_matrix,
+            basic_matrix_len,
+            query_len,
+            target_ends_len,
+            threads_to_launch,
+            grid_dim=num_blocks,
+            block_dim=BLOCK_SIZE,
+        )
+    else:
+        Logger.error("Unsupported query length")
 
     # ctx.synchronize()
 
 
 # Modified kernel that processes only indices within a specific batch
-fn gpu_align_coarse(
+fn gpu_align_coarse[
+    query_length: UInt
+](
     query: DeviceBuffer[DType.uint8],
     ref_buffer: DeviceBuffer[DType.uint8],
     target_ends: DeviceBuffer[DType.uint32],
@@ -2034,7 +2287,7 @@ fn gpu_align_coarse(
 
     # Load query sequence into shared memory - all threads use the same query
     var query_seq_ptr = stack_allocation[
-        200,
+        query_length,
         SIMD[DType.uint8, 1],
         address_space = AddressSpace.SHARED,
     ]()
@@ -2052,7 +2305,7 @@ fn gpu_align_coarse(
         return
 
     # Hard coded parameters
-    var gap_open_penalty = -3
+    var gap_open_penalty = -6
     var gap_ext_penalty = -1
 
     # Process references in a strided pattern
@@ -2064,11 +2317,7 @@ fn gpu_align_coarse(
         # Perform the alignment
         var result = semi_global_parasail_gpu[
             DType.int16,
-            max_query_length=200,
-            free_query_start_gaps=True,
-            free_query_end_gaps=True,
-            free_target_start_gaps=True,
-            free_target_end_gaps=True,
+            max_query_length=query_length,
         ](
             query_seq_ptr,
             query_len,
@@ -2080,6 +2329,10 @@ fn gpu_align_coarse(
             basic_matrix,
             gap_open_penalty=gap_open_penalty,
             gap_extension_penalty=gap_ext_penalty,
+            free_query_start_gaps=True,
+            free_query_end_gaps=True,
+            free_target_start_gaps=True,
+            free_target_end_gaps=True,
         )
 
         barrier()
