@@ -40,6 +40,15 @@ struct SearcherSettings:
     fn is_output_stdout(read self) -> Bool:
         return self.output_file == "/dev/stdout"
 
+    @always_inline
+    fn readable_batch_size(read self) -> UInt:
+        """The batch size to be read.
+
+        This is distance from batch_size, which is the number of bytes processed in parallel by each device.
+        This only comes into play when multiple GPUs are used.
+        """
+        return self.batch_size * max(1, self.max_gpus)
+
     @staticmethod
     fn from_args() raises -> Optional[Self]:
         var parser = OptParser(

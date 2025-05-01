@@ -9,6 +9,7 @@ from typing import Optional, List
 ISH_128 = "/home/ubuntu/dev/ish/ish-aligner-128"
 ISH_256 = "/home/ubuntu/dev/ish/ish-aligner-256"
 ISH_512 = "/home/ubuntu/dev/ish/ish-aligner-512"
+ISH_GPU = "/home/ubuntu/dev/ish/ish-aligner-gpu"
 
 PARASAIL_ALIGNER = "/home/ubuntu/dev/parasail/apps/parasail_aligner"
 
@@ -51,12 +52,13 @@ QUERY_SEQS = {
 MATRIX = ["blosum62", "blosum50"]
 
 # curl https://ftp.uniprot.org/pub/databases/uniprot/previous_releases/release-2015_11/knowledgebase/uniprot_sprot-only2015_11.tar.gz --output uniprot_sprot-only2015_11.tar.gz
-REF_DB = "/home/ubuntu/data/uniprot_sprot-only/uniprot_sprot.fasta"
+REF_DB = "/home/ubuntu/data/uniprot_sprot_5x.fasta"
 
 
 @dataclass
 class BenchmarkResults:
     aligner: str
+    devices: int
     total_query_seqs: int
     total_target_seqs: int
     query_len: int
@@ -72,6 +74,7 @@ class BenchmarkResults:
 
     HEADERS = [
         "aligner",
+        "devices",
         "total_query_seqs",
         "total_target_seqs",
         "query_len",
@@ -105,17 +108,18 @@ class BenchmarkResults:
                     "score_size": r.score_size,
                     "runtime_secs": r.runtime_secs,
                     "cells_updated": r.cells_updated,
+                    "devices": r.devices,
                     "gcups": r.gcups,
                 }
             )
 
     @staticmethod
-    def from_ish_csv_str(csv_str: str, aligner: str) -> List["BenchmarkResults"]:
+    def from_ish_csv_str(csv_str: str, aligner: str, devices: int = 0) -> List["BenchmarkResults"]:
         csv_file = io.StringIO(csv_str)
         reader = csv.DictReader(
             csv_file,
             delimiter=",",
-            fieldnames=BenchmarkResults.HEADERS[1:],  # skip "aligner"
+            fieldnames=BenchmarkResults.HEADERS[2:],  # skip "aligner" and "devices"
         )
         results = []
         x = next(reader)  # Skip headers
@@ -123,6 +127,7 @@ class BenchmarkResults:
             results.append(
                 BenchmarkResults(
                     aligner,
+                    devices,
                     int(row["total_query_seqs"]),
                     int(row["total_target_seqs"]),
                     int(row["query_len"]),
@@ -165,6 +170,7 @@ class BenchmarkResults:
 
         return BenchmarkResults(
             aligner,
+            0,
             int(kv_pairs["number of queries"]),
             int(kv_pairs["number of db seqs"]),
             int(query_len),
@@ -253,6 +259,7 @@ def run_ish_aligner(
     gap_open_score=3,
     gap_ext_score=1,
     iterations=3,
+    devices=0,
     *,
     algo="striped-local"
 ) -> Optional[BenchmarkResults]:
@@ -267,7 +274,8 @@ def run_ish_aligner(
         "--gap-ext-score", str(gap_ext_score),
         "--scoring-matrix", scoring_matrix,
         "--iterations", str(iterations),
-        "--score-size", score_size
+        "--score-size", score_size,
+        "--devices", str(devices)
     ]
     # fmt: on
     result = None
@@ -278,7 +286,7 @@ def run_ish_aligner(
         if "overflow" in out.stdout:
             print("Overflow, no result for: ", " ".join(args), file=sys.stderr)
             return None
-        result = BenchmarkResults.from_ish_csv_str(out.stdout, aligner="ish-aligner")[
+        result = BenchmarkResults.from_ish_csv_str(out.stdout, aligner="ish-aligner", devices=devices)[
             0
         ]  # Only take the first item since we're running this in such a way that only one will be there anyways
     except sp.CalledProcessError as e:
@@ -296,41 +304,45 @@ def main():
     writer.writeheader()
 
     results: List[BenchmarkResults] = []
-    for ish in [ISH_128]: #, ISH_256, ISH_512]:
+    for ish in [ISH_GPU]: #, ISH_256, ISH_512]:
         for score_size in score_sizes:
-            for query in QUERY_SEQS.keys():
-                print(f"Running {ish} on {query} with {score_size}", file=sys.stderr)
-                r = run_ish_aligner(
-                    ish,
-                    query,
-                    REF_DB,
-                    score_size=score_size,
-                    scoring_matrix="Blosum62",
-                    output_file="/home/ubuntu/outputs/ish-aligner.csv",
-                    iterations=1,
-                    algo="striped-semi-global"
-                )
-                if r:
-                    writer.writerow(
-                        {
-                            "aligner": r.aligner,
-                            "total_query_seqs": r.total_query_seqs,
-                            "total_target_seqs": r.total_target_seqs,
-                            "query_len": r.query_len,
-                            "matrix": r.matrix,
-                            "gap_open": r.gap_open,
-                            "gap_extend": r.gap_extend,
-                            "u8_width": r.u8_width,
-                            "u16_width": r.u16_width,
-                            "score_size": r.score_size,
-                            "runtime_secs": r.runtime_secs,
-                            "cells_updated": r.cells_updated,
-                            "gcups": r.gcups,
-                        }
+            for device in range(0, 4):
+                for query in QUERY_SEQS.keys():
+                    print(f"Running {ish} on {query} with {score_size}", file=sys.stderr)
+                    r = run_ish_aligner(
+                        ish,
+                        query,
+                        REF_DB,
+                        score_size=score_size,
+                        scoring_matrix="Blosum62",
+                        output_file="/home/ubuntu/outputs/ish-aligner.csv",
+                        iterations=3,
+                        algo="basic-semi-global-gpu-parallel",
+                        devices = device + 1
                     )
-                    results.append(r)
+                    if r:
+                        writer.writerow(
+                            {
+                                "aligner": r.aligner,
+                                "total_query_seqs": r.total_query_seqs,
+                                "total_target_seqs": r.total_target_seqs,
+                                "query_len": r.query_len,
+                                "matrix": r.matrix,
+                                "gap_open": r.gap_open,
+                                "gap_extend": r.gap_extend,
+                                "u8_width": r.u8_width,
+                                "u16_width": r.u16_width,
+                                "score_size": r.score_size,
+                                "runtime_secs": r.runtime_secs,
+                                "cells_updated": r.cells_updated,
+                                "devices": r.devices,
+                                "gcups": r.gcups,
+                            }
+                        )
+                        results.append(r)
 
-    for inst in ["sse41_128"]:
+    for inst in []:
+    # for inst in ["sse41_128"]:
     # for inst in ["sse41_128", "avx2_256"]:
     # for inst in ["neon_128"]:
         for score_size in score_sizes:
