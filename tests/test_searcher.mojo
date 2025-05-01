@@ -95,6 +95,7 @@ def test_line_ascii_search():
                             max_gpus=max_gpus[],
                             tty_info=TTYInfoResult(False, 0, 0),
                             sg_ends_free=sg[],
+                            verbose=False,
                         )
                     )
 
@@ -144,6 +145,7 @@ def test_fasta_actgn_search():
                             max_gpus=max_gpus[],
                             tty_info=TTYInfoResult(False, 0, 0),
                             sg_ends_free=sg[],
+                            verbose=False,
                         )
                     )
 
@@ -194,6 +196,7 @@ def test_fasta_blosum62_search():
                             max_gpus=max_gpus[],
                             tty_info=TTYInfoResult(False, 0, 0),
                             sg_ends_free=sg[],
+                            verbose=False,
                         )
                     )
 
