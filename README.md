@@ -122,3 +122,14 @@ Novel things:
 - Support muliple queries
 - Choose a better default between cpu and gpu / think about more. GPU crushes on big files / long running / many files, cpu is faster for small jobs
 - Add ability to not skip dotfiles
+
+
+TODO to make promises in the paper:
+
+- Read targets from stdin
+- FASTQ support
+
+Comparable tools:
+- https://github.com/laurikari/tre/ (the version of agrep this compiles)
+- https://github.com/fulcrumgenomics/fqgrep, no protein support, no fuzzy match
+- https://github.com/Rbfinch/grepq, only fasta/fastq, no fuzzy match
