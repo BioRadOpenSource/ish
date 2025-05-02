@@ -12,14 +12,7 @@ Accelerated alignment on the CLI.
 ## Install
 
 1. Install the mojo build tool [magic](https://docs.modular.com/magic/)
-1. `ish` relies on a dev version of ExtraMojo, for now. This will be updated soon and just be a normal dep.
 
-```
-git clone git@github.com:ExtraMojo/ExtraMojo.git
-cd ExtraMojo
-git checkout feat/check_cli_arg_len
-```
-1. Update the paths to `ExtraMojo` in the `mojoproject.toml` file.
 1. `magic run build`
 1. `./ish --help`
 
@@ -36,28 +29,56 @@ Search for inexact patterns in files.
 
 ARGS:
         <ARGS (>=1)>...
-                Files to search for the given pattern.
+                Pattern to search for, then any number of files or directories to search.
 FLAGS:
         --help <Bool> [Default: False]
                 Show help message
 
+        --verbose <Bool> [Default: False]
+                Verbose logging output.
+
 OPTIONS:
-        --pattern <String> [Required]
-                The pattern to search for.
+        --scoring-matrix <String> [Default: ascii]
+                The scoring matrix to use.
+                ascii: does no encoding of input bytes, matches are 2, mismatch is -2.
+                blosum62: encodes searched inputs as amino acids and uses the classic Blosum62 scoring matrix.
+                actgn: encodes searched inputs as nucleotides, matches are 2, mismatch is -2, Ns match anything
 
-        --min-score <Int> [Default: 1]
-                The min score needed to return a match.
 
-        --match-algo <String> [Default: ssw]
-                The algorithm to use for matching: [naive_exact, ssw, sw_local]
+        --score <Float> [Default: 0.8]
+                The min score needed to return a match. Results >= this value will be returned. The score is the found alignment score / the optimal score for the given scoring matrix and gap-open / gap-extend penalty.
+
+        --gap-open <Int> [Default: 3]
+                Score penalty for opening a gap.
+
+        --gap-extend <Int> [Default: 1]
+                Score penalty for extending a gap.
+
+        --match-algo <String> [Default: striped-semi-global]
+                The algorithm to use for matching: [naive_exact, striped-local, basic-local, basic-global, basic-semi-global, striped-semi-global]
 
         --record-type <String> [Default: line]
                 The input record type: [line, fasta]
+
+        --threads <Int> [Default: 24]
+                The number of threads to use. Defaults to the number of physical cores.
+
+        --batch-size <Int> [Default: 268435456]
+                The number of bytes in a parallel processing batch. Note that this may use 2-3x this amount to account for intermediate transfer buffers.
+
+        --max-gpus <Int> [Default: 0]
+                The max number of GPUs to try to use. If set to 0 this will ignore any found GPUs. In general, if you have only one query then there won't be much using more than 1 GPU. GPUs won't always be faster than CPU parallelization depending on the profile of data you are working with.
+
+        --output-file <String> [Default: /dev/stdout]
+                The file to write the output to, defaults to stdout.
+
+        --sg-ends-free <String> [Default: FFTT]
+                The ends-free for semi-global alignment, if used. The free ends are: (query_start, query_end, target_start, target_end). These must be specified with a T or F, all four must be specified. By default this target ends are free.
 ```
 
 ```sh
 # Some actual usage.
-❯ ./ish --pattern "blosum62" ---match-algo ssw ./ish_bench_aligner.mojo 
+❯ ./ish blosum62 ./ish_bench_aligner.mojo 
 ./ish_bench_aligner.mojo:94             default_value=String("Blosum50"),
 ./ish_bench_aligner.mojo:96                 "Scoring matrix to use. Currently supports: [Blosum50,"
 ./ish_bench_aligner.mojo:97                 " Blosum62, ACTGN]"
@@ -77,7 +98,7 @@ OPTIONS:
 - `striped-local`: Striped Smith-Waterman, SIMD accelerated, supports affine gaps and scoring matrices. TODO: non-ascii scoring matrix
 - `basic-local`: Classic full matrix dynamic programming Smith-Waterman alignment, does not support affine gaps.
 - `basic-global`: Classic Needleman-Wunsch global alignment.
-- `naive_exact`: 
+- TODO: update
 
 ## Record Types
 
