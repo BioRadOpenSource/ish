@@ -449,8 +449,10 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
             self.host_target_ends.value().buffer
         )
 
-    fn launch_kernel(mut self, threads_to_launch: UInt = 15000) raises:
-        self._process_with_coarse_graining(
+    fn launch_kernel[
+        block_size: UInt = 32
+    ](mut self, threads_to_launch: UInt = 15000) raises:
+        self._process_with_coarse_graining[block_size=block_size](
             threads_to_launch=threads_to_launch,
         )
 

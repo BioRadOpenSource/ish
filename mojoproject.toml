@@ -12,15 +12,20 @@ platforms = ["osx-arm64", "linux-64", "linux-aarch64"]
 version = "0.1.0"
 
 [tasks]
-build-bench = "magic run mojo build -D SIMD_MOD=1 --march native  -I ./ishlib -o ish-aligner ./ish_bench_aligner.mojo"
-build-bench-128 = "magic run mojo build -D SIMD_MOD=4 --march native  -I ./ishlib -o ish-aligner-128 ./ish_bench_aligner.mojo"
-build-bench-256 = "magic run mojo build -D SIMD_MOD=2 --march native  -I ./ishlib -o ish-aligner-256 ./ish_bench_aligner.mojo"
-build-bench-512 = "magic run mojo build -D SIMD_MOD=1 --march native  -I ./ishlib -o ish-aligner-512 ./ish_bench_aligner.mojo"
-build-bench-gpu = "magic run mojo build -D ISH_LOG_LEVEL=timing -D SIMD_MOD=1 --march native  -I ./ishlib -o ish-aligner-gpu ./ish_bench_aligner_gpu.mojo"
 build = "magic run mojo build -D ISH_LOG_LEVEL=info --march native -o ish main.mojo"
 debug = "magic run mojo build -D ISH_LOG_LEVEL=debug --debug-level line-tables --march native -o ish main.mojo"
 pkglib = "magic run mojo package ./ishlib"
 testlib = "magic run mojo test -I ishlib --co && magic run mojo test -I ishlib"
+
+# Bench the gpu fun in ish using Bench
+build-bench-gpu = "magic run mojo build -D ISH_LOG_LEVEL=timing --march native -I ./ishlib -o bench-gpu ./ish_bench_aligner_gpu_only.mojo"
+
+# Bench any algorithm using internal timings
+build-bench = "magic run mojo build -D SIMD_MOD=1 --march native  -I ./ishlib -o ish-aligner ./ish_bench_aligner.mojo"
+build-bench-128 = "magic run mojo build -D SIMD_MOD=4 --march native  -I ./ishlib -o ish-aligner-128 ./ish_bench_aligner.mojo"
+build-bench-256 = "magic run mojo build -D SIMD_MOD=2 --march native  -I ./ishlib -o ish-aligner-256 ./ish_bench_aligner.mojo"
+build-bench-512 = "magic run mojo build -D SIMD_MOD=1 --march native  -I ./ishlib -o ish-aligner-512 ./ish_bench_aligner.mojo"
+build-bench-gpu-all = "magic run mojo build -D ISH_LOG_LEVEL=timing -D SIMD_MOD=1 --march native  -I ./ishlib -o ish-aligner-gpu ./ish_bench_aligner_gpu.mojo"
 
 [dependencies]
 max = "=25.2.0"

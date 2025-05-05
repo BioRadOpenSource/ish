@@ -62,7 +62,7 @@ fn parallel_starts_ends[
     )
 
     # Create the buffers
-    var gpu_buffer_create_start = perf_counter()
+    var host_buffer_create_start = perf_counter()
     for ctx in ctxs:
         ctx[].set_block_info(
             targets_per_device,
@@ -75,15 +75,14 @@ fn parallel_starts_ends[
             max_target_length=max_target_length,
         )
         ctx[].host_create_input_buffers()
-    # TODO: Could separate out host buffer creating vs device, etc
 
     for ctx in ctxs:
         ctx[].synchronize()
-    var buffers_created = perf_counter()
+    var host_buffers_created = perf_counter()
     Logger.timing(
-        "GPU only creation time:", buffers_created - gpu_buffer_create_start
+        "Host buffer creation time:",
+        host_buffers_created - host_buffer_create_start,
     )
-    Logger.timing("Buffer creation time:", buffers_created - start)
 
     # fill in input data
     var buffer_fill_start = perf_counter()
@@ -105,15 +104,8 @@ fn parallel_starts_ends[
 
     parallelize[copy_data](len(ctxs))
 
-    # var total_items = 0
-    # for ctx in ctxs:
-
-    # This is the slowest part by far, moving it around doesn't seem to help much. I wish we had threads.
-
-    # for ctx in ctxs:
-    #     ctx[].synchronize()
     var buffers_filled = perf_counter()
-    Logger.timing("Buffer fill time:", buffers_filled - buffers_created)
+    Logger.timing("Buffer fill time:", buffers_filled - buffer_fill_start)
 
     # Launch Kernel
     for ctx in ctxs:
