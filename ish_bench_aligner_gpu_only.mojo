@@ -541,8 +541,9 @@ fn bench_basic_semi_global_gpu_parallel[
         ctx[].synchronize()
 
     var b = Bench()
+    var gcups_metric = BenchMetric(5, "Giga-Cell Updates per second", "GCUPS")
+    var gcups = ThroughputMeasure(gcups_metric, work)
     var bytes_ = ThroughputMeasure(BenchMetric.bytes, target_bytes)
-    var elements = ThroughputMeasure(BenchMetric.elements, work)
 
     @parameter
     @always_inline
@@ -567,13 +568,19 @@ fn bench_basic_semi_global_gpu_parallel[
     to avoid allocating for each batch since they are mostly the same size.
     """
     b.bench_function[bench_gpu[32, 10000]](
-        BenchId("coarse graining, 32x10000", "gpu"), bytes_, elements
+        BenchId("coarse graining, 32x10000", "gpu"),
+        bytes_,
+        gcups,
     )
     b.bench_function[bench_gpu[32, 15000]](
-        BenchId("coarse graining, 32x15000", "gpu"), bytes_, elements
+        BenchId("coarse graining, 32x15000", "gpu"),
+        bytes_,
+        gcups,
     )
     b.bench_function[bench_gpu[32, 30000]](
-        BenchId("coarse graining, 32x30000", "gpu"), bytes_, elements
+        BenchId("coarse graining, 32x30000", "gpu"),
+        bytes_,
+        gcups,
     )
     b.config.verbose_metric_names = False
     print(b)
