@@ -276,6 +276,7 @@ struct BufferedReader[R: KRead](Movable):
         self.end_of_file = other.end_of_file
         self.reader = other.reader^
 
+    @always_inline
     fn read_bytes(
         mut self, mut buffer: ByteString, mut rest: Int
     ) raises -> Int32:
@@ -297,6 +298,7 @@ struct BufferedReader[R: KRead](Movable):
         self.start += rest
         return len(buffer)
 
+    @always_inline
     fn read_byte(mut self) raises -> Int32:
         if self.end_of_file and self.start >= self.end:
             return -1
@@ -319,6 +321,7 @@ struct BufferedReader[R: KRead](Movable):
 
     # TODO: make keep a parameter
     # TODO: document, keep is whether or not to keep the char read up until
+    @always_inline
     fn read_until[
         delim: SearchChar
     ](
