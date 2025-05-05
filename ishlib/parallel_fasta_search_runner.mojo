@@ -194,47 +194,37 @@ struct GpuParallelFastaSearchRunner[
                 ](files[i])
 
         Logger.debug("Suggested length of:", first_peek.suggested_max_length)
+
         # Create ctxs
-        if first_peek.suggested_max_length <= 128:
-            var ctxs = self.create_ctxs[max_query_length, 128]()
-            self.search_files[
-                W, max_query_length=max_query_length, max_target_length=128
-            ](files, ctxs, writer)
-        elif first_peek.suggested_max_length <= 256:
-            var ctxs = self.create_ctxs[max_query_length, 256]()
-            self.search_files[
-                W, max_query_length=max_query_length, max_target_length=256
-            ](files, ctxs, writer)
-        elif first_peek.suggested_max_length <= 512:
-            var ctxs = self.create_ctxs[max_query_length, 512]()
-            self.search_files[
-                W, max_query_length=max_query_length, max_target_length=512
-            ](files, ctxs, writer)
-        elif first_peek.suggested_max_length <= 1024:
-            var ctxs = self.create_ctxs[max_query_length, 1024]()
-            self.search_files[
-                W, max_query_length=max_query_length, max_target_length=1024
-            ](files, ctxs, writer)
-        elif first_peek.suggested_max_length <= 2048:
-            var ctxs = self.create_ctxs[max_query_length, 2048]()
-            self.search_files[
-                W, max_query_length=max_query_length, max_target_length=2048
-            ](files, ctxs, writer)
-        elif first_peek.suggested_max_length <= 4096:
-            var ctxs = self.create_ctxs[max_query_length, 4096]()
-            self.search_files[
-                W, max_query_length=max_query_length, max_target_length=4096
-            ](files, ctxs, writer)
-        else:
-            # TODO: do we actually have an upper limit?
+        @parameter
+        @always_inline
+        fn choose_max_target_length(suggested_max_length: Int) raises:
+            alias MAX_TARGET_LENGTHS = List(128, 256, 512, 1024, 2048, 4096)
+
+            @parameter
+            for i in range(0, len(MAX_TARGET_LENGTHS)):
+                alias max_target_length = MAX_TARGET_LENGTHS[i]
+                if suggested_max_length <= max_target_length:
+                    var ctxs = self.create_ctxs[
+                        max_query_length, max_target_length
+                    ]()
+                    self.search_files[
+                        W,
+                        max_query_length=max_query_length,
+                        max_target_length=max_target_length,
+                    ](files, ctxs, writer)
+                    return
+
             Logger.warn(
-                "Longer line lengths that nicely supported, more work will"
-                " be sent to CPU, concider running with max-gpus set to 0."
+                "Longer line lengths than supported, more work will"
+                " be sent to CPU, consider running with max-gpus set to 0."
             )
             var ctxs = self.create_ctxs[max_query_length, 4096]()
             self.search_files[
                 W, max_query_length=max_query_length, max_target_length=4096
             ](files, ctxs, writer)
+
+        choose_max_target_length(first_peek.suggested_max_length)
 
     fn create_ctxs[
         max_query_length: UInt = 200, max_target_length: UInt = 1024
