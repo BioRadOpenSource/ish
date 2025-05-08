@@ -468,6 +468,7 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
     fn _process_with_coarse_graining[
         block_size: UInt = 32
     ](mut self, threads_to_launch: Int = 15000,) raises:
+        # TODO: there's more rightsizing to be done here. The arbitrary 15,000 is annoying.
         var num_blocks = ceildiv(threads_to_launch, block_size)
         var aligner = self.ctx.compile_function[func]()
 

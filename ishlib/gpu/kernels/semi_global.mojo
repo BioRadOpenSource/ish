@@ -72,12 +72,14 @@ fn gpu_align_coarse[
     var thread_id = (block_idx.x * block_dim.x) + thread_idx.x
 
     # Skip if this thread is outside our desired range
-    if thread_id >= thread_count:
-        return
+    # if thread_id >= thread_count:
+    #     return
 
     # Process references in a strided pattern
     # Each thread processes references with indices: thread_id, thread_id + thread_count, thread_id + 2*thread_count, etc.
-    for idx in range(thread_id, target_ends_len, thread_count):
+    for idx in range(thread_id, target_ends_len + thread_count, thread_count):
+        if idx >= target_ends_len:
+            return
         # Get the length of this reference sequence
         var target_len = Int(target_ends[idx])
 
