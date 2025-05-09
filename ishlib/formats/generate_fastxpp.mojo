@@ -91,6 +91,38 @@ fn to_ascii_padded(value: Int, width: Int) -> String:
     out.write(digits)                                # concat is zero-copy
     return out                                       # length == width
 
+fn generate_fastxpp_hlen(
+        marker: String,
+        header: String,
+        seq_lines: List[String],
+        qualities: Optional[List[String]] = None,
+) -> String:
+    # --- numeric fields ------------------------------------------------
+    var slen: Int = 0
+    for i in range(len(seq_lines)):
+        slen = slen + string_count(seq_lines[i])
+    
+    var hlen_val = string_count(header) # Length of the header part *after* the SWAR block
+
+    # --- fixed-width metadata block ------------------------------------
+    # Format: `hlen:slen` (widths: 6, 9 respectively)
+    # bpl is removed as it's not strictly needed by a parser dealing with a pre-stripped stream.
+    var meta = "`" +
+        to_ascii_padded(hlen_val,             6) +      # hlen
+        to_ascii_padded(slen,                 9) +      # slen
+        "`"
+
+    # --- assemble record -----------------------------------------------
+    var rec = marker + meta + header + "\n"
+    for i in range(len(seq_lines)):
+        rec.write(seq_lines[i], "\n")
+    if qualities:
+        var q = qualities.value()
+        for i in range(len(q)):
+            rec.write(q[i], "\n")
+    return rec
+
+
 fn generate_fastxpp_bpl_fixed(
         marker: String,
         header: String,
@@ -177,7 +209,7 @@ fn main() raises:
                 qlines.append(read_line(reader))
             qual = Optional[List[String]](qlines)
 
-        writer.write(generate_fastxpp_bpl_fixed(marker, header, seq, qual))
+        writer.write(generate_fastxpp_hlen(marker, header, seq, qual))
 
     writer.flush()
     writer.close()
