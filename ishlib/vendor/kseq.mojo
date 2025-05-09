@@ -26,6 +26,10 @@ from utils import StringSlice
 from ishlib.vendor.swar_decode import decode
 
 from time.time import perf_counter
+# No DType module import, DType.uint8 is a built-in enum.
+from algorithm.functional import vectorize # vectorize might need a compile-time width.
+from sys.intrinsics import compressed_store
+from bit import pop_count
 
 from ExtraMojo.bstr.memchr import memchr
 
@@ -38,59 +42,41 @@ alias ASCII_FASTQ_RECORD_START = ord("@")
 alias ASCII_FASTQ_SEPARATOR = ord("+")
 alias ASCII_ZERO = UInt8(ord("0"))
 
+# ──────────────────────────────────────────────────────────────
+#  SIMD/SWAR helpers for vectorized newline stripping
+# ──────────────────────────────────────────────────────────────
+
+alias NL: UInt8 = 0x0A  # ASCII newline
+
+@always_inline
+fn strip_lf(buf_ptr: UnsafePointer[UInt8], n: Int) -> Int:
+    """Remove all LF bytes from `buf_ptr[0:n)` in-place, return new length.
+    Uses vectorized operations with compressed_store.
+    The SIMD vector width is determined by VEC_WIDTH parameter for vectorize.
+    """
+    var wr = 0  # write cursor
+
+    alias VEC_WIDTH = sys.intrinsics.simdwidthof[DType.uint8]()
+                         # This means width parameter in step will be VEC_WIDTH.
+
+    @parameter
+    fn step[width: Int](i: Int):
+        # Load SIMD vector from UnsafePointer. `width` will be VEC_WIDTH (e.g., 32).
+        # The result `v` is of type SIMD[DType.uint8, width].
+        var v = buf_ptr.offset(i).load[width=width]()
+        var keep_mask = (v != NL)  # Mask is true for elements to KEEP (non-newlines)
+        
+        compressed_store(v,
+                         buf_ptr.offset(wr),
+                         keep_mask) # Store elements where keep_mask is true
+        wr += keep_mask.reduce_bit_count() # Increment wr by the number of elements kept
+
+    vectorize[step, VEC_WIDTH](n)
+    return wr
 
 # ──────────────────────────────────────────────────────────────
 #  Helpers for reading in fastx++ files
 # ──────────────────────────────────────────────────────────────
-
-
-@always_inline
-fn strip_newlines_in_place(
-    mut bs: ByteString, disk: Int, expected: Int
-) -> Bool:
-    """Compact `bs` by removing every `\n` byte in‑place; return True if the
-    resulting length equals `expected`.
-    SIMD search for newline, shifts the bytes to the left, and resizes the buffer.
-    Avoids allocating a new buffer and copying the data.
-
-    bs:     Mutable buffer that already holds the raw FASTQ/FASTA chunk just read from disk
-    disk:   The number of bytes that were actually read into bs
-    expected:   how many bases/quality bytes should remain after stripping newlines;
-        used as a quick integrity check.
-
-    Returns:
-        True if the resulting buffer's length equals `expected`, False otherwise.
-    """
-    # read_pos always starts the loop at the first byte that has not yet been examined.
-    var read_pos: Int = 0
-    # write_pos always starts at the first byte that has not yet been written into its final position
-    var write_pos: Int = 0
-    # Before the first newline, every byte is kept, so the pointers march together (no gap)
-    # After the first newline, the pointers may diverge, and we will need to copy bytes
-
-    while read_pos < disk:
-        var span_rel = memchr[do_alignment=False](
-            Span[UInt8, __origin_of(bs.ptr)](
-                ptr=bs.ptr.offset(read_pos), length=disk - read_pos
-            ),
-            UInt8(ASCII_NEWLINE),
-        )
-        # If there are no new lines we dont have to adjust buffer
-        # If there was newlines, compute the contiguous span without newlines
-        var end_pos = disk if span_rel == -1 else read_pos + span_rel
-        var span_len = end_pos - read_pos
-        # We only need to copy if there are newlines that would made gaps resulting in write_pos != read_pos
-        # See read_pos and write_pos comments above
-        if span_len > 0 and write_pos != read_pos:
-            memcpy(bs.ptr.offset(write_pos), bs.ptr.offset(read_pos), span_len)
-        write_pos += span_len
-        read_pos = end_pos + 1  # skip the '\n' (or exit loop if none)
-    bs.resize(write_pos)
-    return write_pos == expected
-
-
-# ──────────────────────────────────────────────────────────────
-
 
 @value
 @register_passable("trivial")
@@ -516,7 +502,7 @@ struct FastxReader[R: KRead, read_comment: Bool = True](Movable):
         return len(self.seq)
 
     fn read_fastxpp_strip_newline(mut self) raises -> Int:
-        # ── 0 Locate the next header byte ('>' or '@') ──────────────────────
+        # ── 0 Locate the next header byte ('>' or '@') ──────────────────────
         var marker: UInt8
         if self.last_char == 0:
             var c = self.reader.read_byte()
@@ -534,13 +520,13 @@ struct FastxReader[R: KRead, read_comment: Bool = True](Movable):
             marker = UInt8(self.last_char)
             self.last_char = 0
 
-        # ── 1 Reset buffers reused across records ───────────────────────────
+        # ── 1 Reset buffers reused across records ───────────────────────────
         self.seq.clear()
         self.qual.clear()
         self.comment.clear()
         self.name.clear()
 
-        # ── 2 Read the back‑tick header line --------------------------------
+        # ── 2 Read the back‑tick header line --------------------------------
         var r = self.reader.read_until[SearchChar.Newline](self.name, 0, False)
         if r < 0:
             return Int(r)
@@ -550,7 +536,7 @@ struct FastxReader[R: KRead, read_comment: Bool = True](Movable):
             # We need at least 21 bytes: 1 backtick + 9 + 7 + 3 + 1 backtick
             return -3  # Not a proper FASTX++ header
 
-        # ── 3 Decode slen:lcnt:bpl from the fixed fields --------------------
+        # ── 3 Decode slen:lcnt:bpl from the fixed fields --------------------
         var slen = decode[9](hdr[1:10])  # 9‑digit field at positions [1..9]
         var lcnt = decode[7](hdr[10:17])  # 7‑digit field at positions [10..16]
         var bpl = decode[3](hdr[17:20])  # 3‑digit field at positions [17..19]
@@ -559,7 +545,7 @@ struct FastxReader[R: KRead, read_comment: Bool = True](Movable):
         if hdr[20] != UInt8(ord("`")):
             return -3
 
-        # ── 4 Read the sequence block (slen + lcnt bytes on disk) -----------
+        # ── 4 Read the sequence block (slen + lcnt bytes on disk) -----------
         var disk_seq = slen + lcnt
         self.seq.reserve(disk_seq)
         var _disk_seq = disk_seq
@@ -567,16 +553,19 @@ struct FastxReader[R: KRead, read_comment: Bool = True](Movable):
         if got_seq != disk_seq:
             return -3  # truncated record
 
-        # ── 5  Remove newline characters in‑place using the helper -----------
-        var ok = strip_newlines_in_place(self.seq, disk_seq, slen)
-        if not ok:
+        # ── 5 Remove newline characters in‑place using the SIMD helper ------
+        var new_len = strip_lf(self.seq.ptr, disk_seq)
+        self.seq.resize(UInt32(new_len))
+        
+        # Validate length matches expected biological sequence length
+        if new_len != slen:
             return -2  # mismatch: not the expected base count
 
-        return len(self.seq)
+        return slen
 
     fn read_fastxpp_swar(mut self) raises -> Int:
         # ── 0 Locate the next header byte ('>' or '@') ──────────────────────
-        var marker: UInt8  # remember which flavour we’re on
+        var marker: UInt8  # remember which flavour we're on
         if self.last_char == 0:
             var c = self.reader.read_byte()
             while (
@@ -607,7 +596,7 @@ struct FastxReader[R: KRead, read_comment: Bool = True](Movable):
         var hdr = self.name.as_span()
         if len(hdr) == 0 or hdr[0] != UInt8(ord("`")):
             print("ERROR: Opening backtick check failed. hdr[0]")
-            return -3  # not a FASTX++ BPL header
+            return -3  # not a FASTX++ BPL header
 
         # useful debugging
         # for i in range(len(hdr)):
@@ -718,6 +707,79 @@ struct FastxReader[R: KRead, read_comment: Bool = True](Movable):
                 return -3
         return slen
 
+    fn read_fastxpp_swar_vectorized(mut self) raises -> Int:
+        # ── 0 Locate the next header byte ('>' or '@') ──────────────────────
+        var marker: UInt8
+        if self.last_char == 0:
+            var c = self.reader.read_byte()
+            while (
+                c >= 0
+                and c != ASCII_FASTA_RECORD_START
+                and c != ASCII_FASTQ_RECORD_START
+            ):
+                c = self.reader.read_byte()
+            if c < 0:
+                return Int(c)  # EOF or stream error
+            marker = UInt8(c)
+        else:
+            marker = UInt8(self.last_char)
+            self.last_char = 0
+
+        # ── 1 Reset buffers reused across records ───────────────────────────
+        self.seq.clear()
+        self.qual.clear()
+        self.comment.clear()
+        self.name.clear()
+
+        # ── 2 Read the back‑tick header line --------------------------------
+        var r = self.reader.read_until[SearchChar.Newline](self.name, 0, False)
+        if r < 0:
+            return Int(r)
+
+        var hdr = self.name.as_span()
+        # ── 3 Find closing back‑tick and parse slen:lcnt:bpl -----------
+        if len(hdr) < 21:  # 1 (`) + 9 (slen) + 7 (lcnt) + 3 (bpl) + 1 (`)
+            return -3  # Malformed header (too short)
+
+        if hdr[0] != UInt8(ord("`")):
+            return -3  # Malformed header (no opening backtick)
+
+        var slen = decode[9](hdr[1:10])  # 9‑digit field at positions [1..9]
+        var lcnt = decode[7](hdr[10:17])  # 7‑digit field at positions [10..16]
+        # bpl is not used by this implementation, as we read the whole block at once
+
+        if hdr[20] != UInt8(ord("`")):
+            return -3  # Malformed header (no closing backtick)
+
+        # ── 4 SEQUENCE block: Read raw, then strip newlines -----------------
+        var disk_seq_len = slen + lcnt
+        
+        # Reserve enough space for the entire sequence block including newlines
+        self.seq.reserve(UInt32(disk_seq_len))
+        
+        # Read the entire sequence block in one shot
+        var _disk_seq_len = disk_seq_len
+        var total_read = self.reader.read_bytes(self.seq, _disk_seq_len)
+        if total_read != disk_seq_len:
+            return -3  # Truncated record or read error
+
+        # Apply vectorized newline stripping using compressed_store
+        # This is the high-performance SIMD operation that adapts to the available CPU features:
+        # NOTE: The speeds clained are by ai. There are a few good blog posts on it though
+        # - AVX-512: vpcmpb + vcompressb (≈30 GB/s)
+        # - AVX2: compare → movemask → pext → permute (≈18-20 GB/s)
+        # - Scalar CPUs: word-at-a-time SWAR approach (≈11 GB/s)
+        var new_len = strip_lf(self.seq.ptr, disk_seq_len)
+        
+        # Resize the sequence buffer to the new length after stripping newlines
+        self.seq.resize(UInt32(new_len))
+
+        # Validate the resulting length against the expected slen
+        if new_len != slen:
+            return -2  # Sequence length mismatch post-stripping
+
+        return slen  # Return the biological sequence length
+
 
 struct FileReader(KRead):
     var fh: FileHandle
@@ -749,13 +811,13 @@ fn main() raises:
         BufferedReader(FileReader(fh^))
     )
 
-    var first = reader.read_fastxpp()
+    var first = reader.read_fastxpp_swar_vectorized()
     print("first‑read returned", first)
 
     var count = 0
     while True:
-        var n = reader.read_fastxpp()
+        var n = reader.read_fastxpp_swar_vectorized()
         if n < 0:
             break
         count += 1
-        print("rec#", count, "seq_len", n, "hdr_len", len(reader.name))
+        print("rec#", count, "seq_len", n, "hdr_len", len(reader.name), "seq", reader.seq.to_string(), "hdr", reader.name.to_string())
