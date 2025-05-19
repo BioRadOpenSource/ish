@@ -85,7 +85,7 @@ struct ZLib:
     var lib_handle: ffi.DLHandle
 
     @staticmethod
-    fn _get_libname() -> StringLiteral:
+    fn _get_libname() -> StaticString:
         @parameter
         if os_is_macos():
             return "libz.dylib"

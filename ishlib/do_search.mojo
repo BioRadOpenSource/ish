@@ -1,5 +1,4 @@
 from time.time import perf_counter
-from utils import StringSlice
 
 from ExtraMojo.io import MovableWriter
 from ExtraMojo.io.buffered import BufferedWriter
@@ -89,7 +88,7 @@ fn do_search[
                 )
                 runner.run_search(writer)
         else:
-            raise "Invalid record type: {}".format(settings.record_type)
+            raise String("Invalid record type: {}").format(settings.record_type)
     elif settings.match_algo == "striped-semi-global":
         if settings.record_type == "line":
             if settings.threads <= 1:
@@ -270,6 +269,6 @@ fn do_search[
                         )
                         runner.run_search(writer)
         else:
-            raise "Invalid record type: {}".format(settings.record_type)
+            raise String("Invalid record type: {}").format(settings.record_type)
     else:
-        raise "Unsupported match algo: {}".format(settings.match_algo)
+        raise String("Unsupported match algo: {}").format(settings.match_algo)

@@ -20,7 +20,7 @@ fn parallel_starts_ends[
     mut output: List[Optional[ComputedMatchResult]],
 ):
     fn do_matching(index: Int) capturing:
-        var target = Pointer.address_of(seqs[index])
+        var target = Pointer(to=seqs[index])
         var result = matcher.first_match(
             target[].buffer_to_search(), matcher.encoded_pattern()
         )

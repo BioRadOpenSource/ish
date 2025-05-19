@@ -22,7 +22,7 @@ struct SGResult(StringableRaising):
     """Alignment score."""
 
     fn __str__(read self) raises -> String:
-        return "query={}, target={}, score={}".format(
+        return String("query={}, target={}, score={}").format(
             self.query, self.target, self.score
         )
 
