@@ -1,6 +1,6 @@
 import sys
 from sys.param_env import env_get_string
-from utils import write_args, StringSlice
+from utils import write_args
 
 
 @value
@@ -14,7 +14,7 @@ struct LogLevel:
     alias Debug = Self(100)
 
     @staticmethod
-    fn from_str(level: StringLiteral) -> Self:
+    fn from_str(level: StaticString) -> Self:
         if level.lower() == "info":
             return Self.Info
         elif level.lower() == "debug":

@@ -115,7 +115,7 @@ struct ParallelLineSearchRunner[M: Matcher]:
                     var m = outputs[i]
                     if not m:
                         continue
-                    var r = Pointer.address_of(lines[i])
+                    var r = Pointer(to=lines[i])
 
                     for i in range(0, len(r[].line)):
                         r[].line[i] = self.matcher.convert_encoding_to_ascii(

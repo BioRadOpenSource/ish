@@ -1,5 +1,5 @@
 from bit import next_power_of_two
-from gpu.host import DeviceContext, DeviceBuffer, DeviceFunction
+from gpu.host import DeviceContext, DeviceBuffer, DeviceFunction, HostBuffer
 from gpu.memory import AddressSpace
 from math import ceildiv
 from memory import UnsafePointer, stack_allocation, memcpy
@@ -26,7 +26,7 @@ struct BlockInfo:
 
 
 @value
-struct DeviceBufferWrapper[location: StringLiteral, dtype: DType]:
+struct DeviceBufferWrapper[dtype: DType]:
     var buffer: DeviceBuffer[dtype]
     var size: UInt
     var capacity: UInt
@@ -41,10 +41,7 @@ struct DeviceBufferWrapper[location: StringLiteral, dtype: DType]:
         var cap = UInt(
             next_power_of_two(size)
         ) if not capacity else capacity.value()
-        if location == "host":
-            self.buffer = ctx.enqueue_create_host_buffer[dtype](cap)
-        else:
-            self.buffer = ctx.enqueue_create_buffer[dtype](cap)
+        self.buffer = ctx.enqueue_create_buffer[dtype](cap)
         self.capacity = cap
         self.size = size
 
@@ -54,10 +51,42 @@ struct DeviceBufferWrapper[location: StringLiteral, dtype: DType]:
             return
 
         self.capacity = next_power_of_two(new_size)
-        if location == "host":
-            self.buffer = ctx.enqueue_create_host_buffer[dtype](self.capacity)
-        else:
-            self.buffer = ctx.enqueue_create_buffer[dtype](self.capacity)
+        self.buffer = ctx.enqueue_create_buffer[dtype](self.capacity)
+        self.size = new_size
+
+    fn as_span(ref self) -> Span[Scalar[dtype], __origin_of(self)]:
+        return Span[Scalar[dtype], __origin_of(self)](
+            ptr=self.buffer.unsafe_ptr(), length=self.size
+        )
+
+
+@value
+struct HostBufferWrapper[dtype: DType]:
+    var buffer: HostBuffer[dtype]
+    var size: UInt
+    var capacity: UInt
+
+    fn __init__(
+        out self,
+        ctx: DeviceContext,
+        *,
+        size: UInt,
+        capacity: Optional[UInt] = None,
+    ) raises:
+        var cap = UInt(
+            next_power_of_two(size)
+        ) if not capacity else capacity.value()
+        self.buffer = ctx.enqueue_create_host_buffer[dtype](cap)
+        self.capacity = cap
+        self.size = size
+
+    fn resize(mut self, ctx: DeviceContext, *, new_size: UInt) raises:
+        if new_size <= self.capacity:
+            self.size = new_size
+            return
+
+        self.capacity = next_power_of_two(new_size)
+        self.buffer = ctx.enqueue_create_host_buffer[dtype](self.capacity)
         self.size = new_size
 
     fn as_span(ref self) -> Span[Scalar[dtype], __origin_of(self)]:
@@ -72,25 +101,21 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
 
     var block_info: Optional[BlockInfo]
 
-    var host_query: Optional[DeviceBufferWrapper["host", DType.uint8]]
-    var host_targets: Optional[DeviceBufferWrapper["host", DType.uint8]]
-    var host_target_lengths: Optional[DeviceBufferWrapper["host", DType.uint32]]
-    var host_scoring_matrix: Optional[DeviceBufferWrapper["host", DType.int8]]
-    var host_scores: Optional[DeviceBufferWrapper["host", DType.int32]]
-    var host_query_ends: Optional[DeviceBufferWrapper["host", DType.int32]]
-    var host_target_ends: Optional[DeviceBufferWrapper["host", DType.int32]]
+    var host_query: Optional[HostBufferWrapper[DType.uint8]]
+    var host_targets: Optional[HostBufferWrapper[DType.uint8]]
+    var host_target_lengths: Optional[HostBufferWrapper[DType.uint32]]
+    var host_scoring_matrix: Optional[HostBufferWrapper[DType.int8]]
+    var host_scores: Optional[HostBufferWrapper[DType.int32]]
+    var host_query_ends: Optional[HostBufferWrapper[DType.int32]]
+    var host_target_ends: Optional[HostBufferWrapper[DType.int32]]
 
-    var device_query: Optional[DeviceBufferWrapper["device", DType.uint8]]
-    var device_targets: Optional[DeviceBufferWrapper["device", DType.uint8]]
-    var device_target_lengths: Optional[
-        DeviceBufferWrapper["device", DType.uint32]
-    ]
-    var device_scoring_matrix: Optional[
-        DeviceBufferWrapper["device", DType.int8]
-    ]
-    var device_scores: Optional[DeviceBufferWrapper["device", DType.int32]]
-    var device_query_ends: Optional[DeviceBufferWrapper["device", DType.int32]]
-    var device_target_ends: Optional[DeviceBufferWrapper["device", DType.int32]]
+    var device_query: Optional[DeviceBufferWrapper[DType.uint8]]
+    var device_targets: Optional[DeviceBufferWrapper[DType.uint8]]
+    var device_target_lengths: Optional[DeviceBufferWrapper[DType.uint32]]
+    var device_scoring_matrix: Optional[DeviceBufferWrapper[DType.int8]]
+    var device_scores: Optional[DeviceBufferWrapper[DType.int32]]
+    var device_query_ends: Optional[DeviceBufferWrapper[DType.int32]]
+    var device_target_ends: Optional[DeviceBufferWrapper[DType.int32]]
 
     fn __init__(
         out self,
@@ -175,45 +200,45 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
         max_target_length: UInt,
     ) raises:
         var num_targets = ceildiv(targets_len, max_target_length)
-        self.host_query = DeviceBufferWrapper["host", DType.uint8](
+        self.host_query = HostBufferWrapper[DType.uint8](
             self.ctx, size=query_len
         )
         self.host_query.value().resize(self.ctx, new_size=0)
 
-        self.host_scoring_matrix = DeviceBufferWrapper["host", DType.int8](
+        self.host_scoring_matrix = HostBufferWrapper[DType.int8](
             self.ctx, size=matrix_len
         )
         self.host_scoring_matrix.value().resize(self.ctx, new_size=0)
 
-        self.host_targets = DeviceBufferWrapper["host", DType.uint8](
+        self.host_targets = HostBufferWrapper[DType.uint8](
             self.ctx, size=targets_len
         )
         self.host_targets.value().resize(self.ctx, new_size=0)
 
-        self.host_target_lengths = DeviceBufferWrapper["host", DType.uint32](
+        self.host_target_lengths = HostBufferWrapper[DType.uint32](
             self.ctx, size=num_targets
         )
         self.host_target_lengths.value().resize(self.ctx, new_size=0)
 
         # Create dev equivalents
-        self.device_query = DeviceBufferWrapper["device", DType.uint8](
+        self.device_query = DeviceBufferWrapper[DType.uint8](
             self.ctx, size=query_len
         )
         self.device_query.value().resize(self.ctx, new_size=0)
 
-        self.device_scoring_matrix = DeviceBufferWrapper["device", DType.int8](
+        self.device_scoring_matrix = DeviceBufferWrapper[DType.int8](
             self.ctx, size=matrix_len
         )
         self.device_scoring_matrix.value().resize(self.ctx, new_size=0)
 
-        self.device_targets = DeviceBufferWrapper["device", DType.uint8](
+        self.device_targets = DeviceBufferWrapper[DType.uint8](
             self.ctx, size=targets_len
         )
         self.device_targets.value().resize(self.ctx, new_size=0)
 
-        self.device_target_lengths = DeviceBufferWrapper[
-            "device", DType.uint32
-        ](self.ctx, size=num_targets)
+        self.device_target_lengths = DeviceBufferWrapper[DType.uint32](
+            self.ctx, size=num_targets
+        )
         self.device_target_lengths.value().resize(self.ctx, new_size=0)
 
     fn host_create_input_buffers(
@@ -224,7 +249,7 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
                 self.ctx, new_size=self.block_info.value().query_len
             )
         else:
-            self.host_query = DeviceBufferWrapper["host", DType.uint8](
+            self.host_query = HostBufferWrapper[DType.uint8](
                 self.ctx, size=self.block_info.value().query_len
             )
 
@@ -233,7 +258,7 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
                 self.ctx, new_size=self.block_info.value().matrix_len
             )
         else:
-            self.host_scoring_matrix = DeviceBufferWrapper["host", DType.int8](
+            self.host_scoring_matrix = HostBufferWrapper[DType.int8](
                 self.ctx, size=self.block_info.value().matrix_len
             )
 
@@ -242,7 +267,7 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
                 self.ctx, new_size=self.block_info.value().targets_len
             )
         else:
-            self.host_targets = DeviceBufferWrapper["host", DType.uint8](
+            self.host_targets = HostBufferWrapper[DType.uint8](
                 self.ctx, size=self.block_info.value().targets_len
             )
 
@@ -251,9 +276,9 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
                 self.ctx, new_size=self.block_info.value().num_targets
             )
         else:
-            self.host_target_lengths = DeviceBufferWrapper[
-                "host", DType.uint32
-            ](self.ctx, size=self.block_info.value().num_targets)
+            self.host_target_lengths = HostBufferWrapper[DType.uint32](
+                self.ctx, size=self.block_info.value().num_targets
+            )
 
     fn device_create_input_buffers(
         mut self,
@@ -265,7 +290,7 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
         else:
             if not self.host_query:
                 raise "Host query buffer must be created before device query buffer."
-            self.device_query = DeviceBufferWrapper["device", DType.uint8](
+            self.device_query = DeviceBufferWrapper[DType.uint8](
                 self.ctx,
                 size=self.host_query.value().size,
                 capacity=self.host_query.value().capacity,
@@ -278,9 +303,7 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
         else:
             if not self.host_scoring_matrix:
                 raise "Host scoring buffer must be created before device scoring buffer."
-            self.device_scoring_matrix = DeviceBufferWrapper[
-                "device", DType.int8
-            ](
+            self.device_scoring_matrix = DeviceBufferWrapper[DType.int8](
                 self.ctx,
                 size=self.host_scoring_matrix.value().size,
                 capacity=self.host_scoring_matrix.value().capacity,
@@ -293,7 +316,7 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
         else:
             if not self.host_targets:
                 raise "Host targets buffer must be created before device targets buffer."
-            self.device_targets = DeviceBufferWrapper["device", DType.uint8](
+            self.device_targets = DeviceBufferWrapper[DType.uint8](
                 self.ctx,
                 size=self.host_targets.value().size,
                 capacity=self.host_targets.value().capacity,
@@ -306,9 +329,7 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
         else:
             if not self.host_target_lengths:
                 raise "Host target_lengths buffer must be created before device target_lengths buffer."
-            self.device_target_lengths = DeviceBufferWrapper[
-                "device", DType.uint32
-            ](
+            self.device_target_lengths = DeviceBufferWrapper[DType.uint32](
                 self.ctx,
                 size=self.host_target_lengths.value().size,
                 capacity=self.host_target_lengths.value().capacity,
@@ -320,7 +341,7 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
                 self.ctx, new_size=self.block_info.value().matrix_len
             )
         else:
-            self.device_scores = DeviceBufferWrapper["device", DType.int32](
+            self.device_scores = DeviceBufferWrapper[DType.int32](
                 self.ctx, size=self.block_info.value().num_targets
             )
 
@@ -329,7 +350,7 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
                 self.ctx, new_size=self.block_info.value().matrix_len
             )
         else:
-            self.device_query_ends = DeviceBufferWrapper["device", DType.int32](
+            self.device_query_ends = DeviceBufferWrapper[DType.int32](
                 self.ctx, size=self.block_info.value().num_targets
             )
 
@@ -338,9 +359,9 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
                 self.ctx, new_size=self.block_info.value().matrix_len
             )
         else:
-            self.device_target_ends = DeviceBufferWrapper[
-                "device", DType.int32
-            ](self.ctx, size=self.block_info.value().num_targets)
+            self.device_target_ends = DeviceBufferWrapper[DType.int32](
+                self.ctx, size=self.block_info.value().num_targets
+            )
 
         self.ctx.enqueue_memset(self.device_scores.value().buffer, 0)
         self.ctx.enqueue_memset(self.device_query_ends.value().buffer, 0)
@@ -356,7 +377,7 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
         else:
             if not self.device_scores:
                 raise "device scores buffer must be created before device scores buffer."
-            self.host_scores = DeviceBufferWrapper["host", DType.int32](
+            self.host_scores = HostBufferWrapper[DType.int32](
                 self.ctx,
                 size=self.device_scores.value().size,
                 capacity=self.device_scores.value().capacity,
@@ -369,7 +390,7 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
         else:
             if not self.device_query_ends:
                 raise "device query_ends buffer must be created before device query_ends buffer."
-            self.host_query_ends = DeviceBufferWrapper["host", DType.int32](
+            self.host_query_ends = HostBufferWrapper[DType.int32](
                 self.ctx,
                 size=self.device_query_ends.value().size,
                 capacity=self.device_scores.value().capacity,
@@ -382,7 +403,7 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
         else:
             if not self.device_target_ends:
                 raise "device target_ends buffer must be created before device target_ends buffer."
-            self.host_target_ends = DeviceBufferWrapper["host", DType.int32](
+            self.host_target_ends = HostBufferWrapper[DType.int32](
                 self.ctx,
                 size=self.device_target_ends.value().size,
                 capacity=self.device_scores.value().capacity,

@@ -1,4 +1,4 @@
-from bit.bit import is_power_of_two, next_power_of_two
+from bit.bit import next_power_of_two
 from collections import Optional
 from sys.info import num_physical_cores
 from pathlib.path import Path, cwd
@@ -227,7 +227,7 @@ struct SearcherSettings:
             if threads <= 0:
                 raise "Threads must be >= 1."
             var batch_size = opts.get_int("batch-size")
-            if not is_power_of_two(batch_size):
+            if not batch_size.is_power_of_two():
                 var next_power_of_two = next_power_of_two(batch_size)
                 raise "Batch size is not a power of two, try: " + String(
                     next_power_of_two

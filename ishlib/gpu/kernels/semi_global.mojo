@@ -3,10 +3,9 @@ from gpu.host import (
     DeviceContext,
     DeviceBuffer,
 )  # HostBuffer (not in 25.2)
-from gpu.memory import AddressSpace
 from layout import Layout, LayoutTensor
 from math import ceildiv
-from memory import UnsafePointer, stack_allocation, memcpy
+from memory import UnsafePointer, stack_allocation, memcpy, AddressSpace
 
 from ishlib.gpu.dynamic_2d_matrix import Dynamic2DMatrix, StorageFormat
 from ishlib.matcher.alignment.scoring_matrix import (
@@ -46,11 +45,11 @@ fn gpu_align_coarse[
     var basic_profile_bytes = stack_allocation[
         len(matrix_kind),
         SIMD[DType.int8, 1],
-        address_space = AddressSpace.SHARED,
+        address_space = AddressSpace(3),
     ]()
 
     for i in range(0, min(Int(basic_matrix_len), len(matrix_kind))):
-        basic_profile_bytes[i] = basic_matrix_values[i]
+        basic_profile_bytes[i] = basic_matrix_values.unsafe_ptr()[i]
 
     var basic_matrix = BasicScoringMatrix[
         address_space = AddressSpace(3), no_lookup=matrix_skip_lookup
@@ -60,11 +59,11 @@ fn gpu_align_coarse[
     var query_seq_ptr = stack_allocation[
         max_query_length,
         SIMD[DType.uint8, 1],
-        address_space = AddressSpace.SHARED,
+        address_space = AddressSpace(3),
     ]()
 
     for i in range(0, min(query_len, max_query_length)):
-        query_seq_ptr[i] = query[i]
+        query_seq_ptr[i] = query.unsafe_ptr()[i]
 
     barrier()  # Ensure shared memory is fully loaded before proceeding
 
@@ -81,7 +80,7 @@ fn gpu_align_coarse[
         if idx >= target_ends_len:
             return
         # Get the length of this reference sequence
-        var target_len = Int(target_ends[idx])
+        var target_len = Int(target_ends.unsafe_ptr()[idx])
 
         # Perform the alignment
         # TODO: shift the ends back to being a param?
@@ -110,7 +109,7 @@ fn gpu_align_coarse[
 
         # Store results
         # TODO: move this to after the loop?
-        score_result_buffer[idx] = result.score
-        query_end_result_buffer[idx] = Int32(result.query) + 1
-        ref_end_result_buffer[idx] = Int32(result.target) + 1
+        score_result_buffer.unsafe_ptr()[idx] = result.score
+        query_end_result_buffer.unsafe_ptr()[idx] = Int32(result.query) + 1
+        ref_end_result_buffer.unsafe_ptr()[idx] = Int32(result.target) + 1
         barrier()

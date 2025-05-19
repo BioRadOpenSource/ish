@@ -122,7 +122,7 @@ struct ParallelFastaSearchRunner[M: Matcher]:
                     var m = outputs[i]
                     if not m:
                         continue
-                    var r = Pointer.address_of(sequences[i])
+                    var r = Pointer(to=sequences[i])
 
                     # Convert back to asii
                     for i in range(0, len(r[].seq.seq)):
