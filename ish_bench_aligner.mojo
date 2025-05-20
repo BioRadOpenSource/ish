@@ -542,10 +542,10 @@ fn bench_striped_local(
         var work: UInt64 = 0
         for i in range(0, len(queries)):
             # TODO: if query construction was done here, we could dispatch to 512 sometimes, which might be cheating for bench purposes.
-            var query = Pointer.address_of(queries[i])
-            var profiles = Pointer.address_of(profiles[i])
+            var query = Pointer(to=queries[i])
+            var profiles = Pointer(to=profiles[i])
             for j in range(0, len(targets)):
-                var target = Pointer.address_of(targets[j])
+                var target = Pointer(to=targets[j])
                 var result = ssw_align[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
                     profile=profiles[].fwd,
                     matrix=matrix,
@@ -606,9 +606,6 @@ fn bench_striped_local(
     )
     metric_writer.serialize(result)
     metric_writer.flush()
-
-
-from utils import StringSlice
 
 
 fn bench_striped_semi_global(
@@ -672,10 +669,10 @@ fn bench_striped_semi_global(
         var work: UInt64 = 0
         for i in range(0, len(queries)):
             # TODO: if query construction was done here, we could dispatch to 512 sometimes, which might be cheating for bench purposes.
-            var query = Pointer.address_of(queries[i])
-            var profiles = Pointer.address_of(profiles[i])
+            var query = Pointer(to=queries[i])
+            var profiles = Pointer(to=profiles[i])
             for j in range(0, len(targets)):
-                var target = Pointer.address_of(targets[j])
+                var target = Pointer(to=targets[j])
                 var result = semi_global_aln_with_saturation_check[
                     SIMD_U8_WIDTH,
                     SIMD_U16_WIDTH,

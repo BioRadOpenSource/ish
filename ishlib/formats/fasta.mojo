@@ -1,5 +1,4 @@
 from collections import Optional
-from utils import StringSlice
 from sys.info import sizeof
 
 from ExtraMojo.io.buffered import BufferedReader

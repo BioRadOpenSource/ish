@@ -1,9 +1,9 @@
 """Test program for SSW."""
+from memory import AddressSpace
 from sys import stdout, stderr
 from sys.info import simdwidthof, has_avx512f, alignof, num_physical_cores
 from sys.param_env import env_get_int
 from time.time import perf_counter
-from utils import StringSlice
 
 from algorithm.functional import parallelize
 
@@ -42,11 +42,8 @@ from ishlib.vendor.log import Logger
 # GPU
 from gpu.host import DeviceContext
 from gpu import thread_idx, block_idx, block_dim, warp, barrier
-from gpu.host import (
-    DeviceContext,
-    DeviceBuffer,
-)  # HostBuffer (not in 25.2)
-from gpu.memory import AddressSpace, external_memory
+from gpu.host import DeviceContext, DeviceBuffer, HostBuffer
+from gpu.memory import external_memory
 from memory import stack_allocation, memcpy, UnsafePointer
 from layout import Layout, LayoutTensor
 from math import ceildiv
@@ -672,10 +669,10 @@ fn bench_striped_local(
         var work: UInt64 = 0
         for i in range(0, len(queries)):
             # TODO: if query construction was done here, we could dispatch to 512 sometimes, which might be cheating for bench purposes.
-            var query = Pointer.address_of(queries[i])
-            var profiles = Pointer.address_of(profiles[i])
+            var query = Pointer(to=queries[i])
+            var profiles = Pointer(to=profiles[i])
             for j in range(0, len(targets)):
-                var target = Pointer.address_of(targets[j])
+                var target = Pointer(to=targets[j])
                 var result = ssw_align[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
                     profile=profiles[].fwd,
                     matrix=matrix,
@@ -810,10 +807,10 @@ fn bench_striped_semi_global(
         var work: UInt64 = 0
         for i in range(0, len(queries)):
             # TODO: if query construction was done here, we could dispatch to 512 sometimes, which might be cheating for bench purposes.
-            var query = Pointer.address_of(queries[i])
-            var profiles = Pointer.address_of(profiles[i])
+            var query = Pointer(to=queries[i])
+            var profiles = Pointer(to=profiles[i])
             for j in range(0, len(targets)):
-                var target = Pointer.address_of(targets[j])
+                var target = Pointer(to=targets[j])
                 var result = semi_global_aln_with_saturation_check[
                     SIMD_U8_WIDTH,
                     SIMD_U16_WIDTH,
@@ -960,9 +957,9 @@ fn bench_basic_semi_global(
         var work: UInt64 = 0
         for i in range(0, len(queries)):
             # TODO: if query construction was done here, we could dispatch to 512 sometimes, which might be cheating for bench purposes.
-            var query = Pointer.address_of(queries[i])
+            var query = Pointer(to=queries[i])
             for j in range(0, len(targets)):
-                var target = Pointer.address_of(targets[j])
+                var target = Pointer(to=targets[j])
 
                 var result = semi_global_parasail[DType.int16](
                     query[].seq,
@@ -1107,11 +1104,11 @@ fn bench_striped_semi_global_parallel(
         # var work: UInt64 = 0
         for i in range(0, len(queries)):
             # TODO: if query construction was done here, we could dispatch to 512 sometimes, which might be cheating for bench purposes.
-            var query = Pointer.address_of(queries[i])
-            var profiles = Pointer.address_of(profiles[i])
+            var query = Pointer(to=queries[i])
+            var profiles = Pointer(to=profiles[i])
 
             fn do_alignment(index: Int) capturing:
-                var target = Pointer.address_of(targets[index])
+                var target = Pointer(to=targets[index])
                 var result = semi_global_aln_with_saturation_check[
                     SIMD_U8_WIDTH,
                     SIMD_U16_WIDTH,
@@ -1138,7 +1135,7 @@ fn bench_striped_semi_global_parallel(
             parallelize[do_alignment](len(targets), num_physical_cores())
 
             for j in range(0, len(targets)):
-                var target = Pointer.address_of(targets[j])
+                var target = Pointer(to=targets[j])
                 writer.serialize(output[j])
                 work += len(target[].seq) * len(query[].seq)
         var end = perf_counter()
@@ -1297,7 +1294,7 @@ fn bench_basic_semi_global_gpu(
     var work = 0
     # Create the host buffers
     for i in range(0, len(queries)):
-        var query = Pointer.address_of(queries[i])
+        var query = Pointer(to=queries[i])
 
         var host_query = ctx.enqueue_create_host_buffer[DType.uint8](
             len(query[].seq)
@@ -1449,7 +1446,7 @@ fn bench_basic_semi_global_gpu(
 @value
 struct BufferPair[dtype: DType]:
     # TODO: maybe we don't want to pair these up, otherwise they can't be destroyed easily?
-    var host: DeviceBuffer[dtype]
+    var host: HostBuffer[dtype]
     var device: DeviceBuffer[dtype]
     var length: UInt
 
@@ -1934,12 +1931,12 @@ fn gpu_align_batched(
     var basic_profile_bytes = stack_allocation[
         576,
         SIMD[DType.int8, 1],
-        address_space = AddressSpace.SHARED,
+        address_space = AddressSpace(3),
         # alignment = alignof[Int8](),
     ]()
     # cp_async_bulk_tensor_shared_cluster_global_multicast
     for i in range(0, 576):
-        basic_profile_bytes[i] = basic_matrix_values[i]
+        basic_profile_bytes[i] = basic_matrix_values.unsafe_ptr()[i]
     var basic_matrix = BasicScoringMatrix[address_space = AddressSpace(3)](
         basic_profile_bytes, 576
     )
@@ -1948,12 +1945,12 @@ fn gpu_align_batched(
     var query_seq_ptr = stack_allocation[
         200,
         SIMD[DType.uint8, 1],
-        address_space = AddressSpace.SHARED,
+        address_space = AddressSpace(3),
         # alignment = alignof[UInt8](),
         # alignment=128,
     ]()
     for i in range(0, query_len):
-        query_seq_ptr[i] = query[i]
+        query_seq_ptr[i] = query.unsafe_ptr()[i]
 
     barrier()
 
@@ -1972,7 +1969,7 @@ fn gpu_align_batched(
     var gap_ext_penalty = -1
 
     # Get the start/end coords for this ref seq
-    var target_len = Int(target_ends[idx])
+    var target_len = Int(target_ends.unsafe_ptr()[idx])
 
     var result = semi_global_parasail_gpu[DType.int16, max_query_length=200,](
         query_seq_ptr,
@@ -1992,9 +1989,9 @@ fn gpu_align_batched(
     )
 
     # Store results
-    score_result_buffer[idx] = result.score
-    query_end_result_buffer[idx] = Int32(result.query)
-    ref_end_result_buffer[idx] = Int32(result.target)
+    score_result_buffer.unsafe_ptr()[idx] = result.score
+    query_end_result_buffer.unsafe_ptr()[idx] = Int32(result.query)
+    ref_end_result_buffer.unsafe_ptr()[idx] = Int32(result.target)
 
 
 fn process_with_coarse_graining(
@@ -2018,13 +2015,13 @@ fn process_with_coarse_graining(
         var aligner = ctx.compile_function[gpu_align_coarse[25]]()
         ctx.enqueue_function(
             aligner,
-            dev_query,
-            dev_ref_buffer,
-            dev_target_ends,
-            dev_score_result_buffer,
-            dev_query_end_result_buffer,
-            dev_ref_end_result_buffer,
-            dev_basic_matrix,
+            dev_query.unsafe_ptr(),
+            dev_ref_buffer.unsafe_ptr(),
+            dev_target_ends.unsafe_ptr(),
+            dev_score_result_buffer.unsafe_ptr(),
+            dev_query_end_result_buffer.unsafe_ptr(),
+            dev_ref_end_result_buffer.unsafe_ptr(),
+            dev_basic_matrix.unsafe_ptr(),
             basic_matrix_len,
             query_len,
             target_ends_len,
@@ -2036,13 +2033,13 @@ fn process_with_coarse_graining(
         var aligner = ctx.compile_function[gpu_align_coarse[50]]()
         ctx.enqueue_function(
             aligner,
-            dev_query,
-            dev_ref_buffer,
-            dev_target_ends,
-            dev_score_result_buffer,
-            dev_query_end_result_buffer,
-            dev_ref_end_result_buffer,
-            dev_basic_matrix,
+            dev_query.unsafe_ptr(),
+            dev_ref_buffer.unsafe_ptr(),
+            dev_target_ends.unsafe_ptr(),
+            dev_score_result_buffer.unsafe_ptr(),
+            dev_query_end_result_buffer.unsafe_ptr(),
+            dev_ref_end_result_buffer.unsafe_ptr(),
+            dev_basic_matrix.unsafe_ptr(),
             basic_matrix_len,
             query_len,
             target_ends_len,
@@ -2054,13 +2051,13 @@ fn process_with_coarse_graining(
         var aligner = ctx.compile_function[gpu_align_coarse[100]]()
         ctx.enqueue_function(
             aligner,
-            dev_query,
-            dev_ref_buffer,
-            dev_target_ends,
-            dev_score_result_buffer,
-            dev_query_end_result_buffer,
-            dev_ref_end_result_buffer,
-            dev_basic_matrix,
+            dev_query.unsafe_ptr(),
+            dev_ref_buffer.unsafe_ptr(),
+            dev_target_ends.unsafe_ptr(),
+            dev_score_result_buffer.unsafe_ptr(),
+            dev_query_end_result_buffer.unsafe_ptr(),
+            dev_ref_end_result_buffer.unsafe_ptr(),
+            dev_basic_matrix.unsafe_ptr(),
             basic_matrix_len,
             query_len,
             target_ends_len,
@@ -2072,12 +2069,12 @@ fn process_with_coarse_graining(
         var aligner = ctx.compile_function[gpu_align_coarse[200]]()
         ctx.enqueue_function(
             aligner,
-            dev_query,
-            dev_ref_buffer,
-            dev_target_ends,
-            dev_score_result_buffer,
-            dev_query_end_result_buffer,
-            dev_ref_end_result_buffer,
+            dev_query.unsafe_ptr(),
+            dev_ref_buffer.unsafe_ptr(),
+            dev_target_ends.unsafe_ptr(),
+            dev_score_result_buffer.unsafe_ptr(),
+            dev_query_end_result_buffer.unsafe_ptr(),
+            dev_ref_end_result_buffer.unsafe_ptr(),
             dev_basic_matrix,
             basic_matrix_len,
             query_len,
@@ -2090,13 +2087,13 @@ fn process_with_coarse_graining(
         var aligner = ctx.compile_function[gpu_align_coarse[300]]()
         ctx.enqueue_function(
             aligner,
-            dev_query,
-            dev_ref_buffer,
-            dev_target_ends,
-            dev_score_result_buffer,
-            dev_query_end_result_buffer,
-            dev_ref_end_result_buffer,
-            dev_basic_matrix,
+            dev_query.unsafe_ptr(),
+            dev_ref_buffer.unsafe_ptr(),
+            dev_target_ends.unsafe_ptr(),
+            dev_score_result_buffer.unsafe_ptr(),
+            dev_query_end_result_buffer.unsafe_ptr(),
+            dev_ref_end_result_buffer.unsafe_ptr(),
+            dev_basic_matrix.unsafe_ptr(),
             basic_matrix_len,
             query_len,
             target_ends_len,
@@ -2108,13 +2105,13 @@ fn process_with_coarse_graining(
         var aligner = ctx.compile_function[gpu_align_coarse[400]]()
         ctx.enqueue_function(
             aligner,
-            dev_query,
-            dev_ref_buffer,
-            dev_target_ends,
-            dev_score_result_buffer,
-            dev_query_end_result_buffer,
-            dev_ref_end_result_buffer,
-            dev_basic_matrix,
+            dev_query.unsafe_ptr(),
+            dev_ref_buffer.unsafe_ptr(),
+            dev_target_ends.unsafe_ptr(),
+            dev_score_result_buffer.unsafe_ptr(),
+            dev_query_end_result_buffer.unsafe_ptr(),
+            dev_ref_end_result_buffer.unsafe_ptr(),
+            dev_basic_matrix.unsafe_ptr(),
             basic_matrix_len,
             query_len,
             target_ends_len,
@@ -2126,13 +2123,13 @@ fn process_with_coarse_graining(
         var aligner = ctx.compile_function[gpu_align_coarse[500]]()
         ctx.enqueue_function(
             aligner,
-            dev_query,
-            dev_ref_buffer,
-            dev_target_ends,
-            dev_score_result_buffer,
-            dev_query_end_result_buffer,
-            dev_ref_end_result_buffer,
-            dev_basic_matrix,
+            dev_query.unsafe_ptr(),
+            dev_ref_buffer.unsafe_ptr(),
+            dev_target_ends.unsafe_ptr(),
+            dev_score_result_buffer.unsafe_ptr(),
+            dev_query_end_result_buffer.unsafe_ptr(),
+            dev_ref_end_result_buffer.unsafe_ptr(),
+            dev_basic_matrix.unsafe_ptr(),
             basic_matrix_len,
             query_len,
             target_ends_len,
@@ -2144,13 +2141,13 @@ fn process_with_coarse_graining(
         var aligner = ctx.compile_function[gpu_align_coarse[600]]()
         ctx.enqueue_function(
             aligner,
-            dev_query,
-            dev_ref_buffer,
-            dev_target_ends,
-            dev_score_result_buffer,
-            dev_query_end_result_buffer,
-            dev_ref_end_result_buffer,
-            dev_basic_matrix,
+            dev_query.unsafe_ptr(),
+            dev_ref_buffer.unsafe_ptr(),
+            dev_target_ends.unsafe_ptr(),
+            dev_score_result_buffer.unsafe_ptr(),
+            dev_query_end_result_buffer.unsafe_ptr(),
+            dev_ref_end_result_buffer.unsafe_ptr(),
+            dev_basic_matrix.unsafe_ptr(),
             basic_matrix_len,
             query_len,
             target_ends_len,
@@ -2162,13 +2159,13 @@ fn process_with_coarse_graining(
         var aligner = ctx.compile_function[gpu_align_coarse[700]]()
         ctx.enqueue_function(
             aligner,
-            dev_query,
-            dev_ref_buffer,
-            dev_target_ends,
-            dev_score_result_buffer,
-            dev_query_end_result_buffer,
-            dev_ref_end_result_buffer,
-            dev_basic_matrix,
+            dev_query.unsafe_ptr(),
+            dev_ref_buffer.unsafe_ptr(),
+            dev_target_ends.unsafe_ptr(),
+            dev_score_result_buffer.unsafe_ptr(),
+            dev_query_end_result_buffer.unsafe_ptr(),
+            dev_ref_end_result_buffer.unsafe_ptr(),
+            dev_basic_matrix.unsafe_ptr(),
             basic_matrix_len,
             query_len,
             target_ends_len,
@@ -2181,13 +2178,13 @@ fn process_with_coarse_graining(
         var aligner = ctx.compile_function[gpu_align_coarse[800]]()
         ctx.enqueue_function(
             aligner,
-            dev_query,
-            dev_ref_buffer,
-            dev_target_ends,
-            dev_score_result_buffer,
-            dev_query_end_result_buffer,
-            dev_ref_end_result_buffer,
-            dev_basic_matrix,
+            dev_query.unsafe_ptr(),
+            dev_ref_buffer.unsafe_ptr(),
+            dev_target_ends.unsafe_ptr(),
+            dev_score_result_buffer.unsafe_ptr(),
+            dev_query_end_result_buffer.unsafe_ptr(),
+            dev_ref_end_result_buffer.unsafe_ptr(),
+            dev_basic_matrix.unsafe_ptr(),
             basic_matrix_len,
             query_len,
             target_ends_len,
@@ -2199,13 +2196,13 @@ fn process_with_coarse_graining(
         var aligner = ctx.compile_function[gpu_align_coarse[1600]]()
         ctx.enqueue_function(
             aligner,
-            dev_query,
-            dev_ref_buffer,
-            dev_target_ends,
-            dev_score_result_buffer,
-            dev_query_end_result_buffer,
-            dev_ref_end_result_buffer,
-            dev_basic_matrix,
+            dev_query.unsafe_ptr(),
+            dev_ref_buffer.unsafe_ptr(),
+            dev_target_ends.unsafe_ptr(),
+            dev_score_result_buffer.unsafe_ptr(),
+            dev_query_end_result_buffer.unsafe_ptr(),
+            dev_ref_end_result_buffer.unsafe_ptr(),
+            dev_basic_matrix.unsafe_ptr(),
             basic_matrix_len,
             query_len,
             target_ends_len,
@@ -2217,13 +2214,13 @@ fn process_with_coarse_graining(
         var aligner = ctx.compile_function[gpu_align_coarse[3200]]()
         ctx.enqueue_function(
             aligner,
-            dev_query,
-            dev_ref_buffer,
-            dev_target_ends,
-            dev_score_result_buffer,
-            dev_query_end_result_buffer,
-            dev_ref_end_result_buffer,
-            dev_basic_matrix,
+            dev_query.unsafe_ptr(),
+            dev_ref_buffer.unsafe_ptr(),
+            dev_target_ends.unsafe_ptr(),
+            dev_score_result_buffer.unsafe_ptr(),
+            dev_query_end_result_buffer.unsafe_ptr(),
+            dev_ref_end_result_buffer.unsafe_ptr(),
+            dev_basic_matrix.unsafe_ptr(),
             basic_matrix_len,
             query_len,
             target_ends_len,
@@ -2236,12 +2233,12 @@ fn process_with_coarse_graining(
         ctx.enqueue_function(
             aligner,
             dev_query,
-            dev_ref_buffer,
-            dev_target_ends,
-            dev_score_result_buffer,
-            dev_query_end_result_buffer,
-            dev_ref_end_result_buffer,
-            dev_basic_matrix,
+            dev_ref_buffer.unsafe_ptr(),
+            dev_target_ends.unsafe_ptr(),
+            dev_score_result_buffer.unsafe_ptr(),
+            dev_query_end_result_buffer.unsafe_ptr(),
+            dev_ref_end_result_buffer.unsafe_ptr(),
+            dev_basic_matrix.unsafe_ptr(),
             basic_matrix_len,
             query_len,
             target_ends_len,
@@ -2259,13 +2256,13 @@ fn process_with_coarse_graining(
 fn gpu_align_coarse[
     query_length: UInt
 ](
-    query: DeviceBuffer[DType.uint8],
-    ref_buffer: DeviceBuffer[DType.uint8],
-    target_ends: DeviceBuffer[DType.uint32],
-    score_result_buffer: DeviceBuffer[DType.int32],
-    query_end_result_buffer: DeviceBuffer[DType.int32],
-    ref_end_result_buffer: DeviceBuffer[DType.int32],
-    basic_matrix_values: DeviceBuffer[DType.int8],
+    query: UnsafePointer[Scalar[DType.uint8]],
+    ref_buffer: UnsafePointer[Scalar[DType.uint8]],
+    target_ends: UnsafePointer[Scalar[DType.uint32]],
+    score_result_buffer: UnsafePointer[Scalar[DType.int32]],
+    query_end_result_buffer: UnsafePointer[Scalar[DType.int32]],
+    ref_end_result_buffer: UnsafePointer[Scalar[DType.int32]],
+    basic_matrix_values: UnsafePointer[Scalar[DType.int8]],
     basic_matrix_len: Int,
     query_len: Int,
     target_ends_len: Int,
@@ -2275,7 +2272,7 @@ fn gpu_align_coarse[
     var basic_profile_bytes = stack_allocation[
         576,
         SIMD[DType.int8, 1],
-        address_space = AddressSpace.SHARED,
+        address_space = AddressSpace(3),
     ]()
 
     for i in range(0, 576):
@@ -2289,7 +2286,7 @@ fn gpu_align_coarse[
     var query_seq_ptr = stack_allocation[
         query_length,
         SIMD[DType.uint8, 1],
-        address_space = AddressSpace.SHARED,
+        address_space = AddressSpace(3),
     ]()
 
     for i in range(0, query_len):
@@ -2321,7 +2318,7 @@ fn gpu_align_coarse[
         ](
             query_seq_ptr,
             query_len,
-            ref_buffer.unsafe_ptr(),
+            ref_buffer,
             1024,
             target_ends_len,
             idx,

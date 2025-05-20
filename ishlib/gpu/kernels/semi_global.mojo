@@ -22,13 +22,13 @@ fn gpu_align_coarse[
     max_query_length: UInt = 200,
     max_target_length: UInt = 1024,
 ](
-    query: DeviceBuffer[DType.uint8],
-    ref_buffer: DeviceBuffer[DType.uint8],
-    target_ends: DeviceBuffer[DType.uint32],
-    score_result_buffer: DeviceBuffer[DType.int32],
-    query_end_result_buffer: DeviceBuffer[DType.int32],
-    ref_end_result_buffer: DeviceBuffer[DType.int32],
-    basic_matrix_values: DeviceBuffer[DType.int8],
+    query: UnsafePointer[Scalar[DType.uint8]],
+    ref_buffer: UnsafePointer[Scalar[DType.uint8]],
+    target_ends: UnsafePointer[Scalar[DType.uint32]],
+    score_result_buffer: UnsafePointer[Scalar[DType.int32]],
+    query_end_result_buffer: UnsafePointer[Scalar[DType.int32]],
+    ref_end_result_buffer: UnsafePointer[Scalar[DType.int32]],
+    basic_matrix_values: UnsafePointer[Scalar[DType.int8]],
     basic_matrix_len: UInt,
     query_len: UInt,
     target_ends_len: UInt,
@@ -49,7 +49,7 @@ fn gpu_align_coarse[
     ]()
 
     for i in range(0, min(Int(basic_matrix_len), len(matrix_kind))):
-        basic_profile_bytes[i] = basic_matrix_values.unsafe_ptr()[i]
+        basic_profile_bytes[i] = basic_matrix_values[i]
 
     var basic_matrix = BasicScoringMatrix[
         address_space = AddressSpace(3), no_lookup=matrix_skip_lookup
@@ -63,7 +63,7 @@ fn gpu_align_coarse[
     ]()
 
     for i in range(0, min(query_len, max_query_length)):
-        query_seq_ptr[i] = query.unsafe_ptr()[i]
+        query_seq_ptr[i] = query[i]
 
     barrier()  # Ensure shared memory is fully loaded before proceeding
 
@@ -80,7 +80,7 @@ fn gpu_align_coarse[
         if idx >= target_ends_len:
             return
         # Get the length of this reference sequence
-        var target_len = Int(target_ends.unsafe_ptr()[idx])
+        var target_len = Int(target_ends[idx])
 
         # Perform the alignment
         # TODO: shift the ends back to being a param?
@@ -91,7 +91,7 @@ fn gpu_align_coarse[
         ](
             query_seq_ptr,
             query_len,
-            ref_buffer.unsafe_ptr(),
+            ref_buffer,
             max_target_length,
             target_ends_len,
             idx,
@@ -109,7 +109,7 @@ fn gpu_align_coarse[
 
         # Store results
         # TODO: move this to after the loop?
-        score_result_buffer.unsafe_ptr()[idx] = result.score
-        query_end_result_buffer.unsafe_ptr()[idx] = Int32(result.query) + 1
-        ref_end_result_buffer.unsafe_ptr()[idx] = Int32(result.target) + 1
+        score_result_buffer[idx] = result.score
+        query_end_result_buffer[idx] = Int32(result.query) + 1
+        ref_end_result_buffer[idx] = Int32(result.target) + 1
         barrier()
