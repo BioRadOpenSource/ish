@@ -71,8 +71,8 @@ def test_line_ascii_search():
     var settings = List[SearcherSettings]()
     for algo in List(
         # "naive_exact",
-        "striped-local",
-        "striped-semi-global",
+        String("striped-local"),
+        String("striped-semi-global"),
         # "basic-local",
         # "basic-semi-global",
     ):
@@ -119,8 +119,8 @@ def test_fasta_actgn_search():
     var settings = List[SearcherSettings]()
     for algo in List(
         # "naive_exact",
-        "striped-local",
-        "striped-semi-global",
+        String("striped-local"),
+        String("striped-semi-global"),
         # "basic-local",
         # "basic-semi-global",
     ):
@@ -169,8 +169,8 @@ def test_fasta_blosum62_search():
     var settings = List[SearcherSettings]()
     for algo in List(
         # "naive_exact",
-        "striped-local",
-        "striped-semi-global",
+        String("striped-local"),
+        String("striped-semi-global"),
         # "basic-local",
         # "basic-semi-global",
     ):
