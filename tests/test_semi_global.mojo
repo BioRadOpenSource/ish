@@ -23,11 +23,9 @@ struct FreeGapTest(StringableRaising):
     var score: Int32
 
     fn __str__(read self) raises -> String:
-        return (
-            "q_start: {}, q_end: {}, t_start: {}, t_end: {}, score: {}".format(
-                self.q_start, self.q_end, self.t_start, self.t_end, self.score
-            )
-        )
+        return String(
+            "q_start: {}, q_end: {}, t_start: {}, t_end: {}, score: {}"
+        ).format(self.q_start, self.q_end, self.t_start, self.t_end, self.score)
 
 
 fn test_exact_match() raises:
@@ -890,9 +888,6 @@ fn test_alignment_striped_regression() raises:
     var profile = Profile[
         16, 8, SmallType = DType.uint8, LargeType = DType.uint16
     ](query, score_matrix, ScoreSize.Adaptive)
-    var rev_profile = Profile[
-        16, 8, SmallType = DType.uint8, LargeType = DType.uint16
-    ](rev_query, score_matrix, ScoreSize.Adaptive)
 
     # No free ends config
     var result = semi_global_aln[DType.uint16, 8](
