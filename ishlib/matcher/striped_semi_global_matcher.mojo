@@ -1,7 +1,6 @@
 """Smith-Waterman local alignment."""
 from gpu.host import DeviceContext
 from sys.info import simdwidthof
-from utils import StringSlice
 
 from ishlib.gpu.kernels.semi_global import gpu_align_coarse
 from ishlib.matcher import Matcher, MatchResult
@@ -155,7 +154,7 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
 
     @always_inline
     fn score_threshold(read self) -> Float32:
-        """Returns the score threshold needed to be concidered a match."""
+        """Returns the score threshold needed to be considered a match."""
         return self._score_threshold
 
     @staticmethod
@@ -163,13 +162,13 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
         max_query_length: UInt,
         max_target_length: UInt,
     ](
-        query: DeviceBuffer[DType.uint8],
-        ref_buffer: DeviceBuffer[DType.uint8],
-        target_ends: DeviceBuffer[DType.uint32],
-        score_result_buffer: DeviceBuffer[DType.int32],
-        query_end_result_buffer: DeviceBuffer[DType.int32],
-        ref_end_result_buffer: DeviceBuffer[DType.int32],
-        basic_matrix_values: DeviceBuffer[DType.int8],
+        query: UnsafePointer[Scalar[DType.uint8]],
+        ref_buffer: UnsafePointer[Scalar[DType.uint8]],
+        target_ends: UnsafePointer[Scalar[DType.uint32]],
+        score_result_buffer: UnsafePointer[Scalar[DType.int32]],
+        query_end_result_buffer: UnsafePointer[Scalar[DType.int32]],
+        ref_end_result_buffer: UnsafePointer[Scalar[DType.int32]],
+        basic_matrix_values: UnsafePointer[Scalar[DType.int8]],
         basic_matrix_len: Int,
         matrix_kind: MatrixKind,
         query_len: Int,

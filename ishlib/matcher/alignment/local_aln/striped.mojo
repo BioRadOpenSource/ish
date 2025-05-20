@@ -332,7 +332,7 @@ fn sw[
     var i = begin
     while i != end:
         # Initialize to 0, any errors in vH will be corrected in lazy_f
-        var e = zero
+        var e: SIMD[dt, width]
         # Represents scores for alignments that end with gaps in the reference seq
         var v_f = zero  # aka: vF
         # the max score in the current column

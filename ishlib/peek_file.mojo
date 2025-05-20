@@ -54,7 +54,7 @@ fn peek_file[
             is_binary=is_binary, suggested_max_length=DEFAULT_MAX_LENGTH
         )
 
-    var suggested_max_length = DEFAULT_MAX_LENGTH
+    var suggested_max_length: Int
 
     @parameter
     if record_type == RecordType.LINE:

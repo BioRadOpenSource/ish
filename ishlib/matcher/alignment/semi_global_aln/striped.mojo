@@ -51,9 +51,9 @@ struct Profile[
         # print("Intializing a profile for a query of len", len(query))
         var profile_small: Optional[Self.smallVProfile] = None
         var profile_large: Optional[Self.largeVProfile] = None
-        var bias: UInt8 = 0
-        var max_score: Int8 = 0
-        var min_score: Int8 = 0
+        var bias: UInt8
+        var max_score: Int8
+        var min_score: Int8
         # Find the bias to use in the substitution matrix
         # The bias will be smallest value in the scoring matrix
         var bias_tmp: Int8 = 0
@@ -364,7 +364,7 @@ fn semi_global_aln[
     var v_pos_limit = SIMD[dt, width](Int32(MAX) - Int32(max_score) - 1)
 
     # var v_pos_limit = SIMD[dt, width](MAX_LIMIT)
-    var v_saturation_check_min = v_neg_limit
+    # var v_saturation_check_min = v_neg_limit
     var v_saturation_check_max = v_pos_limit - (v_neg_limit)
     var v_max_h = v_neg_limit
     var v_bias = SIMD[dt, width](bias)
@@ -390,7 +390,7 @@ fn semi_global_aln[
 
     for i in range(0, len(reference)):  # Not i and j are swapped
         # print("OUTER LOOP:", i)
-        var v_e = zero
+        var v_e: SIMD[dt, width]
         var v_f = v_neg_limit
         var v_h = pv_h_store[segment_length - 1]
         v_h = v_h.shift_right[1]()

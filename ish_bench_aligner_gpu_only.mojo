@@ -6,7 +6,6 @@ from sys import stdout, stderr
 from sys.info import simdwidthof, has_avx512f, alignof, num_physical_cores
 from sys.param_env import env_get_int
 from time.time import perf_counter
-from utils import StringSlice
 
 from gpu.host import DeviceContext
 

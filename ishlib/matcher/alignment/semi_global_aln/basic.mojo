@@ -315,8 +315,8 @@ fn semi_global_parasail_gpu[
         for j in range(1, cols):
             H[j] = gap_open_penalty + ((j - 1) * gap_extension_penalty)
 
-    var NH = H[0]
-    var WH = NUM(0)
+    var NH: Scalar[DT]
+    var WH: Scalar[DT]
 
     # Iterate over the target sequence
     for i in range(1, rows - 1):
