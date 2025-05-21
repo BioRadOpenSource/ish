@@ -13,6 +13,7 @@ fn main() raises:
         return
     var settings = searcher_settings.value()
     if settings.is_output_stdout():
+        var x = BufferedWriter(stdout)
         do_search(settings, BufferedWriter(stdout))
     else:
         do_search(settings, BufferedWriter(open(settings.output_file, "w")))

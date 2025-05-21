@@ -19,23 +19,17 @@ fn parallel_starts_ends[
     read seqs: Span[S],
     mut output: List[Optional[ComputedMatchResult]],
 ):
-    print("Called parallel_starts_ends")
-    print(len(output))
-
     fn do_matching(index: Int) capturing:
         var target = Pointer(to=seqs[index])
-        print("accessed target")
         var result = matcher.first_match(
             target[].buffer_to_search(), matcher.encoded_pattern()
         )
-        print("Got result")
         if result:
             output[target[].original_index()] = ComputedMatchResult(
                 result.value(),
                 WhereComputed.Cpu,
                 index,
             )
-            print("Assigned result")
 
     parallelize[do_matching](len(seqs), settings.threads)
 
