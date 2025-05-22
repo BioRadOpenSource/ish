@@ -186,7 +186,7 @@ struct ParallelFastaSearchRunner[M: Matcher]:
         W: MovableWriter
     ](mut self, file: Path, mut writer: BufferedWriter[W]) raises:
         var reader = FastxReader[read_comment=False](
-            BufferedReader(GZFile(String(file), "r"))
+            BufferedReader(GZFile(String(file), "rb"))
         )
 
         var sequences = List[SeqAndIndex]()

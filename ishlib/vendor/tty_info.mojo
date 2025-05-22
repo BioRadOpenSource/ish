@@ -88,8 +88,8 @@ struct TTYInfo:
             An Info object.
         """
         var is_tty = self.is_a_tty(fd)
-        (rows, cols) = self.get_tty_size(fd)
-        return Info(is_tty, rows, cols)
+        # (rows, cols) = self.get_tty_size(fd)
+        return Info(is_tty, 0, 0)
 
     fn is_a_tty(self, fd: Int) -> Bool:
         """Check if the file descriptor is attached to a TTY.
@@ -105,28 +105,31 @@ struct TTYInfo:
         )
         return func(c_int(fd)) != 0
 
-    fn get_tty_size(self, fd: Int) -> (Int, Int):
-        """Get the size of a TTY.
+    # TODO: this was just lucky and working in 25.2, in 25.3, something has changed.
+    # Shelving till we have a repr(C) equivalent
+    # fn get_tty_size(self, fd: Int) -> (Int, Int):
+    #     """Get the size of a TTY.
 
-        If it is not attached the returned rows and cols will be -1.
+    #     If it is not attached the returned rows and cols will be -1.
 
-        Args:
-            fd: The file descriptor to check.
+    #     Args:
+    #         fd: The file descriptor to check.
 
-        Returns:
-            (rows, cols) as the size, -1 if not attached.
-        """
-        var func = self.lib_handle.get_function[_ioctl_fn_type]("ioctl")
+    #     Returns:
+    #         (rows, cols) as the size, -1 if not attached.
+    #     """
+    #     var func = self.lib_handle.get_function[_ioctl_fn_type]("ioctl")
 
-        # Allocate a buffer for the struct winsize (4 * 2-byte ushort = 8 bytes)
-        var buf = InlineArray[UInt8, size=8](fill=0)
-        var ptr = buf.unsafe_ptr()
+    #     # Allocate a buffer for the struct winsize (4 * 2-byte ushort = 8 bytes)
+    #     var buf = InlineArray[UInt8, size=8](fill=0)
+    #     var ptr = buf.unsafe_ptr()
 
-        var result = func(c_int(fd), _TIOCGWINSZ(), ptr)
-        if result < 0:
-            return (-1, -1)
+    #     var result = func(c_int(fd), _TIOCGWINSZ(), ptr)
+    #     if result < 0:
+    #         return (-1, -1)
 
-        # Read cols and rows from buffer (0-1 = rows, 2-3 = cols)
-        var rows = Int(UInt16(ptr[0]) | UInt16(ptr[1]) << 8)
-        var cols = Int(UInt16(ptr[2]) | UInt16(ptr[3]) << 8)
-        return (cols, rows)
+    #     # Read cols and rows from buffer (0-1 = rows, 2-3 = cols)
+    #     var rows = Int(UInt16(ptr[0]) | UInt16(ptr[1]) << 8)
+    #     var cols = Int(UInt16(ptr[2]) | UInt16(ptr[3]) << 8)
+    #     _ = buf
+    #     return (cols, rows)
