@@ -56,26 +56,6 @@ alias gzread_fn_type = fn (
 ) -> c_int
 
 
-struct CString:
-    var ptr: UnsafePointer[Int8]
-    var length: UInt  # includes null term
-
-    fn __init__(out self, read s: String):
-        # Get the buffer from the string
-        var buffer = s.as_bytes()
-        var size = len(buffer) + 1  # +1 for null terminator
-        var c_str = UnsafePointer[Int8].alloc(size)
-        for i in range(len(buffer)):
-            c_str[i] = Int8(buffer[i])
-        # add null term
-        c_str[len(buffer)] = 0
-        self.ptr = c_str
-        self.length = size
-
-    fn __del__(owned self):
-        self.ptr.free()
-
-
 @value
 struct ZLib:
     """Wrapper for zlib library functions."""
@@ -94,17 +74,15 @@ struct ZLib:
         """Initialize zlib wrapper."""
         self.lib_handle = ffi.DLHandle(Self._get_libname())
 
-    fn gzopen(self, filename: String, mode: String) raises -> c_void_ptr:
+    fn gzopen(
+        self, mut filename: String, mut mode: String
+    ) raises -> c_void_ptr:
         """Open a gzip file."""
         # Get function pointer
         var func = self.lib_handle.get_function[gzopen_fn_type]("gzopen")
 
-        # Convert strings to C-style strings
-        var filename_c = CString(filename)
-        var mode_c = CString(mode)
-
         # Call the function
-        var result = func(filename_c.ptr, mode_c.ptr)
+        var result = func(filename.unsafe_cstr_ptr(), mode.unsafe_cstr_ptr())
 
         return result
 
@@ -126,11 +104,16 @@ struct GZFile(KRead):
 
     var handle: c_void_ptr
     var lib: ZLib
+    var filename: String
+    var mode: String
 
     fn __init__(out self, filename: String, mode: String) raises:
         """Open a gzip file."""
         self.lib = ZLib()
-        self.handle = self.lib.gzopen(filename, mode)
+        # Note: must keep filename and mode because gzopen takes a ref to them and they need to live as long as the file is open.
+        self.filename = filename
+        self.mode = mode
+        self.handle = self.lib.gzopen(self.filename, self.mode)
         if self.handle == c_void_ptr():
             raise Error("Failed to open gzip file: " + filename)
 
@@ -142,6 +125,8 @@ struct GZFile(KRead):
     fn __moveinit__(out self, owned other: Self):
         self.handle = other.handle
         self.lib = other.lib^
+        self.filename = other.filename^
+        self.mode = other.mode^
 
     fn unbuffered_read[
         o: MutableOrigin
