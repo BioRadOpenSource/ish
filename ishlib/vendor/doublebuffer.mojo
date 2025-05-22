@@ -9,6 +9,7 @@ from ExtraMojo.io.buffered import BufferedWriter
 from runtime.asyncrt import DeviceContextPtr, TaskGroup, parallelism_level
 from os.atomic import Atomic
 from sys import stdout
+from time import perf_counter
 
 
 struct DoubleBuffer[
@@ -25,6 +26,7 @@ struct DoubleBuffer[
     var _current_process_buffer: UInt
 
     fn __init__(out self, *, capacity: Int = 0):
+        print("Par level:", parallelism_level())
         self._buffers = __type_of(self._buffers)(
             List[T](capacity=capacity), List[T](capacity=capacity)
         )
@@ -39,7 +41,6 @@ struct DoubleBuffer[
     fn run(mut self, owned file_to_read: String):
         """Alternate between two buffers as the "fill" buffer and "work" buffer.
         """
-        var fill_done = Atomic[DType.uint32](0)
         var process_done = Atomic[DType.uint32](1)
         var shutdown = Atomic[DType.uint32](0)
 
@@ -59,13 +60,16 @@ struct DoubleBuffer[
 
             while True:
                 if process_done.load() == 1:
-                    _ = process_done.fetch_sub(1)
+                    var start = perf_counter()
                     if (
                         fill(reader, self._buffers[self._current_fill_buffer])
                         < 0
                     ):
                         _ = shutdown.fetch_add(1)
-                    _ = fill_done.fetch_add(1)
+                    var end = perf_counter()
+                    print("Fill in:", end - start)
+                    self._swap_buffers()
+                    _ = process_done.fetch_sub(1)
 
                 if shutdown.load() > 0:
                     print("shutting down filler")
@@ -83,9 +87,8 @@ struct DoubleBuffer[
                 return
 
             while True:
-                if fill_done.load() == 1:
-                    self._swap_buffers()
-                    _ = fill_done.fetch_sub(1)
+                if process_done.load() == 0:
+                    var start = perf_counter()
                     if (
                         process(
                             writer, self._buffers[self._current_process_buffer]
@@ -93,9 +96,11 @@ struct DoubleBuffer[
                         < 0
                     ):
                         _ = shutdown.fetch_add(1)
+                    var end = perf_counter()
+                    print("Process in:", end - start)
                     _ = process_done.fetch_add(1)
 
-                if shutdown.load() > 0 and fill_done.load() == 0:
+                if shutdown.load() > 0 and process_done.load() == 1:
                     print("shutting down processor")
                     break
 

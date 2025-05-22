@@ -1,6 +1,6 @@
 # TODO: This is a copy paste from the fasta reader, make it generic
 
-from algorithm.functional import parallelize
+from algorithm.functional import parallelize, parallelism_level
 from math import ceildiv
 from time.time import perf_counter
 
@@ -37,8 +37,8 @@ fn parallel_starts_ends[
     ],
     read matcher: M,
     read settings: SearcherSettings,
-    read seqs: Span[S],
-    read cpu_seqs: Span[S],
+    read seqs: List[S],
+    read cpu_seqs: List[S],
 ) raises -> List[Optional[ComputedMatchResult]]:
     var start = perf_counter()
     var output_len = len(seqs) + len(cpu_seqs)
@@ -102,7 +102,9 @@ fn parallel_starts_ends[
             seqs[s:e],
         )
 
-    parallelize[copy_data](len(ctxs))
+    # parallelize[copy_data](len(ctxs), settings.threads)
+    for i in range(0, len(ctxs)):
+        copy_data(i)
 
     var buffers_filled = perf_counter()
     Logger.timing("Buffer fill time:", buffers_filled - buffer_fill_start)

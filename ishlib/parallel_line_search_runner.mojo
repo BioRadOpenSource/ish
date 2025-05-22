@@ -364,13 +364,7 @@ struct GpuParallelLineSearchRunner[
                     LineAndIndex,
                     max_query_length,
                     max_target_length,
-                ](
-                    ctxs,
-                    self.matcher,
-                    self.settings,
-                    sequences,
-                    cpu_sequences,
-                )
+                ](ctxs, self.matcher, self.settings, sequences, cpu_sequences)
                 var write_start = perf_counter()
                 for i in range(0, len(outputs)):
                     var m = outputs[i]

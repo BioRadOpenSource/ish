@@ -73,9 +73,9 @@ struct ParallelFastaSearchRunner[M: Matcher]:
             if peek.is_binary and self.settings.verbose:
                 Logger.warn("Skipping binary file:", file[])
             Logger.debug("Processing", f)
-            self.run_search_on_file(f, writer)
+            self.run_search_on_file_doublebuffer(f, writer)
 
-    fn run_search_on_file_ping_pong[
+    fn run_search_on_file_doublebuffer[
         W: MovableWriter
     ](mut self, file: Path, mut _writer: BufferedWriter[W]) raises:
         @parameter
@@ -83,42 +83,34 @@ struct ParallelFastaSearchRunner[M: Matcher]:
             mut reader: FastxReader[GZFile, False],
             mut fill_buffer: List[SeqAndIndex],
         ) capturing -> Int:
-            var do_work = True
             var bytes_saved = 0
             var seq_number = 0
-            while do_work:
+            while True:
                 var ret: Int
                 try:
                     ret = reader.read()
                 except:
                     Logger.error("Failed to read from file", String(file))
-                    return -1
+                    break
 
-                if ret == 0:
-                    do_work = False
-                elif ret < 0:
-                    Logger.error("Got ret of", ret, "from reading")
-                    return -1
-                else:
-                    var seq = List[UInt8](capacity=len(reader.seq))
-                    for s in range(0, len(reader.seq)):
-                        seq.append(
-                            self.matcher.convert_ascii_to_encoding(
-                                reader.seq[s]
-                            )
-                        )
-                    var record = ByteFastaRecord(
-                        List(reader.name.as_span()), seq
+                if ret <= 0:
+                    break
+
+                var seq = List[UInt8](capacity=len(reader.seq))
+                for s in range(0, len(reader.seq)):
+                    seq.append(
+                        self.matcher.convert_ascii_to_encoding(reader.seq[s])
                     )
-                    bytes_saved += record.size_in_bytes()
-                    fill_buffer.append(SeqAndIndex(record, seq_number))
-                    seq_number += 1
-                if bytes_saved >= self.settings.batch_size or not do_work:
+                var record = ByteFastaRecord(List(reader.name.as_span()), seq)
+                bytes_saved += record.size_in_bytes()
+                fill_buffer.append(SeqAndIndex(record, seq_number))
+                seq_number += 1
+                if bytes_saved >= self.settings.batch_size:
                     Logger.info(
                         "Done filling buffer with", len(fill_buffer), "seqs"
                     )
                     return 0
-            return 0
+            return -1
 
         @parameter
         fn process(
@@ -126,60 +118,58 @@ struct ParallelFastaSearchRunner[M: Matcher]:
             mut process_buffer: List[SeqAndIndex],
         ) capturing -> Int:
             Logger.info("Processing seqs: ", len(process_buffer))
-            if len(process_buffer) > 0:
-                var outputs = List[Optional[ComputedMatchResult]](
-                    capacity=len(process_buffer)
-                )
-                for _ in range(0, len(process_buffer)):
-                    outputs.append(None)
+            if len(process_buffer) == 0:
+                return 0
+            var outputs = List[Optional[ComputedMatchResult]](
+                capacity=len(process_buffer)
+            )
+            for _ in range(0, len(process_buffer)):
+                outputs.append(None)
 
-                cpu_parallel_starts_ends[M, SeqAndIndex](
-                    self.matcher,
-                    self.settings,
-                    process_buffer,
-                    outputs,
-                )
-                print("did chunk")
-                for i in range(0, len(outputs)):
-                    var m = outputs[i]
-                    if not m:
-                        continue
-                    var r = Pointer(to=process_buffer[i])
+            cpu_parallel_starts_ends[M, SeqAndIndex](
+                self.matcher,
+                self.settings,
+                process_buffer,
+                outputs,
+            )
+            for i in range(0, len(outputs)):
+                var m = outputs[i]
+                if not m:
+                    continue
+                var r = Pointer(to=process_buffer[i])
 
-                    # Convert back to asii
-                    for i in range(0, len(r[].seq.seq)):
-                        r[].seq.seq[i] = self.matcher.convert_encoding_to_ascii(
-                            r[].seq.seq[i]
-                        )
+                # Convert back to asii
+                for i in range(0, len(r[].seq.seq)):
+                    r[].seq.seq[i] = self.matcher.convert_encoding_to_ascii(
+                        r[].seq.seq[i]
+                    )
 
-                    writer.write(">")
-                    writer.write_bytes(r[].seq.name)
-                    writer.write("\n")
+                writer.write(">")
+                writer.write_bytes(r[].seq.name)
+                writer.write("\n")
 
-                    if (
-                        self.settings.tty_info.is_a_tty
-                        and self.settings.is_output_stdout()
-                    ):
-                        writer.write_bytes(
-                            r[].seq.seq[0 : m.value().result.start]
-                        )
-                        writer.write("\033[1;31m")
-                        writer.write(RED)
-                        writer.write_bytes(
-                            r[].seq.seq[
-                                m.value().result.start : m.value().result.end
-                            ]
-                        )
-                        writer.write()
-                        writer.write(RESET)
-                        writer.write_bytes(r[].seq.seq[m.value().result.end :])
-                    else:
-                        writer.write_bytes(r[].seq.seq)
-                    writer.write("\n")
+                if (
+                    self.settings.tty_info.is_a_tty
+                    and self.settings.is_output_stdout()
+                ):
+                    writer.write_bytes(r[].seq.seq[0 : m.value().result.start])
+                    writer.write("\033[1;31m")
+                    writer.write(RED)
+                    writer.write_bytes(
+                        r[].seq.seq[
+                            m.value().result.start : m.value().result.end
+                        ]
+                    )
+                    writer.write()
+                    writer.write(RESET)
+                    writer.write_bytes(r[].seq.seq[m.value().result.end :])
+                else:
+                    writer.write_bytes(r[].seq.seq)
+                writer.write("\n")
                 process_buffer.clear()
             return 0
 
-        var runner = DoubleBuffer[SeqAndIndex, fill, process](capacity=10000)
+        var runner = DoubleBuffer[SeqAndIndex, fill, process]()
         runner.run(String(file))
 
     fn run_search_on_file[
@@ -213,6 +203,7 @@ struct ParallelFastaSearchRunner[M: Matcher]:
                 seq_number += 1
 
             if bytes_saved >= self.settings.batch_size or not do_work:
+                print("processing", len(sequences), "seqs")
                 var outputs = List[Optional[ComputedMatchResult]](
                     capacity=len(sequences)
                 )
@@ -376,9 +367,163 @@ struct GpuParallelFastaSearchRunner[
                 if peek.is_binary:
                     Logger.warn("Skipping binary file:", paths[i])
                     continue
-            self.run_search_on_file[W, max_query_length, max_target_length](
-                f, ctxs, writer
+            self.run_search_on_file_doublebuffer[
+                W, max_query_length, max_target_length
+            ](f, ctxs, writer)
+
+    fn run_search_on_file_doublebuffer[
+        W: MovableWriter,
+        max_query_length: UInt = 200,
+        max_target_length: UInt = 1024,
+    ](
+        mut self,
+        path: Path,
+        mut ctxs: List[
+            SearcherDevice[
+                M.batch_match_coarse[max_query_length, max_target_length]
+            ]
+        ],
+        mut writer: BufferedWriter[W],
+    ) raises:
+        alias GPU_IDX = 0
+        alias CPU_IDX = 1
+
+        @parameter
+        fn fill(
+            mut reader: FastxReader[GZFile, False],
+            mut fill_buffer: List[List[SeqAndIndex]],
+        ) capturing -> Int:
+            if len(fill_buffer) != 2:
+                fill_buffer.clear()
+                for _ in range(0, 2):
+                    fill_buffer.append(List[SeqAndIndex]())
+
+            var bytes_saved = 0
+            var seq_number = 0
+            while True:
+                var ret: Int
+                try:
+                    ret = reader.read()
+                except:
+                    Logger.error("Failed to read from file", String(path))
+                    break
+
+                if ret <= 0:
+                    break
+
+                var seq = List[UInt8](capacity=len(reader.seq))
+                for s in range(0, len(reader.seq)):
+                    seq.append(
+                        self.matcher.convert_ascii_to_encoding(reader.seq[s])
+                    )
+                var record = ByteFastaRecord(List(reader.name.as_span()), seq)
+
+                if len(reader.seq) > max_target_length:
+                    fill_buffer[CPU_IDX].append(
+                        SeqAndIndex(
+                            record,
+                            seq_number,
+                        )
+                    )
+                else:
+                    bytes_saved += max_target_length
+                    fill_buffer[GPU_IDX].append(SeqAndIndex(record, seq_number))
+
+                seq_number += 1
+                if (
+                    bytes_saved
+                    >= self.settings.readable_batch_size() - max_target_length
+                ):
+                    Logger.info(
+                        "Done filling buffer with", len(fill_buffer), "seqs"
+                    )
+                    return 0
+            return -1
+
+        @parameter
+        fn process(
+            mut writer: BufferedWriter[FileDescriptor],
+            mut process_buffer: List[List[SeqAndIndex]],
+        ) capturing -> Int:
+            fn write_match[
+                mut: Bool, //, o: Origin[mut]
+            ](r: Pointer[ByteFastaRecord, o], m: ComputedMatchResult) capturing:
+                writer.write(">")
+                writer.write_bytes(r[].name)
+                writer.write("\n")
+                if (
+                    self.settings.tty_info.is_a_tty
+                    and self.settings.is_output_stdout()
+                ):
+                    writer.write_bytes(r[].seq[0 : m.result.start])
+                    writer.write(RED)
+                    writer.write_bytes(r[].seq[m.result.start : m.result.end])
+                    writer.write(RESET)
+                    writer.write_bytes(r[].seq[m.result.end :])
+                else:
+                    writer.write_bytes(r[].seq)
+                writer.write("\n")
+
+            Logger.info(
+                "Processing seqs: ",
+                len(process_buffer[GPU_IDX]) + len(process_buffer[CPU_IDX]),
             )
+            if (
+                len(process_buffer[GPU_IDX]) == 0
+                or len(process_buffer[CPU_IDX]) == 0
+            ):
+                return 0
+
+            var outputs: List[Optional[ComputedMatchResult]]
+            try:
+                outputs = gpu_parallel_starts_ends[
+                    M,
+                    SeqAndIndex,
+                    max_query_length,
+                    max_target_length,
+                ](
+                    ctxs,
+                    self.matcher,
+                    self.settings,
+                    process_buffer[GPU_IDX],
+                    process_buffer[CPU_IDX],
+                )
+            except e:
+                Logger.error("Error processing batch of seqs.", e)
+                return -1
+
+            for i in range(0, len(outputs)):
+                var m = outputs[i]
+                if not m:
+                    continue
+
+                if m.value().where_computed == WhereComputed.Gpu:
+                    var r = Pointer(
+                        to=process_buffer[GPU_IDX][m.value().index].seq
+                    )
+                    # Convert back to ascii
+                    for i in range(0, len(r[].seq)):
+                        r[].seq[i] = self.matcher.convert_encoding_to_ascii(
+                            r[].seq[i]
+                        )
+                    write_match(r, m.value())
+                else:
+                    var r = Pointer(
+                        to=process_buffer[CPU_IDX][m.value().index].seq
+                    )
+                    # Convert back to ascii
+                    for i in range(0, len(r[].seq)):
+                        r[].seq[i] = self.matcher.convert_encoding_to_ascii(
+                            r[].seq[i]
+                        )
+                    write_match(r, m.value())
+
+            process_buffer[CPU_IDX].clear()
+            process_buffer[GPU_IDX].clear()
+            return 0
+
+        var runner = DoubleBuffer[List[SeqAndIndex], fill, process]()
+        runner.run(String(path))
 
     fn run_search_on_file[
         W: MovableWriter,
