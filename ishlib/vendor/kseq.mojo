@@ -21,7 +21,6 @@ def main():
 ```
 """
 from memory import UnsafePointer, memcpy
-from utils import StringSlice
 
 from time.time import perf_counter
 
@@ -54,7 +53,6 @@ struct SearchChar:
         return UInt8(self.value)
 
 
-@value
 struct ByteString(Sized):
     # TODO: add address_space
     var size: UInt32
@@ -71,10 +69,10 @@ struct ByteString(Sized):
     fn __del__(owned self):
         self.ptr.free()
 
-    fn __copyinit__(out self, read other: Self):
-        self.ptr = UnsafePointer[UInt8].alloc(Int(other.size))
+    fn __moveinit__(out self, owned other: Self):
+        self.ptr = other.ptr
         self.size = other.size
-        self.cap = other.size
+        self.cap = other.cap
 
     @always_inline
     fn __getitem__[I: Indexer](read self, idx: I) -> UInt8:
@@ -116,21 +114,20 @@ struct ByteString(Sized):
         self.cap = cap
         var new_data = UnsafePointer[UInt8].alloc(Int(self.cap))
         memcpy(new_data, self.ptr, len(self))
-        if self.ptr:
-            self.ptr.free()
+        self.ptr.free()
         self.ptr = new_data
 
     @always_inline
     fn resize(mut self, size: UInt32):
+        var old_size = self.size
         self.size = size
         if self.size <= self.cap:
             return
         self.cap = Self._roundup32(self.size)
         var new_data = UnsafePointer[UInt8].alloc(Int(self.cap))
-        memcpy(new_data, self.ptr, len(self))
+        memcpy(new_data, self.ptr, len(old_size))
 
-        if self.ptr:
-            self.ptr.free()
+        self.ptr.free()
         self.ptr = new_data
 
     # TODO: rename append
@@ -340,7 +337,8 @@ struct FastxReader[R: KRead, read_comment: Bool = True](Movable):
     fn __init__(out self, owned reader: BufferedReader[R]):
         self.reader = reader^
         self.name = ByteString()
-        self.seq = ByteString(256)
+        self.seq = ByteString()
+        self.seq.reserve(256)
         self.qual = ByteString()
         self.comment = ByteString()
         self.last_char = 0
