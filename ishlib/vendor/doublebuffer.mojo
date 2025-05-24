@@ -29,7 +29,8 @@ struct BinarySemaphore:
             sleep(0.001)  # backoff to prevent busy spinning
 
     fn release(self):
-        self.state.max(Int8(1))
+        # Atomic.store doesn't seem to do what I think it should
+        self.state.max(1)
 
 
 struct DoubleBuffer[
@@ -59,6 +60,8 @@ struct DoubleBuffer[
         self._current_process_buffer = tmp
 
     fn run(mut self, owned file_to_read: String):
+        """Alternate between two buffers as the "fill" buffer and "work" buffer.
+        """
         var shutdown = Atomic[DType.uint32](0)
 
         var signal_to_generate = BinarySemaphore(1)
@@ -67,6 +70,8 @@ struct DoubleBuffer[
         @parameter
         @always_inline
         async fn thread_filler():
+            # TODO: When we have a generic "Read" trait, this can go away and a closure can be passed in to
+            # create this.
             var reader: FastxReader[GZFile, read_comment=False]
             try:
                 reader = FastxReader[read_comment=False](
@@ -76,22 +81,32 @@ struct DoubleBuffer[
                 Logger.error("Failed to open", file_to_read, "for reading")
                 return
 
-            while True:
-                signal_to_generate.acquire()
+            # TODO: this almost works, there is something wrong with shutdown sequencing and the last buffer doesn't get processed
 
+            while True:
                 var start = perf_counter()
-                var status = fill(
-                    reader, self._buffers[self._current_fill_buffer]
-                )
+                if fill(reader, self._buffers[self._current_fill_buffer]) < 0:
+                    _ = shutdown.fetch_add(1)
+
                 var end = perf_counter()
                 print("Fill in:", end - start)
                 print(len(self._buffers[self._current_fill_buffer]))
 
+                # Wait till for signal to generate more data
+                signal_to_generate.acquire()
+
+                # Swap buffers
                 self._swap_buffers()
+
+                # Send signal to processing to go ahead
+                print(
+                    "Signal to process",
+                    len(self._buffers[self._current_process_buffer]),
+                )
                 signal_to_process.release()
 
-                if status < 0:
-                    _ = shutdown.fetch_add(1)
+                if shutdown.load() > 0:
+                    print("shutting down filler")
                     break
 
             _ = reader^
@@ -106,26 +121,26 @@ struct DoubleBuffer[
                 Logger.error("Failed to open stdout for writing")
                 return
 
-            while True:
-                if shutdown.load() > 0 and not signal_to_process.check():
-                    print("shutting down processor")
-                    break
+            var saw_shutdown_last_loop = False
 
+            while True:
                 signal_to_process.acquire()
 
                 var start = perf_counter()
-                var status = process(
-                    writer, self._buffers[self._current_process_buffer]
-                )
+                if (
+                    process(writer, self._buffers[self._current_process_buffer])
+                    < 0
+                ):
+                    _ = shutdown.fetch_add(1)
                 var end = perf_counter()
                 print("Process in:", end - start)
 
-                if status < 0:
-                    _ = shutdown.fetch_add(1)
-                    signal_to_generate.release()
-                    break
-
                 signal_to_generate.release()
+                if shutdown.load() > 0:
+                    if not signal_to_process.check() and saw_shutdown_last_loop:
+                        print("shutting down processor")
+                        break
+                    saw_shutdown_last_loop = True
 
             try:
                 writer.flush()
@@ -137,3 +152,27 @@ struct DoubleBuffer[
         tg.create_task(thread_filler())
         tg.create_task(thread_processor())
         tg.wait()
+
+
+# def main():
+#     var source = List[Int](1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+
+#     @parameter
+#     fn filler(mut fill_buffer: List[Int]) capturing -> Int:
+#         if len(source) > 0:
+#             fill_buffer.append(source.pop())
+#             return 0
+#         else:
+#             return -1
+
+#     @parameter
+#     fn processor(mut process_buffer: List[Int]) capturing -> Int:
+#         if len(process_buffer) > 0:
+#             print(process_buffer[0])
+#             process_buffer.clear()
+#         return 0
+
+#     var dblbfr = DoubleBuffer[Int, filler, processor]()
+#     dblbfr.run()
+
+#     _ = source
