@@ -9,7 +9,28 @@ from ExtraMojo.io.buffered import BufferedWriter
 from runtime.asyncrt import DeviceContextPtr, TaskGroup, parallelism_level
 from os.atomic import Atomic
 from sys import stdout
-from time import perf_counter
+from time import perf_counter, sleep
+
+
+struct BinarySemaphore:
+    var state: Atomic[DType.int8]
+
+    fn __init__(out self, initial: Bool):
+        self.state = Atomic[DType.int8](Int8(Int(initial)))
+
+    fn check(mut self) -> Bool:
+        return Bool(self.state.load())
+
+    fn acquire(self):
+        while True:
+            var expected = Int8(1)
+            if self.state.compare_exchange_weak(expected, Int8(0)):
+                return
+            sleep(0.001)  # backoff to prevent busy spinning
+
+    fn release(self):
+        # Atomic.store doesn't seem to do what I think it should
+        self.state.max(1)
 
 
 struct DoubleBuffer[
@@ -41,8 +62,10 @@ struct DoubleBuffer[
     fn run(mut self, owned file_to_read: String):
         """Alternate between two buffers as the "fill" buffer and "work" buffer.
         """
-        var process_done = Atomic[DType.uint32](1)
         var shutdown = Atomic[DType.uint32](0)
+
+        var signal_to_generate = BinarySemaphore(1)
+        var signal_to_process = BinarySemaphore(0)
 
         @parameter
         @always_inline
@@ -58,22 +81,30 @@ struct DoubleBuffer[
                 Logger.error("Failed to open", file_to_read, "for reading")
                 return
 
+            # TODO: this almost works, there is something wrong with shutdown sequencing and the last buffer doesn't get processed
+
             while True:
-                if process_done.load() == 1:
-                    var start = perf_counter()
-                    if (
-                        fill(reader, self._buffers[self._current_fill_buffer])
-                        < 0
-                    ):
-                        _ = shutdown.fetch_add(1)
-                    var end = perf_counter()
-                    print("Fill in:", end - start)
-                    self._swap_buffers()
-                    _ = process_done.fetch_sub(1)
+                var start = perf_counter()
+                if fill(reader, self._buffers[self._current_fill_buffer]) < 0:
+                    _ = shutdown.fetch_add(1)
+
+                var end = perf_counter()
+                print("Fill in:", end - start)
+                print(len(self._buffers[self._current_fill_buffer]))
+
+                # Wait till for signal to generate more data
+                signal_to_generate.acquire()
+
+                # Swap buffers
+                self._swap_buffers()
+
+                # Send signal to processing to go ahead
+                signal_to_process.release()
 
                 if shutdown.load() > 0:
                     print("shutting down filler")
                     break
+
             _ = reader^
 
         @parameter
@@ -87,22 +118,21 @@ struct DoubleBuffer[
                 return
 
             while True:
-                if process_done.load() == 0:
-                    var start = perf_counter()
-                    if (
-                        process(
-                            writer, self._buffers[self._current_process_buffer]
-                        )
-                        < 0
-                    ):
-                        _ = shutdown.fetch_add(1)
-                    var end = perf_counter()
-                    print("Process in:", end - start)
-                    _ = process_done.fetch_add(1)
+                signal_to_process.acquire()
 
-                if shutdown.load() > 0 and process_done.load() == 1:
+                var start = perf_counter()
+                if (
+                    process(writer, self._buffers[self._current_process_buffer])
+                    < 0
+                ):
+                    _ = shutdown.fetch_add(1)
+                var end = perf_counter()
+                print("Process in:", end - start)
+
+                if shutdown.load() > 0 and not signal_to_process.check():
                     print("shutting down processor")
                     break
+                signal_to_generate.release()
 
             try:
                 writer.flush()

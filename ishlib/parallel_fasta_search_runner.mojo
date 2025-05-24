@@ -85,6 +85,7 @@ struct ParallelFastaSearchRunner[M: Matcher]:
         ) capturing -> Int:
             var bytes_saved = 0
             var seq_number = 0
+            fill_buffer.clear()
             while True:
                 var ret: Int
                 try:
@@ -166,7 +167,6 @@ struct ParallelFastaSearchRunner[M: Matcher]:
                 else:
                     writer.write_bytes(r[].seq.seq)
                 writer.write("\n")
-                process_buffer.clear()
             return 0
 
         var runner = DoubleBuffer[SeqAndIndex, fill, process]()
