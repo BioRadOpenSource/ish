@@ -121,6 +121,7 @@ struct DoubleBuffer[
                 Logger.error("Failed to open stdout for writing")
                 return
 
+            # this seems like a hack that I can't trust
             var saw_shutdown_last_loop = False
 
             while True:
