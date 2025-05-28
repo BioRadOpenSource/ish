@@ -355,17 +355,21 @@ fn semi_global_aln[
     # POS_LIMIT = INT8_MAX - matrix->max - 1;
 
     var v_neg_limit: SIMD[dt, width]
+    var v_neg_limit_saturation: SIMD[dt, width]
     if -Int32(gap_open_penalty) < Int32(min_score):
         v_neg_limit = MIN + gap_open_penalty + 1
+        v_neg_limit_saturation = MAX - gap_open_penalty - 1
     else:
         # this is a gross set of casting to allow the possibly negative matrix min
         v_neg_limit = (Int32(MIN) + Int32(abs(min_score)) + Int32(1)).cast[dt]()
+        v_neg_limit_saturation = (
+            Int32(MAX) - Int32(abs(min_score)) - Int32(1)
+        ).cast[dt]()
 
     var v_pos_limit = SIMD[dt, width](Int32(MAX) - Int32(max_score) - 1)
 
-    # var v_pos_limit = SIMD[dt, width](MAX_LIMIT)
-    # var v_saturation_check_min = v_neg_limit
-    var v_saturation_check_max = v_pos_limit - (v_neg_limit)
+    var v_saturation_check_max = min(v_pos_limit, v_neg_limit_saturation)
+    var v_saturation_check_max_reference = v_saturation_check_max
     var v_max_h = v_neg_limit
     var v_bias = SIMD[dt, width](bias)
 
@@ -589,11 +593,12 @@ fn semi_global_aln[
     @parameter
     if do_saturation_check:
         if (
-            (v_saturation_check_max > v_pos_limit)
-            # | (v_saturation_check_min < v_neg_limit)
+            (v_saturation_check_max > v_saturation_check_max_reference)
         ).reduce_or():
             # print(score)
             # print("Saturation")
+            # print(v_saturation_check_max)
+            # print(v_saturation_check_max_reference)
             return AlignmentResult(
                 AlignmentEnd(0, 0, 0), overflow_detected=True
             )
