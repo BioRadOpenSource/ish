@@ -68,6 +68,7 @@ def test_line_ascii_search():
     input.write_text(ASCII_TEXT)
     var output = Path(dir.name) / "output.txt"
 
+
     var settings = List[SearcherSettings]()
     for algo in List(
         # "naive_exact",
@@ -107,7 +108,16 @@ And this is just a very long line that goes on for longer than any of the other 
     for setting in settings:
         var writer = BufferedWriter(open(output, "w"))
         do_search(setting[], writer^)
-        assert_equal(output.read_text(), expected)
+        assert_equal(
+            output.read_text(),
+            expected,
+            String("{}, {}, {}, {}").format(
+                String(setting[].match_algo),
+                String(setting[].threads),
+                String(setting[].max_gpus),
+                setting[].sg_ends_free.__str__(),
+            ),
+        )
 
 
 def test_fasta_actgn_search():

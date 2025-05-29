@@ -1,6 +1,5 @@
 from memory import UnsafePointer
 from sys.info import alignof
-from utils import StringSlice
 from gpu.host import DeviceBuffer
 
 

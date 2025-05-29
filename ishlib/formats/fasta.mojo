@@ -43,9 +43,6 @@ struct FastaRecord:
     fn seq_contains_n(read self) -> Bool:
         return memchr(self.seq.as_bytes(), ord("N")) != -1
 
-    fn uppercase_seq(mut self):
-        to_ascii_uppercase(self.seq._buffer)
-
     @staticmethod
     fn slurp_fasta(file: String) raises -> List[FastaRecord]:
         var reader = BufferedReader(open(file, "r"))

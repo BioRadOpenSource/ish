@@ -29,7 +29,6 @@ fn main() raises:
 from memory import memset_zero, UnsafePointer
 from sys import ffi
 from sys.info import os_is_macos
-from utils import StringSlice
 
 from ishlib.vendor.kseq import KRead
 

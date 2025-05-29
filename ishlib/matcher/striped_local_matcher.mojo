@@ -3,7 +3,6 @@ from gpu.host import DeviceContext
 from sys.info import (
     simdwidthof,
 )
-from utils import StringSlice
 
 from ishlib.vendor.log import Logger
 from ishlib.matcher import Matcher, MatchResult

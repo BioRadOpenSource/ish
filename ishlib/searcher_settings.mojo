@@ -410,3 +410,8 @@ struct SemiGlobalEndsFreeness:
             target_start=target_start,
             target_end=target_end,
         )
+
+    fn __str__(self) raises -> String:
+        return String("{}, {}, {}, {}").format(
+            self.query_start, self.query_end, self.target_start, self.target_end
+        )

@@ -10,7 +10,6 @@ from ishlib.vendor.zlib import GZFile
 from ishlib.vendor.log import Logger
 
 from pathlib import Path
-from utils import StringSlice
 from sys import stdout
 
 

@@ -51,7 +51,7 @@ fn smith_waterman(
     for i in range(1, rows):
         for j in range(1, cols):
             # Calculate the match/mimatch score
-            var diag_score: Int16 = 0
+            var diag_score: Int16
             if seq1[i - 1] == seq2[j - 1]:
                 diag_score = score_matrix[i - 1][j - 1] + match_score
             else:
