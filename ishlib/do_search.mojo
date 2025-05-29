@@ -17,7 +17,7 @@ from ishlib.parallel_line_search_runner import (
     ParallelLineSearchRunner,
     GpuParallelLineSearchRunner,
 )
-from ishlib.matcher.alignment.score_matrix import MatrixKind
+from ishlib.matcher.alignment.scoring_matrix import MatrixKind
 from ishlib.searcher_settings import SearcherSettings, SemiGlobalEndsFreeness
 from ishlib.vendor.log import Logger
 

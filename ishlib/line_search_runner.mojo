@@ -10,7 +10,6 @@ from ishlib.vendor.log import Logger
 from ishlib.searcher_settings import SearcherSettings
 
 from pathlib import Path
-from utils import StringSlice
 from sys import stdout
 
 

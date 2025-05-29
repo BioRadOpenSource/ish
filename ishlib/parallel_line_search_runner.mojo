@@ -33,7 +33,6 @@ from ishlib.vendor.zlib import GZFile
 
 from algorithm.functional import parallelize
 from pathlib import Path
-from utils import StringSlice
 from sys import stdout, info
 from time.time import perf_counter
 

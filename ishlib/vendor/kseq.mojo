@@ -74,6 +74,12 @@ struct ByteString(Sized):
         self.size = other.size
         self.cap = other.cap
 
+    fn __copyinit__(out self, read other: Self):
+        self.cap = other.cap
+        self.size = other.size
+        self.ptr = UnsafePointer[UInt8].alloc(Int(self.cap))
+        memcpy(self.ptr, other.ptr, Int(other.size))
+
     @always_inline
     fn __getitem__[I: Indexer](read self, idx: I) -> UInt8:
         return self.ptr[idx]
@@ -125,7 +131,7 @@ struct ByteString(Sized):
             return
         self.cap = Self._roundup32(self.size)
         var new_data = UnsafePointer[UInt8].alloc(Int(self.cap))
-        memcpy(new_data, self.ptr, len(old_size))
+        memcpy(new_data, self.ptr, Int(old_size))
 
         self.ptr.free()
         self.ptr = new_data

@@ -38,7 +38,6 @@ from ishlib.vendor.log import Logger
 from algorithm.functional import parallelize
 from math import ceildiv
 from pathlib import Path
-from utils import StringSlice
 from sys import stdout, info
 
 
