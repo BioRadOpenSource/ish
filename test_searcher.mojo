@@ -68,7 +68,6 @@ def test_line_ascii_search():
     input.write_text(ASCII_TEXT)
     var output = Path(dir.name) / "output.txt"
 
-    print(String(input))
 
     var settings = List[SearcherSettings]()
     for algo in List(
