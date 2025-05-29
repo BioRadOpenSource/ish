@@ -109,7 +109,6 @@ And this is just a very long line that goes on for longer than any of the other 
     for setting in settings:
         var writer = BufferedWriter(open(output, "w"))
         do_search(setting[], writer^)
-        # TODO: This is failing for some subset, why? Not reading the last line or something?
         assert_equal(
             output.read_text(),
             expected,
