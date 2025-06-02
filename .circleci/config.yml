@@ -1,0 +1,13 @@
+version: 2.1
+
+jobs:
+  test:
+    docker:
+      - image: cimg/base:current  # Ubuntu-based image
+    steps:
+      - checkout
+
+      - run:
+          name: Install Modular CLI and Mojo
+          command: |
+            echo "Hello world"
