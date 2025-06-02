@@ -58,7 +58,6 @@ struct FastaSearchRunner[M: Matcher]:
                     self.settings.tty_info.is_a_tty
                     and self.settings.is_output_stdout()
                 ):
-                    print(m.value().start, m.value().end)
                     writer.write_bytes(
                         reader.seq.as_span()[0 : m.value().start]
                     )

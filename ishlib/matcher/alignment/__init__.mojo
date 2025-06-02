@@ -1,5 +1,6 @@
 from collections import Optional
 from collections.string import StringSlice
+from memory import memcpy, memset_zero
 
 
 @value
@@ -40,3 +41,47 @@ fn create_reversed(input: Span[UInt8]) -> List[UInt8]:
     var ret = List(input)
     ret.reverse()
     return ret
+
+
+struct AlignedMemory[dtype: DType, width: Int, alignment: Int]:
+    var ptr: UnsafePointer[SIMD[dtype, width], alignment=alignment]
+    var length: Int
+
+    fn __init__[zero_mem: Bool = True](out self, length: Int):
+        self.ptr = UnsafePointer[
+            SIMD[Self.dtype, self.width], alignment = self.alignment
+        ].alloc(length)
+        self.length = length
+
+        @parameter
+        if zero_mem:
+            memset_zero(self.ptr, self.length)
+
+    fn __getitem__[
+        I: Indexer
+    ](ref self, offset: I) -> ref [self] SIMD[dtype, width]:
+        return self.ptr[offset]
+
+    fn __copyinit__(out self, read other: Self):
+        self.ptr = UnsafePointer[
+            SIMD[Self.dtype, self.width], alignment = self.alignment
+        ].alloc(other.length)
+        self.length = other.length
+        memcpy(self.ptr, other.ptr, self.length)
+
+    fn __moveinit__(out self, owned other: Self):
+        self.ptr = other.ptr
+        self.length = other.length
+
+    fn __del__(owned self):
+        self.ptr.free()
+
+    fn __len__(read self) -> Int:
+        return self.length
+
+    fn as_span(
+        ref self,
+    ) -> Span[SIMD[self.dtype, self.width], __origin_of(self)]:
+        return rebind[Span[SIMD[self.dtype, self.width], __origin_of(self)]](
+            Span(self.ptr, self.length)
+        )

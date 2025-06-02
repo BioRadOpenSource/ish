@@ -71,8 +71,8 @@ def test_line_ascii_search():
     var settings = List[SearcherSettings]()
     for algo in List(
         # "naive_exact",
-        "striped-local",
-        "striped-semi-global",
+        String("striped-local"),
+        String("striped-semi-global"),
         # "basic-local",
         # "basic-semi-global",
     ):
@@ -107,7 +107,16 @@ And this is just a very long line that goes on for longer than any of the other 
     for setting in settings:
         var writer = BufferedWriter(open(output, "w"))
         do_search(setting[], writer^)
-        assert_equal(output.read_text(), expected)
+        assert_equal(
+            output.read_text(),
+            expected,
+            String("{}, {}, {}, {}").format(
+                String(setting[].match_algo),
+                String(setting[].threads),
+                String(setting[].max_gpus),
+                setting[].sg_ends_free.__str__(),
+            ),
+        )
 
 
 def test_fasta_actgn_search():
@@ -119,8 +128,8 @@ def test_fasta_actgn_search():
     var settings = List[SearcherSettings]()
     for algo in List(
         # "naive_exact",
-        "striped-local",
-        "striped-semi-global",
+        String("striped-local"),
+        String("striped-semi-global"),
         # "basic-local",
         # "basic-semi-global",
     ):
@@ -169,8 +178,8 @@ def test_fasta_blosum62_search():
     var settings = List[SearcherSettings]()
     for algo in List(
         # "naive_exact",
-        "striped-local",
-        "striped-semi-global",
+        String("striped-local"),
+        String("striped-semi-global"),
         # "basic-local",
         # "basic-semi-global",
     ):

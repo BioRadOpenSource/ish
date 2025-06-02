@@ -3,11 +3,39 @@ version: 2.1
 jobs:
   test:
     docker:
-      - image: cimg/base:current  # Ubuntu-based image
+      - image: cimg/base:current
     steps:
       - checkout
-
       - run:
-          name: Install Modular CLI and Mojo
+          name: Install magic CLI
           command: |
-            echo "Hello world"
+            sudo apt-get update && sudo apt-get install -s libtinfo-dev
+            # Fixup missing libtinfo symlink
+            sudo ln -s /lib/x86_64-linux-gnu/libtinfo.so.6 /lib/x86_64-linux-gnu/libtinfo.so || true
+            curl -ssL https://magic.modular.com | bash
+            export PATH="$PATH:/home/circleci/.modular/bin"
+            magic --help
+      - run:
+          name: Install Mojo and deps
+          command: |
+            export PATH="$PATH:/home/circleci/.modular/bin"
+            magic install --locked
+      - run:
+          name: Run tests
+          command: |
+            export PATH="$PATH:/home/circleci/.modular/bin"
+            magic run pkglib
+            magic run testlib
+      - run:
+          name: Run build
+          command: |
+            export PATH="$PATH:/home/circleci/.modular/bin"
+            magic run build
+            
+
+
+workflows:
+  version: 2
+  test:
+    jobs:
+      - test

@@ -1,4 +1,5 @@
 from memory import memset_zero
+from ishlib.matcher.alignment import AlignedMemory
 
 
 @always_inline
@@ -100,10 +101,10 @@ struct AlignmentEnd:
 
 @value
 struct ProfileVectors[dt: DType, width: Int]:
-    var pv_h_store: List[SIMD[dt, width]]
-    var pv_h_load: List[SIMD[dt, width]]
-    var pv_e: List[SIMD[dt, width]]
-    var pv_h_max: List[SIMD[dt, width]]
+    var pv_h_store: AlignedMemory[dt, width, width]
+    var pv_h_load: AlignedMemory[dt, width, width]
+    var pv_e: AlignedMemory[dt, width, width]
+    var pv_h_max: AlignedMemory[dt, width, width]
     var zero: SIMD[dt, width]
     var max_column: List[SIMD[dt, 1]]
     var end_query_column: List[Int32]
@@ -115,27 +116,13 @@ struct ProfileVectors[dt: DType, width: Int]:
 
         var zero = SIMD[dt, width](0)
         # Stores the H values (scores) for the current row of the dynamic programming matrix
-        var pv_h_store = List[SIMD[dt, width]](
-            capacity=Int(segment_length)
-        )  # aka: pvHStore
+        var pv_h_store = AlignedMemory[dt, width, width](Int(segment_length))
         # Contains scores from the previous row that will be loaded for calculation
-        var pv_h_load = List[SIMD[dt, width]](
-            capacity=Int(segment_length)
-        )  # aka: pvHLoad
+        var pv_h_load = AlignedMemory[dt, width, width](Int(segment_length))
         # Tracks scores for alignments that end with gaps in the query seq (horizontal gaps in visualization)
-        var pv_e = List[SIMD[dt, width]](
-            capacity=Int(segment_length)
-        )  # aka: pvE
+        var pv_e = AlignedMemory[dt, width, width](Int(segment_length))
         # Stores the max scores seen in each column for traceback
-        var pv_h_max = List[SIMD[dt, width]](
-            capacity=Int(segment_length)
-        )  # aka: pvHmax
-
-        # init all of the above to zeros
-        memset_zero(pv_h_store.unsafe_ptr(), Int(segment_length))
-        memset_zero(pv_h_load.unsafe_ptr(), Int(segment_length))
-        memset_zero(pv_e.unsafe_ptr(), Int(segment_length))
-        memset_zero(pv_h_max.unsafe_ptr(), Int(segment_length))
+        var pv_h_max = AlignedMemory[dt, width, width](Int(segment_length))
 
         # List to record the largest score of each reference position
         var max_column = List[SIMD[dt, 1]]()
@@ -153,10 +140,10 @@ struct ProfileVectors[dt: DType, width: Int]:
         self.end_query_column = end_query_column
 
     fn zero_out(mut self):
-        memset_zero(self.pv_h_store.unsafe_ptr(), Int(self.segment_length))
-        memset_zero(self.pv_h_load.unsafe_ptr(), Int(self.segment_length))
-        memset_zero(self.pv_e.unsafe_ptr(), Int(self.segment_length))
-        memset_zero(self.pv_h_max.unsafe_ptr(), Int(self.segment_length))
+        memset_zero(self.pv_h_store.ptr, Int(self.segment_length))
+        memset_zero(self.pv_h_load.ptr, Int(self.segment_length))
+        memset_zero(self.pv_e.ptr, Int(self.segment_length))
+        memset_zero(self.pv_h_max.ptr, Int(self.segment_length))
 
     fn init_columns(mut self, ref_len: Int):
         self.max_column.resize(ref_len, 0)

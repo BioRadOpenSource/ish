@@ -5,7 +5,7 @@ from collections import InlineArray
 from math import sqrt, iota
 from memory import pack_bits, memset_zero
 
-from ishlib.matcher.alignment import create_reversed
+from ishlib.matcher.alignment import create_reversed, AlignedMemory
 from ishlib.matcher.alignment.scoring_matrix import ScoringMatrix
 from ishlib.matcher.alignment.striped_utils import (
     saturating_sub,
@@ -25,8 +25,12 @@ struct Profile[
     SmallType: DType = DType.uint8,
     LargeType: DType = DType.uint16,
 ]:
-    alias smallVProfile = List[SIMD[SmallType, SIMD_SMALL_WIDTH]]
-    alias largeVProfile = List[SIMD[LargeType, SIMD_LARGE_WIDTH]]
+    alias smallVProfile = AlignedMemory[
+        SmallType, SIMD_SMALL_WIDTH, SIMD_SMALL_WIDTH
+    ]
+    alias largeVProfile = AlignedMemory[
+        LargeType, SIMD_LARGE_WIDTH, SIMD_LARGE_WIDTH
+    ]
 
     var profile_small: Optional[Self.smallVProfile]
     var profile_large: Optional[Self.largeVProfile]
@@ -96,22 +100,20 @@ struct Profile[
         T: DType, size: Int
     ](
         query: Span[UInt8], read score_matrix: ScoringMatrix, bias: UInt8
-    ) -> List[SIMD[T, size]]:
+    ) -> AlignedMemory[T, size, size]:
         """Divide the query into segments."""
         var segment_length = (len(query) + size - 1) // size
-        var profile = List[SIMD[T, size]](
-            capacity=Int(score_matrix.size * segment_length)
-        )
-        for _ in range(0, profile.capacity):
-            profile.append(SIMD[T, size](0))
+        var length = Int(score_matrix.size * segment_length)
+        var profile = AlignedMemory[T, size, size](length)
 
         # Generate query profile and rearrange query sequence and calculate the weight of match/mismatch
+        var p = profile.as_span()
         var t_idx = 0
         for nt in range(0, score_matrix.size):
             for i in range(0, segment_length):
                 var j = i
                 for segment_idx in range(0, size):
-                    profile[t_idx][segment_idx] = (
+                    p[t_idx][segment_idx] = (
                         bias if j
                         >= len(query) else (
                             score_matrix.get(nt, Int(query[j]))
@@ -220,7 +222,7 @@ fn semi_global_aln_with_saturation_check[
             query_len,
             gap_open_penalty=gap_open_penalty.cast[SmallType](),
             gap_extension_penalty=gap_extension_penalty.cast[SmallType](),
-            profile=profile.profile_small.value(),
+            profile=profile.profile_small.value().as_span(),
             bias=profile.bias.cast[SmallType](),
             max_score=profile.max_score,
             min_score=profile.min_score,
@@ -238,7 +240,7 @@ fn semi_global_aln_with_saturation_check[
             query_len,
             gap_open_penalty=gap_open_penalty.cast[LargeType](),
             gap_extension_penalty=gap_extension_penalty.cast[LargeType](),
-            profile=profile.profile_large.value(),
+            profile=profile.profile_large.value().as_span(),
             bias=profile.bias.cast[LargeType](),
             max_score=profile.max_score,
             min_score=profile.min_score,
@@ -292,20 +294,12 @@ fn semi_global_aln[
 
     var score = MIN
     var zero = SIMD[dt, width](ZERO)
-    var pv_h_store = List[SIMD[dt, width]](
-        capacity=Int(segment_length)
-    )  # aka: pvHStore
+    var pv_h_store = AlignedMemory[dt, width, width](Int(segment_length))
     # Contains scores from the previous row that will be loaded for calculation
-    var pv_h_load = List[SIMD[dt, width]](
-        capacity=Int(segment_length)
-    )  # aka: pvHLoad
+    var pv_h_load = AlignedMemory[dt, width, width](Int(segment_length))
     # Tracks scores for alignments that end with gaps in the query seq (horizontal gaps in visualization)
-    var pv_e = List[SIMD[dt, width]](capacity=Int(segment_length))  # aka: pvE
+    var pv_e = AlignedMemory[dt, width, width](Int(segment_length))
     var boundary = List[SIMD[dt, 1]](capacity=len(reference) + 1)
-    memset_zero(pv_h_store.unsafe_ptr(), Int(segment_length))
-    memset_zero(pv_h_load.unsafe_ptr(), Int(segment_length))
-    memset_zero(pv_e.unsafe_ptr(), Int(segment_length))
-    # memset_zero(boundary.unsafe_ptr(), len(reference) + 1)
 
     # TODO: better handling for overflows on setup, just return a new return type.
     # Init H and E
