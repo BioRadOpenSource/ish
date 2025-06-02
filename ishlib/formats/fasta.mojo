@@ -51,7 +51,6 @@ struct FastaRecord:
         var buffer = List[UInt8]()
         var bytes_read = reader.read_until(buffer, ord(">"))
         if bytes_read != 1:
-            print(bytes_read)
             raise String.write("File should start with '>': ", len(buffer))
 
         while True:

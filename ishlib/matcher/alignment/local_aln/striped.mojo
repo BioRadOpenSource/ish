@@ -3,8 +3,9 @@
 from builtin.math import max
 from collections import InlineArray
 from math import sqrt
-from memory import pack_bits, memset_zero
+from memory import pack_bits, memset_zero, memcpy
 
+from ishlib.matcher.alignment import AlignedMemory
 from ishlib.matcher.alignment.scoring_matrix import ScoringMatrix
 from ishlib.matcher.alignment.striped_utils import (
     saturating_sub,
@@ -47,8 +48,14 @@ struct Alignment:
 
 @value
 struct Profile[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
-    alias ByteVProfile = List[SIMD[DType.uint8, SIMD_U8_WIDTH]]
-    alias WordVProfile = List[SIMD[DType.uint16, SIMD_U16_WIDTH]]
+    # alias ByteVProfile = List[SIMD[DType.uint8, SIMD_U8_WIDTH]]
+    # alias WordVProfile = List[SIMD[DType.uint16, SIMD_U16_WIDTH]]
+    alias ByteVProfile = AlignedMemory[
+        DType.uint8, SIMD_U8_WIDTH, SIMD_U8_WIDTH
+    ]
+    alias WordVProfile = AlignedMemory[
+        DType.uint16, SIMD_U16_WIDTH, SIMD_U16_WIDTH
+    ]
 
     var profile_byte: Optional[Self.ByteVProfile]
     var profile_word: Optional[Self.WordVProfile]
@@ -107,30 +114,21 @@ struct Profile[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
         T: DType, size: Int
     ](
         query: Span[UInt8], read score_matrix: ScoringMatrix, bias: UInt8
-    ) -> List[SIMD[T, size]]:
+    ) -> AlignedMemory[T, size, size]:
         """Divide the query into segments."""
         var segment_length = (len(query) + size - 1) // size
-        var profile = List[SIMD[T, size]](
-            length=Int(score_matrix.size * segment_length),
-            fill=SIMD[T, size](0),
-        )
+        var length = Int(score_matrix.size * segment_length)
+        var profile = AlignedMemory[T, size, size](length)
 
         # Generate query profile and rearrange query sequence and calculate the weight of match/mismatch
+        print("filling profile")
+        var p = profile.as_span()
         var t_idx = 0
         for nt in range(0, score_matrix.size):
             for i in range(0, segment_length):
                 var j = i
                 for segment_idx in range(0, size):
-                    # if j >= len(query):
-                    #     profile[t_idx][segment_idx] = bias.cast[T]()
-                    # else:
-                    #     profile[t_idx][segment_idx] = (
-                    #         score_matrix.get(nt, Int(query[j]))
-                    #         + bias.cast[DType.int8]()
-                    #     ).cast[T]()
-                    # print(profile[t_idx][segment_idx])
-                    # ^ non-ternary version
-                    profile[t_idx][segment_idx] = (
+                    p[t_idx][segment_idx] = (
                         bias if j
                         >= len(query) else (
                             score_matrix.get(nt, Int(query[j]))
@@ -139,6 +137,7 @@ struct Profile[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
                     ).cast[T]()
                     j += segment_length
                 t_idx += 1
+        print("filled profile")
         return profile
 
 
@@ -169,7 +168,7 @@ fn ssw_align[
             profile.query_len,
             gap_open_penalty,
             gap_extension_penalty,
-            profile.profile_byte.value(),
+            profile.profile_byte.value().as_span(),
             # profile.byte_vectors,
             -1,
             profile.bias,
@@ -185,7 +184,7 @@ fn ssw_align[
                 profile.query_len,
                 gap_open_penalty.cast[DType.uint16](),
                 gap_extension_penalty.cast[DType.uint16](),
-                profile.profile_word.value(),
+                profile.profile_word.value().as_span(),
                 # profile.word_vectors,
                 -1,
                 profile.bias.cast[DType.uint16](),
@@ -206,7 +205,7 @@ fn ssw_align[
             profile.query_len,
             gap_open_penalty.cast[DType.uint16](),
             gap_extension_penalty.cast[DType.uint16](),
-            profile.profile_word.value(),
+            profile.profile_word.value().as_span(),
             # profile.word_vectors,
             -1,
             profile.bias.cast[DType.uint16](),
@@ -245,7 +244,7 @@ fn ssw_align[
             reverse_profile.query_len,
             gap_open_penalty,
             gap_extension_penalty,
-            reverse_profile.profile_byte.value(),
+            reverse_profile.profile_byte.value().as_span(),
             -1,
             reverse_profile.bias,
             mask_length,
@@ -257,7 +256,7 @@ fn ssw_align[
             reverse_profile.query_len,
             gap_open_penalty.cast[DType.uint16](),
             gap_extension_penalty.cast[DType.uint16](),
-            reverse_profile.profile_word.value(),
+            reverse_profile.profile_word.value().as_span(),
             -1,
             reverse_profile.bias.cast[DType.uint16](),
             mask_length,

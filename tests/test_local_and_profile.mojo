@@ -93,7 +93,7 @@ fn test_profile() raises:
 
         # Verify each of the 4 vectors for this character
         for i in range(4):
-            var actual_vector = profile.profile_byte.value()[
+            var actual_vector = profile.profile_byte.value().as_span()[
                 vector_base_idx + i
             ]
             assert_equal(
@@ -139,7 +139,7 @@ fn test_profile() raises:
 
         # Verify each of the 8 vectors for this character
         for i in range(8):
-            var actual_vector = profile.profile_word.value()[
+            var actual_vector = profile.profile_word.value().as_span()[
                 vector_base_idx + i
             ]
             assert_equal(
@@ -187,7 +187,7 @@ fn test_sw_byte() raises:
         len(query),
         gap_open,
         gap_extend,
-        profile.profile_byte.value(),
+        profile.profile_byte.value().as_span(),
         -1,  # No early termination
         profile.bias,
         4,  # Small mask length
@@ -232,7 +232,7 @@ fn test_sw_byte() raises:
         len(query),
         gap_open,
         gap_extend,
-        profile.profile_byte.value(),
+        profile.profile_byte.value().as_span(),
         -1,
         profile.bias,
         4,
@@ -259,7 +259,7 @@ fn test_sw_byte() raises:
         len(query),
         gap_open,
         gap_extend,
-        profile.profile_byte.value(),
+        profile.profile_byte.value().as_span(),
         0,
         profile.bias,
         4,
@@ -324,7 +324,7 @@ fn test_sw_byte_comprehensive() raises:
         len(query1),
         gap_open,
         gap_extend,
-        profile1.profile_byte.value(),
+        profile1.profile_byte.value().as_span(),
         -1,
         profile1.bias,
         4,
@@ -350,7 +350,7 @@ fn test_sw_byte_comprehensive() raises:
         len(query2),
         gap_open,
         gap_extend,
-        profile2.profile_byte.value(),
+        profile2.profile_byte.value().as_span(),
         -1,
         profile2.bias,
         4,
@@ -372,7 +372,7 @@ fn test_sw_byte_comprehensive() raises:
         len(query3),
         gap_open,
         gap_extend,
-        profile3.profile_byte.value(),
+        profile3.profile_byte.value().as_span(),
         -1,
         profile3.bias,
         4,
@@ -409,7 +409,7 @@ fn test_compare_vs_c() raises:
         len(read_seq),
         gap_open,
         gap_extend,
-        profile.profile_byte.value(),
+        profile.profile_byte.value().as_span(),
         -1,  # No early termination
         profile.bias,
         15,  # Small mask length
