@@ -111,10 +111,9 @@ struct Profile[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
         """Divide the query into segments."""
         var segment_length = (len(query) + size - 1) // size
         var profile = List[SIMD[T, size]](
-            capacity=Int(score_matrix.size * segment_length)
+            length=Int(score_matrix.size * segment_length),
+            fill=SIMD[T, size](0),
         )
-        for _ in range(0, profile.capacity):
-            profile.append(SIMD[T, size](0))
 
         # Generate query profile and rearrange query sequence and calculate the weight of match/mismatch
         var t_idx = 0

@@ -10,6 +10,8 @@ jobs:
           name: Install magic CLI
           command: |
             sudo apt-get update && sudo apt-get install -s libtinfo-dev
+            # Fixup missing libtinfo symlink
+            sudo ln -s /lib/x86_64-linux-gnu/libtinfo.so.6 /lib/x86_64-linux-gnu/libtinfo.so || true
             curl -ssL https://magic.modular.com | bash
             export PATH="$PATH:/home/circleci/.modular/bin"
             magic --help
