@@ -14,7 +14,7 @@ version = "0.1.0"
 build = "pixi run mojo build -D ISH_LOG_LEVEL=info --march native -o ish main.mojo"
 debug = "pixi run mojo build -D ISH_LOG_LEVEL=debug --debug-level line-tables --march native -o ish main.mojo"
 pkglib = "pixi run mojo package ./ishlib"
-testlib = "pixi run mojo test -I ishlib --co && pixi run mojo test -I ishlib"
+testlib = "pixi run mojo test tests -I . --co && pixi run mojo test tests -I ."
 
 # Bench the gpu fun in ish using Bench
 build-bench-gpu = "pixi run mojo build -D ISH_LOG_LEVEL=timing --march native -I ./ishlib -o bench-gpu ./ish_bench_aligner_gpu_only.mojo"
