@@ -106,9 +106,7 @@ struct SearcherSettings:
                 OptKind.StringLike,
                 default_value=String("striped-semi-global"),
                 description=(
-                    "The algorithm to use for matching: [naive_exact,"
-                    " striped-local, basic-local, basic-global,"
-                    " basic-semi-global, striped-semi-global]"
+                    "The algorithm to use for matching: [striped-local, striped-semi-global]"
                 ),
             )
         )
