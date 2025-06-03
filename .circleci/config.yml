@@ -7,30 +7,30 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Install magic CLI
+          name: Install pixi CLI
           command: |
             sudo apt-get update && sudo apt-get install -s libtinfo-dev
             # Fixup missing libtinfo symlink
             sudo ln -s /lib/x86_64-linux-gnu/libtinfo.so.6 /lib/x86_64-linux-gnu/libtinfo.so || true
-            curl -ssL https://magic.modular.com | bash
-            export PATH="$PATH:/home/circleci/.modular/bin"
-            magic --help
+            curl -fsSL https://pixi.sh/install.sh | sh
+            export PATH="$PATH:/home/circleci/.pixi/bin"
+            pixi --help
       - run:
           name: Install Mojo and deps
           command: |
-            export PATH="$PATH:/home/circleci/.modular/bin"
-            magic install --locked
+            export PATH="$PATH:/home/circleci/.pixi/bin"
+            pixi install --locked
       - run:
           name: Run tests
           command: |
-            export PATH="$PATH:/home/circleci/.modular/bin"
-            magic run pkglib
-            magic run testlib
+            export PATH="$PATH:/home/circleci/.pixi/bin"
+            pixi run pkglib
+            pixi run testlib
       - run:
           name: Run build
           command: |
-            export PATH="$PATH:/home/circleci/.modular/bin"
-            magic run build
+            export PATH="$PATH:/home/circleci/.pixi/bin"
+            pixi run build
             
 
 
