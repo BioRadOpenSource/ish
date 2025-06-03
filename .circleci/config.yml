@@ -25,6 +25,8 @@ jobs:
           command: |
             export PATH="$PATH:/home/circleci/.pixi/bin"
             pixi run pkglib
+            # This is a total hack till 25.4 where the .pixi folder will be ignored by mojo test
+            rm /home/circleci/project/.pixi/envs/default/test/test_test.mojo
             pixi run testlib
       - run:
           name: Run build
