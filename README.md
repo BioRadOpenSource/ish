@@ -1,25 +1,41 @@
-# ish 🔥
+<a name="readme-top"></a>
 
-Accelerated alignment on the CLI.
+<!-- PROJECT LOGO -->
+<br />
+<div align="center">
+  <img src="ish_logo.png" alt="Logo" width="250" height="250">
 
-> ⚠️ **Warning**
-> 
-> `ish` is under active development.
+  <p align="center">
+    Fast record filtering by alignment-scores 🔥
+    <br/>
+
+   ![Written in Mojo][language-shield]
+   [![Apache-2.0 License][license-shield]][license-url]
+   ![Build status][build-shield]
+   <br/>
+   ![Contributors Welcome][contributors-shield]
+
+  </p>
+</div>
 
 
 `ish` is a CLI tool for searching for matches against records using different alignment methods.
 
 ## Install
 
-1. Install the mojo build tool [magic](https://docs.modular.com/magic/)
+1. Install [pixi](https://pixi.sh/latest/installation/)
 
 1. `pixi run build`
 1. `./ish --help`
 
 ### Pixi / Conda install
 
+> ⚠️ **Warning**
+> These can't be tested until this repo is public and the `recipe.yaml` has been contributed to `modular-community`.
+
 ```
 pixi install -c conda-forge -c https://repo.prefix.dev/modular-community -c https://conda.modular.com/max ish
+# Or
 conda install -c conda-forge -c https://repo.prefix.dev/modular-community -c https://conda.modular.com/max ish
 ```
 
@@ -122,4 +138,19 @@ This is a benchmarking tool based on `parasail_aligner`.
 - Choose a better default between cpu and gpu / think about more. GPU crushes on big files / long running / many files, cpu is faster for small jobs
 - Add ability to not skip dotfiles
 
+<!-- MARKDOWN LINKS & IMAGES -->
+<!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
+[build-shield]: https://img.shields.io/circleci/build/github/BioRadOpenSource/ish 
+[language-shield]: https://img.shields.io/badge/language-mojo-orange
+[license-shield]: https://img.shields.io/github/license/BioRadOpenSource/ish?logo=github
+[license-url]: https://github.com/BioRadOpenSource/ish/blob/main/LICENSE
+[contributors-shield]: https://img.shields.io/badge/contributors-welcome!-blue
 
+## Rattler Build
+
+For testing the build process for modular-community
+
+```bash
+pixi global install rattler-build
+rattler-build build -c https://repo.prefix.dev/modular-community -c https://conda.modular.com/max -c conda-forge --skip-existing=all -r ./recipe.yaml
+```
