@@ -13,12 +13,15 @@ Accelerated alignment on the CLI.
 
 1. Install the mojo build tool [magic](https://docs.modular.com/magic/)
 
-1. `magic run build`
+1. `pixi run build`
 1. `./ish --help`
 
-### Conda install
+### Pixi / Conda install
 
-Mojo packages are hosted in a conda repo, once this tool is baked it can be published to the Modular channel and then installed via conda anywhere.
+```
+pixi install -c conda-forge -c https://repo.prefix.dev/modular-community -c https://conda.modular.com/max ish
+conda install -c conda-forge -c https://repo.prefix.dev/modular-community -c https://conda.modular.com/max ish
+```
 
 ## Usage
 
@@ -55,12 +58,12 @@ OPTIONS:
                 Score penalty for extending a gap.
 
         --match-algo <String> [Default: striped-semi-global]
-                The algorithm to use for matching: [naive_exact, striped-local, basic-local, basic-global, basic-semi-global, striped-semi-global]
+                The algorithm to use for matching: [striped-local, striped-semi-global]
 
         --record-type <String> [Default: line]
                 The input record type: [line, fasta]
 
-        --threads <Int> [Default: 24]
+        --threads <Int> [Default: 16]
                 The number of threads to use. Defaults to the number of physical cores.
 
         --batch-size <Int> [Default: 268435456]
@@ -95,10 +98,8 @@ OPTIONS:
 
 ## Match Methods
 
-- `striped-local`: Striped Smith-Waterman, SIMD accelerated, supports affine gaps and scoring matrices. TODO: non-ascii scoring matrix
-- `basic-local`: Classic full matrix dynamic programming Smith-Waterman alignment, does not support affine gaps.
-- `basic-global`: Classic Needleman-Wunsch global alignment.
-- TODO: update
+- `striped-semi-global`: Striped Semi-global, SIMD accelerated, GPU accelerated when available, supports affine gaps and scoring matrices. Specify ends-free with the `--sg-ends-free` options.
+- `striped-local`: Striped Smith-Waterman, SIMD accelerated, supports affine gaps and scoring matrices.
 
 ## Record Types
 
@@ -112,32 +113,9 @@ This is a benchmarking tool based on `parasail_aligner`.
 
 > ⚠️ **Warning**
 > 
-> `ish-aligner` is under active development.
+> `ish-aligner` and all variations of it are for development purposes only.
 
 ## Future Work
-
-Next Steps:
-- Add alignment output - like a nice viz
-- Add FASTQ support for record type
-- Add SAM support for record type
-- Add CSV support, matching against individual columns?
-- Add more matchers
-- Parallelize over files when gpus are available
-
-Idea attribution:
-- SSW lib / parasail
-- BWA-Mem - stores the query vecs on the profile as well
-other speedups and attributions?
-
-Novel things:
-- AVX512
-- oversubscribed SSE2 to mimic AVX2
-- precompute the reverse profile for finding starts
-    - is this actually good? or only for my test data?
-- Dynamic selection of the simd width based on the query length
-- the ish tool itself, doing index-free alignments
-
-## TODO 
 
 - FASTQ support
 - Support muliple queries
@@ -145,12 +123,3 @@ Novel things:
 - Add ability to not skip dotfiles
 
 
-TODO to make promises in the paper:
-
-- Read targets from stdin
-- FASTQ support
-
-Comparable tools:
-- https://github.com/laurikari/tre/ (the version of agrep this compiles)
-- https://github.com/fulcrumgenomics/fqgrep, no protein support, no fuzzy match
-- https://github.com/Rbfinch/grepq, only fasta/fastq, no fuzzy match

@@ -1,0 +1,60 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/prefix-dev/recipe-format/main/schema.json
+
+context:
+  version: "0.1.0"
+
+package:
+  name: "ish"
+  version: ${{ version }}
+
+source:
+  - git: https://github.com/BioRadOpenSource/ish.git
+    rev: 49b2a0099f5fbd418be67a5b3d895e39c2ef753d
+
+build:
+  number: 0
+  script:
+    - mkdir -p ${{ PREFIX }}/lib/mojo
+    - mojo package -o ${{ PREFIX }}/lib/mojo/ishlib.mojopkg ./ishlib 
+    - mkdir -p ${{ PREFIX }}/bin
+    - mojo build -D ISH_LOG_LEVEL=info --march native -o ${{ PREFIX }}/bin/ish main.mojo
+
+requirements:
+  host:
+      - max =25.3
+      - extramojo =0.14.0
+
+  run:
+    - ${{ pin_compatible('max') }}
+
+tests:
+  - script:
+      - if: unix
+        then:
+          - mojo test -I ${{ PREFIX }}/lib/mojo/ishlib.mojopkg tests/test_global.mojo
+          - mojo test -I ${{ PREFIX }}/lib/mojo/ishlib.mojopkg tests/test_local_and_profile.mojo
+          - mojo test -I ${{ PREFIX }}/lib/mojo/ishlib.mojopkg tests/test_searcher.mojo
+          - mojo test -I ${{ PREFIX }}/lib/mojo/ishlib.mojopkg tests/test_semi_global.mojo
+    requirements:
+      run:
+        - max =25.3
+        - extramojo =0.14.0
+
+    files:
+      recipe:
+        - tests/test_global.mojo
+        - tests/test_local_and_profile.mojo
+        - tests/test_searcher.mojo
+        - tests/test_semi_global.mojo
+
+about:
+  homepage: https://github.com/BioRadOpenSource/ish
+  license: Apache-2.0
+  license_file: LICENSE
+  summary:  Alignment-based filtering CLI tool 
+  repository: https://github.com/BioRadOpenSource/ish 
+
+extra:
+  maintainers:
+    - sstadick
+  project_name: ish
