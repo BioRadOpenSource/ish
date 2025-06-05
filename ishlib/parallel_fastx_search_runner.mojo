@@ -69,8 +69,10 @@ struct ParallelFastxSearchRunner[M: Matcher]:
             var f = file[]  # force copy
             var peek = peek_file[record_type = RecordType.FASTX](f)
             Logger.debug("Suggested length:", peek.suggested_max_length)
-            if peek.is_binary and self.settings.verbose:
-                Logger.warn("Skipping binary file:", file[])
+            if peek.is_binary:
+                if self.settings.verbose:
+                    Logger.warn("Skipping binary file:", file[])
+                continue
             Logger.debug("Processing", f)
             if peek.is_fastq:
                 self.run_search_on_file[is_fastq=True](f, writer)
@@ -289,7 +291,8 @@ struct GpuParallelFastxSearchRunner[
                     record_type = RecordType.FASTX, check_record_size=False
                 ](f)
                 if peek.is_binary:
-                    Logger.warn("Skipping binary file:", paths[i])
+                    if self.settings.verbose:
+                        Logger.warn("Skipping binary file:", paths[i])
                     continue
                 if peek.is_fastq:
                     self.run_search_on_file[
