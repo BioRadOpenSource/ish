@@ -65,7 +65,8 @@ struct SearcherSettings:
                 "The scoring matrix to use.\n"
                 "\t\tascii: does no encoding of input bytes, matches are 2, mismatch is -2.\n"
                 "\t\tblosum62: encodes searched inputs as amino acids and uses the classic Blosum62 scoring matrix.\n"
-                "\t\tactgn: encodes searched inputs as nucleotides, matches are 2, mismatch is -2, Ns match anything\n"
+                "\t\tactgn: encodes searched inputs as nucleotides, matches are 2, mismatch is -2, Ns match anything.\n"
+                "\t\tactgn0: encodes searched inputs as nucleotides, matches are 2, mismatch is -2, Ns don't count toward score.\n"
                 # TODO: support iupac
                 )
                 # fmt: on
@@ -106,7 +107,8 @@ struct SearcherSettings:
                 OptKind.StringLike,
                 default_value=String("striped-semi-global"),
                 description=(
-                    "The algorithm to use for matching: [striped-local, striped-semi-global]"
+                    "The algorithm to use for matching: [striped-local,"
+                    " striped-semi-global]"
                 ),
             )
         )
@@ -115,7 +117,7 @@ struct SearcherSettings:
                 "record-type",
                 OptKind.StringLike,
                 default_value=String("line"),
-                description="The input record type: [line, fasta]",
+                description="The input record type: [line, fastx]",
             )
         )
         parser.add_opt(

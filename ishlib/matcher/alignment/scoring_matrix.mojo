@@ -161,6 +161,15 @@ alias ACTGN = InlineArray[Int8, 25](
     -2, -2, -2,  2,  2, # G
      2,  2,  2,  2,  2  # N
 )
+
+alias ACTGN0 = InlineArray[Int8, 25](
+   # A   C   T   G   N
+     2, -2, -2, -2,  0, # A
+    -2,  2, -2, -2,  0, # C
+    -2, -2,  2, -2,  0, # T
+    -2, -2, -2,  2,  0, # G
+     0,  0,  0,  0,  0  # N
+)
 # fmt: on
 
 
@@ -170,7 +179,8 @@ struct MatrixKind:
     var value: UInt8
     alias ASCII = Self(0)
     alias ACTGN = Self(1)
-    alias BLOSUM62 = Self(2)
+    alias ACTGN0= Self(2)
+    alias BLOSUM62 = Self(3)
 
     @staticmethod
     fn from_str(read name: String) raises -> Self:
@@ -178,6 +188,8 @@ struct MatrixKind:
             return Self.ASCII
         elif name.lower() == "actgn":
             return Self.ACTGN
+        elif name.lower() == "actgn0":
+            return Self.ACTGN0
         elif name.lower() == "blosum62":
             return Self.BLOSUM62
         else:
@@ -196,6 +208,8 @@ struct MatrixKind:
             return ScoringMatrix.all_ascii_default_matrix()
         elif self == Self.ACTGN:
             return ScoringMatrix.actgn_matrix()
+        elif self == Self.ACTGN0:
+            return ScoringMatrix.actgn0_matrix()
         elif self == Self.BLOSUM62:
             return ScoringMatrix.blosum62()
         else:
@@ -209,6 +223,8 @@ struct MatrixKind:
             writer.write("ASCII")
         elif self == Self.ACTGN:
             writer.write("ACTGN")
+        elif self == Self.ACTGN0:
+            writer.write("ACTGN0")
         elif self == Self.BLOSUM62:
             writer.write("BLOSUM62")
         else:
@@ -228,6 +244,8 @@ struct MatrixKind:
         if self == Self.ASCII:
             return True
         elif self == Self.ACTGN:
+            return False
+        elif self == Self.ACTGN0:
             return False
         elif self == Self.BLOSUM62:
             return False
@@ -329,6 +347,14 @@ struct ScoringMatrix:
     fn actgn_matrix(match_score: Int8 = 2, mismatch_score: Int8 = -2) -> Self:
         var size = sqrt(len(ACTGN))
         var values = List(Span(ACTGN))
+        var ascii_to_encoding = List(Span(NT_TO_NUM))
+        var encoding_to_ascii = List(Span(NUM_TO_NT))
+        return Self(values, size, ascii_to_encoding, encoding_to_ascii)
+
+    @staticmethod
+    fn actgn0_matrix(match_score: Int8 = 2, mismatch_score: Int8 = -2) -> Self:
+        var size = sqrt(len(ACTGN0))
+        var values = List(Span(ACTGN0))
         var ascii_to_encoding = List(Span(NT_TO_NUM))
         var encoding_to_ascii = List(Span(NUM_TO_NT))
         return Self(values, size, ascii_to_encoding, encoding_to_ascii)

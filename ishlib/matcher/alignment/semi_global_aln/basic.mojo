@@ -279,8 +279,6 @@ fn semi_global_parasail_gpu[
         scoring_matrix: ScoringMatrix for match/mismatch
         gap_open_penalty: The cost (negative) of opening a gap.
         gap_extension_penalty: The cost (negative) of extending an existing gap.
-
-    Paramters
         free_query_start_gaps: Gaps at the start of the query are free.
         free_query_end_gaps: Gaps at the end of the query are free.
         free_target_start_gaps: Gaps at the start of the target are free.

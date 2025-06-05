@@ -288,9 +288,7 @@ fn semi_global_aln[
     var segment_length = (query_len + width - 1) // width
     var offset = (query_len - 1) % segment_length
     var position = (width - 1) - (query_len - 1) // segment_length
-    # print("POSITION for vposmax:", position)
     var v_pos_mask = SIMD[dt, width](position) == iota[dt, width]().reversed()
-    # print("vposmask:", v_pos_mask)
 
     var score = MIN
     var zero = SIMD[dt, width](ZERO)
@@ -322,10 +320,6 @@ fn semi_global_aln[
         pv_h_store[index] = h
         pv_e[index] = e
         index += 1
-    # print("pv_e and pv_h_store")
-    # for i in range(0, segment_length):
-    #     print(i, "e:", pv_e[i] - ZERO)
-    #     print(i, "h_store:", pv_h_store[i] - ZERO)
 
     # Init upper boundary
     boundary.append(ZERO)
@@ -336,17 +330,8 @@ fn semi_global_aln[
         )
         boundary.append(MIN if tmp < Int32(MIN) else tmp.cast[dt]())
 
-    # print("Boundary:")
-    # print()
-    # for i in range(0, len(reference) + 1):
-    #     print(boundary[i], ", ", end="")
-    # print()
-
     var v_gap_open = SIMD[dt, width](gap_open_penalty)  # aka: vGap0
     var v_gap_ext = SIMD[dt, width](gap_extension_penalty)  # aka: vGapE
-
-    # NEG_LIMIT = (-open < matrix->min ? INT8_MIN + open : INT8_MIN - matrix->min) + 1;
-    # POS_LIMIT = INT8_MAX - matrix->max - 1;
 
     var v_neg_limit: SIMD[dt, width]
     var v_neg_limit_saturation: SIMD[dt, width]
@@ -367,27 +352,11 @@ fn semi_global_aln[
     var v_max_h = v_neg_limit
     var v_bias = SIMD[dt, width](bias)
 
-    # 32767
     # Note:
     # H - Score for match / mismatch (diagonal move)
     # E - Score for gap in query (horizontal move)
     # F - Score for gap in reference (vertical move)
-    # print("MIN:", MIN)
-    # print("MAX:", MAX)
-    # print("ZERO:", ZERO)
-    # print("bias:", bias)
-    # print("Segment length:", segment_length)
-    # print("RefLen: ", len(reference))
-    # print("querylen: ", query_len)
-    # print("SIMD DType", dt)
-    # print("SIMD WIDTH", width)
-    # print("Free Q Start", free_query_start_gaps)
-    # print("Free Q End", free_query_end_gaps)
-    # print("Free T Start", free_target_start_gaps)
-    # print("Free T End", free_target_end_gaps)
-
     for i in range(0, len(reference)):  # Not i and j are swapped
-        # print("OUTER LOOP:", i)
         var v_e: SIMD[dt, width]
         var v_f = v_neg_limit
         var v_h = pv_h_store[segment_length - 1]
@@ -401,45 +370,14 @@ fn semi_global_aln[
         # Insert the boundary condition
         v_h[0] = boundary[i]
 
-        # print("vH State:", v_h)
-        # print("pvHLoad State:", end="")
-        # for i in range(0, segment_length):
-        #     print(pv_h_load[i], ", ", end="")
-        # print()
-
-        # print("pvHStore State:", end="")
-        # for i in range(0, segment_length):
-        #     print(pv_h_store[i], ", ", end="")
-        # print()
-
-        # print("pvE State:", end="")
-        # for i in range(0, segment_length):
-        #     print(pv_e[i], ", ", end="")
-        # print()
-
         # Inner loop to process the query sequence
         for j in range(0, segment_length):
-            # print("\tInner loop for query sequence, checcking segment:", j)
-            # print("\tSegement J's query profile:", profile[profile_idx + j])
             # Add profile score to
             v_h = saturating_add(v_h, profile[profile_idx + j])
             v_h = saturating_sub(v_h, v_bias)
             v_e = pv_e[j]
-            # print(
-            #     "\t\tState of vH after adding profile: ",
-            #     v_h,
-            # )
-            # print(
-            #     "\t\tState of vE : ",
-            #     v_e,
-            # )
-            # print(
-            #     "\t\tState of vF: ",
-            #     v_f,
-            # )
 
             # Get max from current_cell_score, horizontal gap, and vertical gap score
-            # print("\t\t", "Get max from current cell / hgap / vgap")
             v_h = max(v_h, v_e)
             v_h = max(v_h, v_f)
 
@@ -451,37 +389,25 @@ fn semi_global_aln[
                 v_saturation_check_max = max(
                     v_saturation_check_max, v_h - v_neg_limit
                 )
-                # v_saturation_check_min = min(v_saturation_check_min, v_h)
                 v_saturation_check_max = max(
                     v_saturation_check_max, v_e - v_neg_limit
                 )
-            # v_saturation_check_min = min(v_saturation_check_min, v_e)
-            # print("SATCHECK MAX:", v_saturation_check_max)
-            # print("SATCHECK MIN:", v_saturation_check_min)
 
             # update vE
             v_h = saturating_sub(v_h, v_gap_open)
             v_e = saturating_sub(v_e, v_gap_ext)
             v_e = max(v_e, v_h)
             pv_e[j] = v_e
-            # print("\t\te State after update: ", v_e)
 
             # update vF
             v_f = saturating_sub(v_f, v_gap_ext)
             v_f = max(v_f, v_h)
-            # print("\t\tvF State after update:", v_f)
 
             # load the next vH
             v_h = pv_h_load[j]
-            # print("\t\tnext vH:", v_h)
 
-        # print("\tStarting LazyF")
         # Lazy_F loop, disallows adjacent insertion and then deletion from SWPS3
         # Possible speedup - check if v_f has any updates to start with
-        # var break_out = (v_f == zero).reduce_and()
-        # var k = 0
-        # while not break_out and k < width:
-        # k += 1
         var break_out = False
         for _k in range(0, width):
             var tmp = (ZERO - gap_open_penalty).cast[
@@ -496,12 +422,8 @@ fn semi_global_aln[
             v_f = v_f.shift_right[1]()
             v_f[0] = tmp2
 
-            # print("\tLeft Shift vF:", v_f)
-            # print("\tWalking Segments")
             for j in range(0, segment_length):
-                # print("\t\tvF:               ", v_f)
                 v_h = pv_h_store[j]
-                # print("\t\tvH from store:    ", v_h)
                 v_h = max(v_h, v_f)
 
                 pv_h_store[j] = v_h
@@ -511,14 +433,9 @@ fn semi_global_aln[
                     v_saturation_check_max = max(
                         v_saturation_check_max, v_h - v_neg_limit
                     )
-                # v_saturation_check_min = min(v_saturation_check_min, v_h)
-                # print("SATCHECK MAX:", v_saturation_check_max)
-                # print("SATCHECK MIN:", v_saturation_check_min)
 
                 v_h = saturating_sub(v_h, v_gap_open)
                 v_f = saturating_sub(v_f, v_gap_ext)
-                # print("\t\tnew vH: ", v_h)
-                # print("\t\tnew vF: ", v_f)
 
                 # Early termination check
                 if not (v_f > v_h).reduce_or():
@@ -526,27 +443,18 @@ fn semi_global_aln[
                     break
             if break_out:
                 break
-        # print("\t Done with main loops")
 
         # Extract vector containing last value from the column
         v_h = pv_h_store[offset]
-        # print("\tLast col vector:", v_h)
-        # print("\tCurrent v_max_h:", v_max_h)
-        # print("vH > vMaxH result:", v_h > v_max_h)
-        # print("v_pos_mask:", v_pos_mask)
         var v_compare = v_pos_mask & (v_h > v_max_h)
-        # print("\tv_compare:", v_compare)
         v_max_h = max(v_h, v_max_h)
-        # print("\tnew v_max_h:", v_max_h)
         if v_compare.reduce_or():
-            # print("Setting end_reference to", i)
             end_reference = i
 
     # Done, handle possible free gaps
 
     # Max last value from all columns
     if free_target_end_gaps:
-        # print("Free target end gaps")
         for _k in range(0, position):
             v_max_h = v_max_h.shift_right[1]()
         score = v_max_h[width - 1]
@@ -554,7 +462,6 @@ fn semi_global_aln[
 
     # Max of lst column
     if free_query_end_gaps:
-        # print("Free query end gaps")
         for i in range(0, segment_length):
             for j in range(0, width):
                 var temp = i + j * segment_length
@@ -573,12 +480,9 @@ fn semi_global_aln[
 
     # Extract last value from the last column
     if not free_target_end_gaps and not free_query_end_gaps:
-        # print("No free end gaps")
         var v_h = pv_h_store[offset]
-        # print("\tvH", v_h)
         for _k in range(0, position):
             v_h = v_h.shift_right[1]()
-        # print("\tvH post shift", v_h)
         score = v_h[width - 1]
         end_reference = len(reference) - 1
         end_query = query_len - 1
@@ -589,10 +493,6 @@ fn semi_global_aln[
         if (
             (v_saturation_check_max > v_saturation_check_max_reference)
         ).reduce_or():
-            # print(score)
-            # print("Saturation")
-            # print(v_saturation_check_max)
-            # print(v_saturation_check_max_reference)
             return AlignmentResult(
                 AlignmentEnd(0, 0, 0), overflow_detected=True
             )

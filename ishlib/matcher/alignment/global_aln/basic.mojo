@@ -124,9 +124,6 @@ fn needleman_wunsch_full_naive[
             var current = scoring_matrix.get(
                 Int(query[i - 1]), Int(target[j - 1])
             ).cast[DT]()
-            # print(
-            #     chr(Int(seq1[i - 1])), "vs", chr(Int(seq2[j - 1])), "=", current
-            # )
             H[i][j] = max(
                 H[i - 1][j - 1] + current,
                 max(E[i][j], F[i][j]),
@@ -135,25 +132,6 @@ fn needleman_wunsch_full_naive[
     var score = max(
         H[rows - 1][cols - 1], max(F[rows - 1][cols - 1], E[rows - 1][cols - 1])
     )
-
-    # print("H")
-    # for i in range(0, rows + 1):
-    #     for j in range(0, cols + 1):
-    #         print(H[i][j], ",", end="")
-    #     print()
-
-    # print("E")
-    # for i in range(0, rows + 1):
-    #     for j in range(0, cols + 1):
-    #         print(E[i][j], ",", end="")
-    #     print()
-
-    # print("F")
-    # for i in range(0, rows + 1):
-    #     for j in range(0, cols + 1):
-    #         print(F[i][j], ",", end="")
-    #     print()
-
     return AlignmentResult(score.cast[DType.int32](), None, None, None)
 
 

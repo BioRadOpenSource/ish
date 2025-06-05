@@ -148,7 +148,7 @@ def test_fasta_actgn_search():
                             gap_open_penalty=3,
                             gap_extension_penalty=1,
                             match_algo=String(algo[]),
-                            record_type="fasta",
+                            record_type="fastx",
                             threads=num_threads[],
                             batch_size=268435456,  # default
                             max_gpus=max_gpus[],
@@ -199,7 +199,7 @@ def test_fasta_blosum62_search():
                             gap_open_penalty=3,
                             gap_extension_penalty=1,
                             match_algo=String(algo[]),
-                            record_type="fasta",
+                            record_type="fastx",
                             threads=num_threads[],
                             batch_size=268435456,  # default
                             max_gpus=max_gpus[],

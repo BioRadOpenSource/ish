@@ -48,8 +48,6 @@ struct Alignment:
 
 @value
 struct Profile[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
-    # alias ByteVProfile = List[SIMD[DType.uint8, SIMD_U8_WIDTH]]
-    # alias WordVProfile = List[SIMD[DType.uint16, SIMD_U16_WIDTH]]
     alias ByteVProfile = AlignedMemory[
         DType.uint8, SIMD_U8_WIDTH, SIMD_U8_WIDTH
     ]
@@ -73,7 +71,6 @@ struct Profile[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
 
         i.e. ACTG should be 0, 1, 2, 3
         """
-        # print("Intializing a profile for a query of len", len(query))
         var profile_byte: Optional[Self.ByteVProfile] = None
         var profile_word: Optional[Self.WordVProfile] = None
         var bias: UInt8 = 0
@@ -121,7 +118,6 @@ struct Profile[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
         var profile = AlignedMemory[T, size, size](length)
 
         # Generate query profile and rearrange query sequence and calculate the weight of match/mismatch
-        print("filling profile")
         var p = profile.as_span()
         var t_idx = 0
         for nt in range(0, score_matrix.size):
@@ -137,7 +133,6 @@ struct Profile[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
                     ).cast[T]()
                     j += segment_length
                 t_idx += 1
-        print("filled profile")
         return profile
 
 
@@ -169,7 +164,6 @@ fn ssw_align[
             gap_open_penalty,
             gap_extension_penalty,
             profile.profile_byte.value().as_span(),
-            # profile.byte_vectors,
             -1,
             profile.bias,
             mask_length,
@@ -185,7 +179,6 @@ fn ssw_align[
                 gap_open_penalty.cast[DType.uint16](),
                 gap_extension_penalty.cast[DType.uint16](),
                 profile.profile_word.value().as_span(),
-                # profile.word_vectors,
                 -1,
                 profile.bias.cast[DType.uint16](),
                 mask_length,
@@ -206,7 +199,6 @@ fn ssw_align[
             gap_open_penalty.cast[DType.uint16](),
             gap_extension_penalty.cast[DType.uint16](),
             profile.profile_word.value().as_span(),
-            # profile.word_vectors,
             -1,
             profile.bias.cast[DType.uint16](),
             mask_length,

@@ -4,6 +4,7 @@ from ExtraMojo.io.buffered import BufferedWriter
 from time.time import perf_counter
 
 from ishlib import RED, PURPLE, GREEN
+from ishlib.formats.fastx import ByteFastxRecord
 from ishlib.formats.fasta import (
     FastaReader,
     BorrowedFastaRecord,
@@ -43,7 +44,7 @@ from sys import stdout, info
 
 @value
 struct SeqAndIndex(SearchableWithIndex):
-    var seq: ByteFastaRecord
+    var seq: ByteFastxRecord
     var orig_index: UInt
 
     fn buffer_to_search(ref self) -> Span[UInt8, __origin_of(self)]:
@@ -56,7 +57,7 @@ struct SeqAndIndex(SearchableWithIndex):
 
 
 @value
-struct ParallelFastaSearchRunner[M: Matcher]:
+struct ParallelFastxSearchRunner[M: Matcher]:
     var settings: SearcherSettings
     var matcher: M
 
@@ -66,15 +67,18 @@ struct ParallelFastaSearchRunner[M: Matcher]:
         # Simple thing first?
         for file in self.settings.files:
             var f = file[]  # force copy
-            var peek = peek_file[record_type = RecordType.FASTA](f)
+            var peek = peek_file[record_type = RecordType.FASTX](f)
             Logger.debug("Suggested length:", peek.suggested_max_length)
             if peek.is_binary and self.settings.verbose:
                 Logger.warn("Skipping binary file:", file[])
             Logger.debug("Processing", f)
-            self.run_search_on_file(f, writer)
+            if peek.is_fastq:
+                self.run_search_on_file[is_fastq=True](f, writer)
+            else:
+                self.run_search_on_file[is_fastq=False](f, writer)
 
     fn run_search_on_file[
-        W: MovableWriter
+        W: MovableWriter, *, is_fastq: Bool = False
     ](mut self, file: Path, mut writer: BufferedWriter[W]) raises:
         # TODO: pass an enocoder to the FastaReader
         var reader = FastxReader[read_comment=False](
@@ -99,7 +103,20 @@ struct ParallelFastaSearchRunner[M: Matcher]:
                     seq.append(
                         self.matcher.convert_ascii_to_encoding(reader.seq[s])
                     )
-                var record = ByteFastaRecord(List(reader.name.as_span()), seq)
+                var record: ByteFastxRecord
+
+                @parameter
+                if is_fastq:
+                    record = ByteFastxRecord(
+                        List(reader.name.as_span()),
+                        seq,
+                        List(reader.qual.as_span()),
+                    )
+                else:
+                    record = ByteFastxRecord(
+                        List(reader.name.as_span()),
+                        seq,
+                    )
                 bytes_saved += record.size_in_bytes()
                 sequences.append(SeqAndIndex(record, seq_number))
                 seq_number += 1
@@ -152,6 +169,12 @@ struct ParallelFastaSearchRunner[M: Matcher]:
                         writer.write_bytes(r[].seq.seq[m.value().result.end :])
                     else:
                         writer.write_bytes(r[].seq.seq)
+
+                    @parameter
+                    if is_fastq:
+                        writer.write("\n+\n")
+                        writer.write_bytes(r[].seq.qual.value())
+
                     writer.write("\n")
                 sequences.clear()
                 bytes_saved = 0
@@ -161,7 +184,7 @@ struct ParallelFastaSearchRunner[M: Matcher]:
 
 
 @value
-struct GpuParallelFastaSearchRunner[
+struct GpuParallelFastxSearchRunner[
     M: GpuMatcher,
     max_query_length: UInt = 200,
     max_target_length: UInt = 1024,
@@ -184,12 +207,12 @@ struct GpuParallelFastaSearchRunner[
         # First non-binary file
         var files = self.settings.files
         var first_peek = peek_file[
-            record_type = RecordType.FASTA, check_record_size=True
+            record_type = RecordType.FASTX, check_record_size=True
         ](files[0])
         if first_peek.is_binary:
             for i in range(1, len(files)):
                 first_peek = peek_file[
-                    record_type = RecordType.FASTA, check_record_size=True
+                    record_type = RecordType.FASTX, check_record_size=True
                 ](files[i])
 
         Logger.debug("Suggested length of:", first_peek.suggested_max_length)
@@ -263,19 +286,26 @@ struct GpuParallelFastaSearchRunner[
             if i > 0:
                 # Can skip the first peek since we've already checked it.
                 var peek = peek_file[
-                    record_type = RecordType.FASTA, check_record_size=False
+                    record_type = RecordType.FASTX, check_record_size=False
                 ](f)
                 if peek.is_binary:
                     Logger.warn("Skipping binary file:", paths[i])
                     continue
-            self.run_search_on_file[W, max_query_length, max_target_length](
-                f, ctxs, writer
-            )
+                if peek.is_fastq:
+                    self.run_search_on_file[
+                        W, max_query_length, max_target_length, is_fastq=True
+                    ](f, ctxs, writer)
+                else:
+                    self.run_search_on_file[
+                        W, max_query_length, max_target_length, is_fastq=False
+                    ](f, ctxs, writer)
 
     fn run_search_on_file[
         W: MovableWriter,
         max_query_length: UInt = 200,
         max_target_length: UInt = 1024,
+        *,
+        is_fastq: Bool = False,
     ](
         mut self,
         path: Path,
@@ -294,7 +324,7 @@ struct GpuParallelFastaSearchRunner[
         fn write_match[
             mut: Bool, //, o: Origin[mut]
         ](
-            r: Pointer[ByteFastaRecord, o], m: ComputedMatchResult
+            r: Pointer[ByteFastxRecord, o], m: ComputedMatchResult
         ) capturing raises:
             writer.write(">")
             writer.write_bytes(r[].name)
@@ -310,6 +340,11 @@ struct GpuParallelFastaSearchRunner[
                 writer.write_bytes(r[].seq[m.result.end :])
             else:
                 writer.write_bytes(r[].seq)
+
+            @parameter
+            if is_fastq:
+                writer.write("\n+\n")
+                writer.write_bytes(r[].qual.value())
             writer.write("\n")
 
         var cpu_sequences = List[SeqAndIndex]()
@@ -332,7 +367,17 @@ struct GpuParallelFastaSearchRunner[
                     seq.append(
                         self.matcher.convert_ascii_to_encoding(reader.seq[s])
                     )
-                var record = ByteFastaRecord(List(reader.name.as_span()), seq)
+                var record: ByteFastxRecord
+
+                @parameter
+                if is_fastq:
+                    record = ByteFastxRecord(
+                        List(reader.name.as_span()),
+                        seq,
+                        List(reader.qual.as_span()),
+                    )
+                else:
+                    record = ByteFastxRecord(List(reader.name.as_span()), seq)
 
                 if len(reader.seq) > max_target_length:
                     cpu_sequences.append(

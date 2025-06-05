@@ -14,7 +14,7 @@ from sys import stdout
 
 
 @value
-struct FastaSearchRunner[M: Matcher]:
+struct FastxSearchRunner[M: Matcher]:
     var settings: SearcherSettings
     var matcher: M
 
@@ -24,7 +24,7 @@ struct FastaSearchRunner[M: Matcher]:
         # Simple thing first?
         for file in self.settings.files:
             var f = file[]  # force copy
-            var peek = peek_file[record_type = RecordType.FASTA](f)
+            var peek = peek_file[record_type = RecordType.FASTX](f)
             if peek.is_binary and self.settings.verbose:
                 Logger.warn("Skipping binary file:", file[])
             Logger.debug("Processing", f)
@@ -70,6 +70,11 @@ struct FastaSearchRunner[M: Matcher]:
                     writer.write_bytes(reader.seq.as_span()[m.value().end :])
                 else:
                     writer.write_bytes(reader.seq.as_span())
+
+                # Handle FASTQ Case
+                if len(reader.qual.as_span()) > 0:
+                    writer.write("\n+\n")
+                    writer.write_bytes(reader.qual.as_span())
                 writer.write("\n")
 
         writer.flush()
