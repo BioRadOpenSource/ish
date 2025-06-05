@@ -62,8 +62,9 @@ struct ParallelLineSearchRunner[M: Matcher]:
             var f = file[]  # force copy
             var peek = peek_file[record_type = RecordType.LINE](f)
             Logger.debug("Suggested length:", peek.suggested_max_length)
-            if peek.is_binary and self.settings.verbose:
-                Logger.warn("Skipping binary file:", file[])
+            if peek.is_binary:
+                if self.settings.verbose:
+                    Logger.warn("Skipping binary file:", file[])
                 continue
             self.run_search_on_file(f, writer)
 
@@ -192,6 +193,8 @@ struct GpuParallelLineSearchRunner[
                 first_peek = peek_file[
                     record_type = RecordType.LINE, check_record_size=True
                 ](files[i])
+                if not first_peek.is_binary:
+                    break
 
         Logger.debug("Suggested length of:", first_peek.suggested_max_length)
 
@@ -267,7 +270,8 @@ struct GpuParallelLineSearchRunner[
                     record_type = RecordType.LINE, check_record_size=False
                 ](f)
                 if peek.is_binary:
-                    Logger.warn("Skipping binary file:", paths[i])
+                    if self.settings.verbose:
+                        Logger.warn("Skipping binary file:", paths[i])
                     continue
             self.run_search_on_file[W, max_query_length, max_target_length](
                 f, ctxs, writer

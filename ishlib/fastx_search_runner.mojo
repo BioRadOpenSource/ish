@@ -25,8 +25,10 @@ struct FastxSearchRunner[M: Matcher]:
         for file in self.settings.files:
             var f = file[]  # force copy
             var peek = peek_file[record_type = RecordType.FASTX](f)
-            if peek.is_binary and self.settings.verbose:
-                Logger.warn("Skipping binary file:", file[])
+            if peek.is_binary:
+                if self.settings.verbose:
+                    Logger.warn("Skipping binary file:", file[])
+                continue
             Logger.debug("Processing", f)
             self.run_search_on_file(f, writer)
 
