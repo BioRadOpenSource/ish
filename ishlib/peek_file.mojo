@@ -20,10 +20,12 @@ alias DEFAULT_MAX_LENGTH = 1024
 struct PeekFindings:
     var is_binary: Bool
     var suggested_max_length: UInt
+    var is_fastq: Bool
 
     fn __init__(out self):
         self.is_binary = False
         self.suggested_max_length = DEFAULT_MAX_LENGTH
+        self.is_fastq = False
 
 
 fn peek_file[
@@ -40,7 +42,9 @@ fn peek_file[
         raise "Error reading file."
     if bytes_read == 0:
         return PeekFindings(
-            is_binary=False, suggested_max_length=DEFAULT_MAX_LENGTH
+            is_binary=False,
+            suggested_max_length=DEFAULT_MAX_LENGTH,
+            is_fastq=False,
         )
     var filled_buffer = Span(buffer)[0:bytes_read]
 
@@ -51,10 +55,13 @@ fn peek_file[
     @parameter
     if not check_record_size:
         return PeekFindings(
-            is_binary=is_binary, suggested_max_length=DEFAULT_MAX_LENGTH
+            is_binary=is_binary,
+            suggested_max_length=DEFAULT_MAX_LENGTH,
+            is_fastq=False,
         )
 
     var suggested_max_length: Int
+    var is_fastq = False
 
     @parameter
     if record_type == RecordType.LINE:
@@ -72,7 +79,7 @@ fn peek_file[
         suggested_max_length = next_power_of_two(
             Int(stats.mean() + stats.standard_deviation())
         )
-    elif record_type == RecordType.FASTA:
+    elif record_type == RecordType.FASTX:
         var stats = RunningStats[DType.uint32]()
         var buffer_span = filled_buffer.get_immutable()
         var reader = FastxReader(
@@ -80,6 +87,7 @@ fn peek_file[
         )
         while reader.read() > 0:
             stats.push(len(reader.seq))
+            is_fastq = is_fastq or len(reader.qual) > 0
         suggested_max_length = next_power_of_two(
             Int(stats.mean() + stats.standard_deviation())
         )
@@ -87,7 +95,9 @@ fn peek_file[
         raise "Unknown record type"
 
     return PeekFindings(
-        is_binary=is_binary, suggested_max_length=suggested_max_length
+        is_binary=is_binary,
+        suggested_max_length=suggested_max_length,
+        is_fastq=is_fastq,
     )
 
 

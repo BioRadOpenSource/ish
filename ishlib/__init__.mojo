@@ -25,7 +25,7 @@ struct ByteSpanWriter[origin: ImmutableOrigin](Writable):
 struct RecordType:
     var value: Int
     alias LINE = Self(0)
-    alias FASTA = Self(1)
+    alias FASTX = Self(1)
 
     fn __eq__(read self, other: Self) -> Bool:
         return self.value == other.value

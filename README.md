@@ -47,52 +47,53 @@ ish
 Search for inexact patterns in files.
 
 ARGS:
-        <ARGS (>=1)>...
-                Pattern to search for, then any number of files or directories to search.
+	<ARGS (>=1)>...
+		Pattern to search for, then any number of files or directories to search.
 FLAGS:
-        --help <Bool> [Default: False]
-                Show help message
+	--help <Bool> [Default: False]
+		Show help message
 
-        --verbose <Bool> [Default: False]
-                Verbose logging output.
+	--verbose <Bool> [Default: False]
+		Verbose logging output.
 
 OPTIONS:
-        --scoring-matrix <String> [Default: ascii]
-                The scoring matrix to use.
-                ascii: does no encoding of input bytes, matches are 2, mismatch is -2.
-                blosum62: encodes searched inputs as amino acids and uses the classic Blosum62 scoring matrix.
-                actgn: encodes searched inputs as nucleotides, matches are 2, mismatch is -2, Ns match anything
+	--scoring-matrix <String> [Default: ascii]
+		The scoring matrix to use.
+		ascii: does no encoding of input bytes, matches are 2, mismatch is -2.
+		blosum62: encodes searched inputs as amino acids and uses the classic Blosum62 scoring matrix.
+		actgn: encodes searched inputs as nucleotides, matches are 2, mismatch is -2, Ns match anything.
+		actgn0: encodes searched inputs as nucleotides, matches are 2, mismatch is -2, Ns don't count toward score.
 
 
-        --score <Float> [Default: 0.8]
-                The min score needed to return a match. Results >= this value will be returned. The score is the found alignment score / the optimal score for the given scoring matrix and gap-open / gap-extend penalty.
+	--score <Float> [Default: 0.8]
+		The min score needed to return a match. Results >= this value will be returned. The score is the found alignment score / the optimal score for the given scoring matrix and gap-open / gap-extend penalty.
 
-        --gap-open <Int> [Default: 3]
-                Score penalty for opening a gap.
+	--gap-open <Int> [Default: 3]
+		Score penalty for opening a gap.
 
-        --gap-extend <Int> [Default: 1]
-                Score penalty for extending a gap.
+	--gap-extend <Int> [Default: 1]
+		Score penalty for extending a gap.
 
-        --match-algo <String> [Default: striped-semi-global]
-                The algorithm to use for matching: [striped-local, striped-semi-global]
+	--match-algo <String> [Default: striped-semi-global]
+		The algorithm to use for matching: [striped-local, striped-semi-global]
 
-        --record-type <String> [Default: line]
-                The input record type: [line, fasta]
+	--record-type <String> [Default: line]
+		The input record type: [line, fastx]
 
-        --threads <Int> [Default: 16]
-                The number of threads to use. Defaults to the number of physical cores.
+	--threads <Int> [Default: 10]
+		The number of threads to use. Defaults to the number of physical cores.
 
-        --batch-size <Int> [Default: 268435456]
-                The number of bytes in a parallel processing batch. Note that this may use 2-3x this amount to account for intermediate transfer buffers.
+	--batch-size <Int> [Default: 268435456]
+		The number of bytes in a parallel processing batch. Note that this may use 2-3x this amount to account for intermediate transfer buffers.
 
-        --max-gpus <Int> [Default: 0]
-                The max number of GPUs to try to use. If set to 0 this will ignore any found GPUs. In general, if you have only one query then there won't be much using more than 1 GPU. GPUs won't always be faster than CPU parallelization depending on the profile of data you are working with.
+	--max-gpus <Int> [Default: 0]
+		The max number of GPUs to try to use. If set to 0 this will ignore any found GPUs. In general, if you have only one query then there won't be much using more than 1 GPU. GPUs won't always be faster than CPU parallelization depending on the profile of data you are working with.
 
-        --output-file <String> [Default: /dev/stdout]
-                The file to write the output to, defaults to stdout.
+	--output-file <String> [Default: /dev/stdout]
+		The file to write the output to, defaults to stdout.
 
-        --sg-ends-free <String> [Default: FFTT]
-                The ends-free for semi-global alignment, if used. The free ends are: (query_start, query_end, target_start, target_end). These must be specified with a T or F, all four must be specified. By default this target ends are free.
+	--sg-ends-free <String> [Default: FFTT]
+		The ends-free for semi-global alignment, if used. The free ends are: (query_start, query_end, target_start, target_end). These must be specified with a T or F, all four must be specified. By default this target ends are free.
 ```
 
 ```sh
@@ -120,7 +121,7 @@ OPTIONS:
 ## Record Types
 
 - `line`: match against one line at a time, a-la `grep`
-- `fasta`: match against the sequence portion of fastq records.
+- `fastx`: match against the sequence portion of FASTA or FASTQ records.
 
 
 ## ish-aligner
@@ -133,18 +134,9 @@ This is a benchmarking tool based on `parasail_aligner`.
 
 ## Future Work
 
-- FASTQ support
-- Support muliple queries
+- Support multiple queries
 - Choose a better default between cpu and gpu / think about more. GPU crushes on big files / long running / many files, cpu is faster for small jobs
 - Add ability to not skip dotfiles
-
-<!-- MARKDOWN LINKS & IMAGES -->
-<!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
-[build-shield]: https://img.shields.io/circleci/build/github/BioRadOpenSource/ish 
-[language-shield]: https://img.shields.io/badge/language-mojo-orange
-[license-shield]: https://img.shields.io/github/license/BioRadOpenSource/ish?logo=github
-[license-url]: https://github.com/BioRadOpenSource/ish/blob/main/LICENSE
-[contributors-shield]: https://img.shields.io/badge/contributors-welcome!-blue
 
 ## Rattler Build
 
@@ -154,3 +146,11 @@ For testing the build process for modular-community
 pixi global install rattler-build
 rattler-build build -c https://repo.prefix.dev/modular-community -c https://conda.modular.com/max -c conda-forge --skip-existing=all -r ./recipe.yaml
 ```
+
+<!-- MARKDOWN LINKS & IMAGES -->
+<!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
+[build-shield]: https://img.shields.io/circleci/build/github/BioRadOpenSource/ish 
+[language-shield]: https://img.shields.io/badge/language-mojo-orange
+[license-shield]: https://img.shields.io/github/license/BioRadOpenSource/ish?logo=github
+[license-url]: https://github.com/BioRadOpenSource/ish/blob/main/LICENSE
+[contributors-shield]: https://img.shields.io/badge/contributors-welcome!-blue

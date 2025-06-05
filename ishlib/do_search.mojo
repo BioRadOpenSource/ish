@@ -5,13 +5,13 @@ from ExtraMojo.io.buffered import BufferedWriter
 
 from ishlib.gpu import has_gpu
 from ishlib.line_search_runner import LineSearchRunner
-from ishlib.fasta_search_runner import FastaSearchRunner
+from ishlib.fastx_search_runner import FastxSearchRunner
 from ishlib.matcher.naive_exact_matcher import NaiveExactMatcher
 from ishlib.matcher.striped_local_matcher import StripedLocalMatcher
 from ishlib.matcher.striped_semi_global_matcher import StripedSemiGlobalMatcher
-from ishlib.parallel_fasta_search_runner import (
-    ParallelFastaSearchRunner,
-    GpuParallelFastaSearchRunner,
+from ishlib.parallel_fastx_search_runner import (
+    ParallelFastxSearchRunner,
+    GpuParallelFastxSearchRunner,
 )
 from ishlib.parallel_line_search_runner import (
     ParallelLineSearchRunner,
@@ -62,9 +62,9 @@ fn do_search[
                     ),
                 )
                 runner.run_search(writer)
-        elif settings.record_type == "fasta":
+        elif settings.record_type == "fastx":
             if settings.threads <= 1:
-                var runner = FastaSearchRunner[
+                var runner = FastxSearchRunner[
                     StripedLocalMatcher[__origin_of(settings.pattern)]
                 ](
                     settings,
@@ -76,7 +76,7 @@ fn do_search[
                 )
                 runner.run_search(writer)
             else:
-                var runner = ParallelFastaSearchRunner[
+                var runner = ParallelFastxSearchRunner[
                     StripedLocalMatcher[__origin_of(settings.pattern)]
                 ](
                     settings,
@@ -179,9 +179,9 @@ fn do_search[
                             ),
                         )
                         runner.run_search(writer)
-        elif settings.record_type == "fasta":
+        elif settings.record_type == "fastx":
             if settings.threads <= 1:
-                var runner = FastaSearchRunner[StripedSemiGlobalMatcher](
+                var runner = FastxSearchRunner[StripedSemiGlobalMatcher](
                     settings,
                     StripedSemiGlobalMatcher(
                         settings.pattern,
@@ -193,7 +193,7 @@ fn do_search[
                 runner.run_search(writer)
             else:
                 if settings.max_gpus == 0 or not has_gpu():
-                    var runner = ParallelFastaSearchRunner[
+                    var runner = ParallelFastxSearchRunner[
                         StripedSemiGlobalMatcher
                     ](
                         settings,
@@ -212,7 +212,7 @@ fn do_search[
 
                         @parameter
                         @always_inline
-                        fn choose_striped_semi_global_fasta_search_runner(
+                        fn choose_striped_semi_global_fastx_search_runner(
                             qlen: Int,
                         ) raises:
                             alias MAX_QLEN = List(
@@ -223,7 +223,7 @@ fn do_search[
                             for i in range(0, len(MAX_QLEN)):
                                 alias max_len = MAX_QLEN[i]
                                 if qlen <= max_len:
-                                    var runner = GpuParallelFastaSearchRunner[
+                                    var runner = GpuParallelFastxSearchRunner[
                                         StripedSemiGlobalMatcher,
                                         max_query_length=max_len,
                                     ](
@@ -239,7 +239,7 @@ fn do_search[
                                     return
 
                             # CPU fallback
-                            var runner = ParallelFastaSearchRunner[
+                            var runner = ParallelFastxSearchRunner[
                                 StripedSemiGlobalMatcher
                             ](
                                 settings,
@@ -252,11 +252,11 @@ fn do_search[
                             )
                             runner.run_search(writer)
 
-                        choose_striped_semi_global_fasta_search_runner(
+                        choose_striped_semi_global_fastx_search_runner(
                             len(settings.pattern)
                         )
                     else:
-                        var runner = ParallelFastaSearchRunner[
+                        var runner = ParallelFastxSearchRunner[
                             StripedSemiGlobalMatcher
                         ](
                             settings,
