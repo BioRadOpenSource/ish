@@ -238,15 +238,15 @@ struct GpuParallelFastxSearchRunner[
                         max_target_length=max_target_length,
                     ](files, ctxs, writer)
                     return
-
-            Logger.warn(
-                "Longer line lengths than supported, more work will"
-                " be sent to CPU, consider running with max-gpus set to 0."
-            )
-            var ctxs = self.create_ctxs[max_query_length, 4096]()
-            self.search_files[
-                W, max_query_length=max_query_length, max_target_length=4096
-            ](files, ctxs, writer)
+            else:
+                Logger.warn(
+                    "Longer line lengths than supported, more work will"
+                    " be sent to CPU, consider running with max-gpus set to 0."
+                )
+                var ctxs = self.create_ctxs[max_query_length, 4096]()
+                self.search_files[
+                    W, max_query_length=max_query_length, max_target_length=4096
+                ](files, ctxs, writer)
 
         choose_max_target_length(first_peek.suggested_max_length)
 
