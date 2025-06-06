@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/prefix-dev/recipe-format/main/schema.json
 
 context:
-  version: "0.1.0"
+  version: "1.1.0"
 
 package:
   name: "ish"
