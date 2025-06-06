@@ -148,20 +148,20 @@ fn do_search[
                                     )
                                     runner.run_search(writer)
                                     return
-
-                            # CPU fallback
-                            var runner = ParallelLineSearchRunner[
-                                StripedSemiGlobalMatcher
-                            ](
-                                settings,
-                                StripedSemiGlobalMatcher(
-                                    settings.pattern,
-                                    settings.score_threshold,
-                                    settings.sg_ends_free,
-                                    settings.matrix_kind,
-                                ),
-                            )
-                            runner.run_search(writer)
+                            else:
+                                # CPU fallback
+                                var runner = ParallelLineSearchRunner[
+                                    StripedSemiGlobalMatcher
+                                ](
+                                    settings,
+                                    StripedSemiGlobalMatcher(
+                                        settings.pattern,
+                                        settings.score_threshold,
+                                        settings.sg_ends_free,
+                                        settings.matrix_kind,
+                                    ),
+                                )
+                                runner.run_search(writer)
 
                         choose_striped_semi_global_line_search_runner(
                             len(settings.pattern)
@@ -237,20 +237,20 @@ fn do_search[
                                     )
                                     runner.run_search(writer)
                                     return
-
-                            # CPU fallback
-                            var runner = ParallelFastxSearchRunner[
-                                StripedSemiGlobalMatcher
-                            ](
-                                settings,
-                                StripedSemiGlobalMatcher(
-                                    settings.pattern,
-                                    settings.score_threshold,
-                                    settings.sg_ends_free,
-                                    settings.matrix_kind,
-                                ),
-                            )
-                            runner.run_search(writer)
+                            else:
+                                # CPU fallback
+                                var runner = ParallelFastxSearchRunner[
+                                    StripedSemiGlobalMatcher
+                                ](
+                                    settings,
+                                    StripedSemiGlobalMatcher(
+                                        settings.pattern,
+                                        settings.score_threshold,
+                                        settings.sg_ends_free,
+                                        settings.matrix_kind,
+                                    ),
+                                )
+                                runner.run_search(writer)
 
                         choose_striped_semi_global_fastx_search_runner(
                             len(settings.pattern)
