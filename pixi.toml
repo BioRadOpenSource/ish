@@ -8,7 +8,7 @@ channels = [
 ]
 name = "ish"
 platforms = ["osx-arm64", "linux-64", "linux-aarch64"]
-version = "0.1.0"
+version = "1.1.0"
 
 [tasks]
 build = "pixi run mojo build -D ISH_LOG_LEVEL=info --march native -o ish main.mojo"
