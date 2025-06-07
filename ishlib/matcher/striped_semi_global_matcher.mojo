@@ -223,6 +223,28 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
                 ends_free.target_start,
                 ends_free.target_end,
             )
+        elif matrix_kind == MatrixKind.ACTGN0:
+            gpu_align_coarse[
+                MatrixKind.ACTGN0, max_query_length, max_target_length
+            ](
+                query,
+                ref_buffer,
+                target_ends,
+                score_result_buffer,
+                query_end_result_buffer,
+                ref_end_result_buffer,
+                basic_matrix_values,
+                basic_matrix_len,
+                query_len,
+                target_ends_len,
+                thread_count,
+                gap_open,
+                gap_extend,
+                ends_free.query_start,
+                ends_free.query_end,
+                ends_free.target_start,
+                ends_free.target_end,
+            )
         elif matrix_kind == MatrixKind.BLOSUM62:
             gpu_align_coarse[
                 MatrixKind.BLOSUM62, max_query_length, max_target_length

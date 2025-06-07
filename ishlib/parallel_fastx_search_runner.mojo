@@ -30,7 +30,7 @@ from ishlib.matcher import (
     WhereComputed,
 )
 from ishlib import ByteSpanWriter, RecordType
-from ishlib.peek_file import peek_file
+from ishlib.peek_file import peek_file, PeekFindings
 from ishlib.matcher.alignment.striped_utils import AlignmentResult
 from ishlib.vendor.kseq import BufferedReader, FastxReader
 from ishlib.vendor.zlib import GZFile
@@ -64,15 +64,12 @@ struct ParallelFastxSearchRunner[M: Matcher]:
     fn run_search[
         W: MovableWriter
     ](mut self, mut writer: BufferedWriter[W]) raises:
-        # Simple thing first?
+        # Peek only the first file to determine fastq or not, assume not-binary
+        var peek = peek_file[record_type = RecordType.FASTX](
+            self.settings.files[0]
+        )
         for file in self.settings.files:
             var f = file[]  # force copy
-            var peek = peek_file[record_type = RecordType.FASTX](f)
-            Logger.debug("Suggested length:", peek.suggested_max_length)
-            if peek.is_binary:
-                if self.settings.verbose:
-                    Logger.warn("Skipping binary file:", file[])
-                continue
             Logger.debug("Processing", f)
             if peek.is_fastq:
                 self.run_search_on_file[is_fastq=True](f, writer)
@@ -204,51 +201,39 @@ struct GpuParallelFastxSearchRunner[
         W: MovableWriter
     ](mut self, mut writer: BufferedWriter[W]) raises:
         # Peek the first file to get the suggested size, then use that for all of them.
-        # Still peek each for binary
-
-        # First non-binary file
+        # Assume non-binary
         var files = self.settings.files
         var first_peek = peek_file[
             record_type = RecordType.FASTX, check_record_size=True
         ](files[0])
-        if first_peek.is_binary:
-            for i in range(1, len(files)):
-                first_peek = peek_file[
-                    record_type = RecordType.FASTX, check_record_size=True
-                ](files[i])
 
         Logger.debug("Suggested length of:", first_peek.suggested_max_length)
 
         # Create ctxs
+        alias MAX_TARGET_LENGTHS = List(128, 256, 512, 1024, 2048, 4096)
+
         @parameter
-        @always_inline
-        fn choose_max_target_length(suggested_max_length: Int) raises:
-            alias MAX_TARGET_LENGTHS = List(128, 256, 512, 1024, 2048, 4096)
-
-            @parameter
-            for i in range(0, len(MAX_TARGET_LENGTHS)):
-                alias max_target_length = MAX_TARGET_LENGTHS[i]
-                if suggested_max_length <= max_target_length:
-                    var ctxs = self.create_ctxs[
-                        max_query_length, max_target_length
-                    ]()
-                    self.search_files[
-                        W,
-                        max_query_length=max_query_length,
-                        max_target_length=max_target_length,
-                    ](files, ctxs, writer)
-                    return
-            else:
-                Logger.warn(
-                    "Longer line lengths than supported, more work will"
-                    " be sent to CPU, consider running with max-gpus set to 0."
-                )
-                var ctxs = self.create_ctxs[max_query_length, 4096]()
+        for i in range(0, len(MAX_TARGET_LENGTHS)):
+            alias max_target_length = MAX_TARGET_LENGTHS[i]
+            if first_peek.suggested_max_length <= max_target_length:
+                var ctxs = self.create_ctxs[
+                    max_query_length, max_target_length
+                ]()
                 self.search_files[
-                    W, max_query_length=max_query_length, max_target_length=4096
-                ](files, ctxs, writer)
-
-        choose_max_target_length(first_peek.suggested_max_length)
+                    W,
+                    max_query_length=max_query_length,
+                    max_target_length=max_target_length,
+                ](files, ctxs, writer, first_peek)
+                return
+        else:
+            Logger.warn(
+                "Longer line lengths than supported, more work will"
+                " be sent to CPU, consider running with max-gpus set to 0."
+            )
+            var ctxs = self.create_ctxs[max_query_length, 4096]()
+            self.search_files[
+                W, max_query_length=max_query_length, max_target_length=4096
+            ](files, ctxs, writer, first_peek)
 
     fn create_ctxs[
         max_query_length: UInt = 200, max_target_length: UInt = 1024
@@ -281,27 +266,21 @@ struct GpuParallelFastxSearchRunner[
             ]
         ],
         mut writer: BufferedWriter[W],
+        read peek: PeekFindings,
     ) raises:
         for i in range(0, len(paths)):
             var f = paths[i]  # force copy
             Logger.debug("Processing", f)
-            if i > 0:
-                # Can skip the first peek since we've already checked it.
-                var peek = peek_file[
-                    record_type = RecordType.FASTX, check_record_size=False
-                ](f)
-                if peek.is_binary:
-                    if self.settings.verbose:
-                        Logger.warn("Skipping binary file:", paths[i])
-                    continue
-                if peek.is_fastq:
-                    self.run_search_on_file[
-                        W, max_query_length, max_target_length, is_fastq=True
-                    ](f, ctxs, writer)
-                else:
-                    self.run_search_on_file[
-                        W, max_query_length, max_target_length, is_fastq=False
-                    ](f, ctxs, writer)
+            # Assume that since the user specified FASTX, there are no binary files
+            # Assume that all files are the same record type
+            if peek.is_fastq:
+                self.run_search_on_file[
+                    W, max_query_length, max_target_length, is_fastq=True
+                ](f, ctxs, writer)
+            else:
+                self.run_search_on_file[
+                    W, max_query_length, max_target_length, is_fastq=False
+                ](f, ctxs, writer)
 
     fn run_search_on_file[
         W: MovableWriter,
