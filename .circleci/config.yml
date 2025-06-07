@@ -7,6 +7,18 @@ jobs:
     steps:
       - checkout
       - run:
+          name: Check DCO Sign-offs
+          command: |
+            echo "🔍 Checking for Signed-off-by lines in commits..."
+            COMMITS=$(git log origin/main..HEAD --pretty=format:'%H')
+            for commit in $COMMITS; do
+              if ! git show -s --format=%B "$commit" | grep -q '^Signed-off-by:'; then
+                echo "❌ Commit $commit is missing a Signed-off-by line (git commit -s)."
+                exit 1
+              fi
+            done
+            echo "✅ All commits have Signed-off-by lines."
+      - run:
           name: Install pixi CLI
           command: |
             sudo apt-get update && sudo apt-get install -s libtinfo-dev
