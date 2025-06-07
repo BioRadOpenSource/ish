@@ -10,8 +10,9 @@
     <br/>
 
    ![Written in Mojo][language-shield]
-   [![Apache-2.0 License][license-shield]][license-url]
+   ![License Badge][license-shield]
    ![Build status][build-shield]
+   ![CodeQL][codeql]
    <br/>
    ![Contributors Welcome][contributors-shield]
 
@@ -151,6 +152,7 @@ rattler-build build -c https://repo.prefix.dev/modular-community -c https://cond
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
 [build-shield]: https://img.shields.io/circleci/build/github/BioRadOpenSource/ish 
 [language-shield]: https://img.shields.io/badge/language-mojo-orange
-[license-shield]: https://img.shields.io/github/license/BioRadOpenSource/ish?logo=github
-[license-url]: https://github.com/BioRadOpenSource/ish/blob/main/LICENSE
+[license-shield]: https://badgen.net/static/license/Apache-2.0/blue
 [contributors-shield]: https://img.shields.io/badge/contributors-welcome!-blue
+[codeql]: https://github.com/BioRadOpenSource/ish/workflows/CodeQL/badge.svg
+
