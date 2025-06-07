@@ -9,7 +9,7 @@ package:
 
 source:
   - git: https://github.com/BioRadOpenSource/ish.git
-    rev: 49b2a0099f5fbd418be67a5b3d895e39c2ef753d
+    rev: 884cde78989382dd5df96fea2cc1bfe7cba3b299
 
 build:
   number: 0
