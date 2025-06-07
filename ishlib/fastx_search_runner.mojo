@@ -21,19 +21,20 @@ struct FastxSearchRunner[M: Matcher]:
     fn run_search[
         W: MovableWriter
     ](mut self, mut writer: BufferedWriter[W]) raises:
-        # Simple thing first?
+        # Peek only the first file to determine fastq or not, assume not-binary
+        var peek = peek_file[record_type = RecordType.FASTX](
+            self.settings.files[0]
+        )
         for file in self.settings.files:
             var f = file[]  # force copy
-            var peek = peek_file[record_type = RecordType.FASTX](f)
-            if peek.is_binary:
-                if self.settings.verbose:
-                    Logger.warn("Skipping binary file:", file[])
-                continue
             Logger.debug("Processing", f)
-            self.run_search_on_file(f, writer)
+            if peek.is_fastq:
+                self.run_search_on_file[is_fastq=True](f, writer)
+            else:
+                self.run_search_on_file[is_fastq=False](f, writer)
 
     fn run_search_on_file[
-        W: MovableWriter
+        W: MovableWriter, *, is_fastq: Bool = False
     ](mut self, file: Path, mut writer: BufferedWriter[W]) raises:
         var reader = FastxReader[read_comment=False](
             BufferedReader(GZFile(String(file), "r"))
@@ -74,7 +75,8 @@ struct FastxSearchRunner[M: Matcher]:
                     writer.write_bytes(reader.seq.as_span())
 
                 # Handle FASTQ Case
-                if len(reader.qual.as_span()) > 0:
+                @parameter
+                if is_fastq:
                     writer.write("\n+\n")
                     writer.write_bytes(reader.qual.as_span())
                 writer.write("\n")

@@ -1,7 +1,6 @@
 from pathlib import Path
 from testing import assert_equal
 from tempfile import TemporaryDirectory
-from utils import StringSlice
 
 from ExtraMojo.io.buffered import BufferedWriter
 
@@ -166,7 +165,13 @@ ACTGACTGACGACGACGACTAATAGNNNNACTGANNNATCATCTAGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG
         var writer = BufferedWriter(open(output, "w"))
         do_search(setting[], writer^)
         var found = output.read_text()
-        assert_equal(found.upper(), expected.upper())
+        assert_equal(
+            found.upper(),
+            expected.upper(),
+            String("max_gpus {}, num_threads {}, algo {}").format(
+                setting[].max_gpus, setting[].threads, setting[].match_algo
+            ),
+        )
 
 
 def test_fasta_blosum62_search():
@@ -216,7 +221,13 @@ MAFSAEDVLKEYDRRRRMEALLLSLYYPNDRKLLDYKEWSPPRVQVECPKAPVEWNNPPSEKGLIVGHFSGIKYKGEKAQ
     for setting in settings:
         var writer = BufferedWriter(open(output, "w"))
         do_search(setting[], writer^)
-        assert_equal(output.read_text().upper(), expected.upper())
+        assert_equal(
+            output.read_text().upper(),
+            expected.upper(),
+            String("max_gpus {}, num_threads {}, algo {}").format(
+                setting[].max_gpus, setting[].threads, setting[].match_algo
+            ),
+        )
 
 
 def main():
