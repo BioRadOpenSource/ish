@@ -17,14 +17,14 @@ pkglib = "pixi run mojo package ./ishlib"
 testlib = "pixi run mojo test tests -I . --co && pixi run mojo test tests -I ."
 
 # Bench the gpu fun in ish using Bench
-build-bench-gpu = "pixi run mojo build -D ISH_LOG_LEVEL=timing --march native -I ./ishlib -o bench-gpu ./ish_bench_aligner_gpu_only.mojo"
+build-bench-gpu = "pixi run mojo build -D ISH_LOG_LEVEL=timing --march native -I . -o bench-gpu ./benchmarking/ish_bench_aligner_gpu_only.mojo"
 
 # Bench any algorithm using internal timings
-build-bench = "pixi run mojo build -D SIMD_MOD=1 --march native  -I ./ishlib -o ish-aligner ./ish_bench_aligner.mojo"
-build-bench-128 = "pixi run mojo build -D SIMD_MOD=4 --march native  -I ./ishlib -o ish-aligner-128 ./ish_bench_aligner.mojo"
-build-bench-256 = "pixi run mojo build -D SIMD_MOD=2 --march native  -I ./ishlib -o ish-aligner-256 ./ish_bench_aligner.mojo"
-build-bench-512 = "pixi run mojo build -D SIMD_MOD=1 --march native  -I ./ishlib -o ish-aligner-512 ./ish_bench_aligner.mojo"
-build-bench-gpu-all = "pixi run mojo build -D ISH_LOG_LEVEL=timing -D SIMD_MOD=1 --march native  -I ./ishlib -o ish-aligner-gpu ./ish_bench_aligner_gpu.mojo"
+build-bench = "pixi run mojo build -D SIMD_MOD=1 --march native  -I . -o ish-aligner ./benchmarking/ish_bench_aligner.mojo"
+build-bench-128 = "pixi run mojo build -D SIMD_MOD=4 --march native  -I . -o ish-aligner-128 ./benchmarking/ish_bench_aligner.mojo"
+build-bench-256 = "pixi run mojo build -D SIMD_MOD=2 --march native  -I . -o ish-aligner-256 ./benchmarking/ish_bench_aligner.mojo"
+build-bench-512 = "pixi run mojo build -D SIMD_MOD=1 --march native  -I . -o ish-aligner-512 ./benchmarking/ish_bench_aligner.mojo"
+build-bench-gpu-all = "pixi run mojo build -D ISH_LOG_LEVEL=timing -D SIMD_MOD=1 --march native  -I . -o ish-aligner-gpu ./benchmarking/ish_bench_aligner_gpu.mojo"
 
 [dependencies]
 max = "=25.3.0"
