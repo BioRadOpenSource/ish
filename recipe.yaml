@@ -14,10 +14,13 @@ source:
 build:
   number: 0
   script:
-    - mkdir -p ${{ PREFIX }}/lib/mojo
-    - mojo package -o ${{ PREFIX }}/lib/mojo/ishlib.mojopkg ./ishlib 
+    - mkdir -p ${{ PREFIX }}/share/mojo
+    # Needed for tests
+    - mojo package -o ${{ PREFIX }}/share/mojo/ishlib.mojopkg ./ishlib
     - mkdir -p ${{ PREFIX }}/bin
     - mojo build -D ISH_LOG_LEVEL=info --march native -o ${{ PREFIX }}/bin/ish main.mojo
+    # Need to remove these or install_name_tool tries and fails to update paths
+    - find ${{ PREFIX }} -type d -name .mojo_cache -exec rm -rf {} +
 
 requirements:
   host:
@@ -31,10 +34,10 @@ tests:
   - script:
       - if: unix
         then:
-          - mojo test -I ${{ PREFIX }}/lib/mojo/ishlib.mojopkg tests/test_global.mojo
-          - mojo test -I ${{ PREFIX }}/lib/mojo/ishlib.mojopkg tests/test_local_and_profile.mojo
-          - mojo test -I ${{ PREFIX }}/lib/mojo/ishlib.mojopkg tests/test_searcher.mojo
-          - mojo test -I ${{ PREFIX }}/lib/mojo/ishlib.mojopkg tests/test_semi_global.mojo
+          - mojo test -I ${{ PREFIX }}/share/mojo/ishlib.mojopkg tests/test_global.mojo
+          - mojo test -I ${{ PREFIX }}/share/mojo/ishlib.mojopkg tests/test_local_and_profile.mojo
+          - mojo test -I ${{ PREFIX }}/share/mojo/ishlib.mojopkg tests/test_searcher.mojo
+          - mojo test -I ${{ PREFIX }}/share/mojo/ishlib.mojopkg tests/test_semi_global.mojo
     requirements:
       run:
         - max =25.3
@@ -51,8 +54,8 @@ about:
   homepage: https://github.com/BioRadOpenSource/ish
   license: Apache-2.0
   license_file: LICENSE
-  summary:  Alignment-based filtering CLI tool 
-  repository: https://github.com/BioRadOpenSource/ish 
+  summary:  Alignment-based filtering CLI tool
+  repository: https://github.com/BioRadOpenSource/ish
 
 extra:
   maintainers:
