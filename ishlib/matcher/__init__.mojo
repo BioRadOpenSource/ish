@@ -1,9 +1,27 @@
 from collections import Optional
 from gpu.host import DeviceBuffer
 from memory import Span, UnsafePointer
+from sys.info import sizeof, simdwidthof
+from sys.param_env import env_get_string
 
 from ishlib.matcher.alignment.scoring_matrix import MatrixKind
 from ishlib.searcher_settings import SemiGlobalEndsFreeness
+
+
+fn simd_width_selector[dtype: DType]() -> Int:
+    """Select a SIMD width for a given type.
+
+    This will override the `simdwidthof` if the env var ISH_SIMD_TARGET=baseline
+    """
+    constrained[sizeof[Scalar[dtype]]() <= 16, "dytpe size too large."]()
+    alias target = env_get_string["ISH_SIMD_TARGET", "none"]().lower()
+    alias SSE_U8_SIZE = 16
+
+    @parameter
+    if target == "baseline":
+        return SSE_U8_SIZE // sizeof[Scalar[dtype]]()
+    else:
+        return simdwidthof[dtype]()
 
 
 @value

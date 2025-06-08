@@ -3,7 +3,7 @@ from gpu.host import DeviceContext
 from sys.info import simdwidthof
 
 from ishlib.gpu.kernels.semi_global import gpu_align_coarse
-from ishlib.matcher import Matcher, MatchResult
+from ishlib.matcher import Matcher, MatchResult, simd_width_selector
 from ishlib.matcher.alignment import create_reversed
 from ishlib.matcher.alignment.scoring_matrix import ScoringMatrix, MatrixKind
 from ishlib.matcher.alignment.semi_global_aln.striped import (
@@ -18,12 +18,9 @@ from ishlib.vendor.log import Logger
 
 @value
 struct StripedSemiGlobalMatcher(GpuMatcher):
-    alias SIMD_U8_WIDTH = simdwidthof[
-        UInt8
-    ]()  # // 4  # TODO: needs tuning on wider machines
-    alias SIMD_U16_WIDTH = simdwidthof[
-        UInt16
-    ]()  # // 4  # TODO: needs tuning on wider machines
+    alias SIMD_U8_WIDTH = simd_width_selector[DType.uint8]()
+    alias SIMD_U16_WIDTH = simd_width_selector[DType.uint16]()
+
     var pattern: List[UInt8]
     var rev_pattern: List[UInt8]
     var max_score: Int
