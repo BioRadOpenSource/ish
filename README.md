@@ -22,7 +22,7 @@
 
 `ish` is a CLI tool for searching for matches against records using different alignment methods.
 
-## Install
+## Build 
 
 1. Install [pixi](https://pixi.sh/latest/installation/)
 
@@ -31,14 +31,13 @@
 
 ### Pixi / Conda install
 
-> ⚠️ **Warning**
-> These can't be tested until this repo is public and the `recipe.yaml` has been contributed to `modular-community`.
-
 ```
-pixi install -c conda-forge -c https://repo.prefix.dev/modular-community -c https://conda.modular.com/max ish
+pixi global install -c conda-forge -c https://repo.prefix.dev/modular-community -c https://conda.modular.com/max ish
 # Or
 conda install -c conda-forge -c https://repo.prefix.dev/modular-community -c https://conda.modular.com/max ish
 ```
+
+For best performance it's recommended to build from source. 
 
 ## Usage
 
