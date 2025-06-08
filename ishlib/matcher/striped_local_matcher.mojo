@@ -5,7 +5,7 @@ from sys.info import (
 )
 
 from ishlib.vendor.log import Logger
-from ishlib.matcher import Matcher, MatchResult
+from ishlib.matcher import Matcher, MatchResult, simd_width_selector
 from ishlib.matcher.alignment import create_reversed
 from ishlib.matcher.alignment.scoring_matrix import ScoringMatrix, MatrixKind
 from ishlib.matcher.alignment.local_aln.striped import (
@@ -17,8 +17,8 @@ from ishlib.matcher.alignment.local_aln.striped import (
 
 @value
 struct StripedLocalMatcher[mut: Bool, //, origin: Origin[mut]](Matcher):
-    alias SIMD_U8_WIDTH = simdwidthof[UInt8]()
-    alias SIMD_U16_WIDTH = simdwidthof[UInt16]()
+    alias SIMD_U8_WIDTH = simd_width_selector[DType.uint8]()
+    alias SIMD_U16_WIDTH = simd_width_selector[DType.uint16]()
 
     var pattern: List[UInt8]
     var rev_pattern: List[UInt8]

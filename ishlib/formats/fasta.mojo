@@ -66,7 +66,6 @@ struct FastaRecord:
             # Find the first newline in the buffer
             var header_line_end = memchr(buffer, ord("\n"))
             if header_line_end == -1:
-                print(StringSlice(unsafe_from_utf8=buffer))
                 raise "No newline found for FASTA record header"
 
             var name = String()

@@ -12,6 +12,7 @@ version = "1.1.0"
 
 [tasks]
 build = "pixi run mojo build -D ISH_LOG_LEVEL=info --march native -o ish main.mojo"
+build_generic = "pixi run mojo build -D ISH_SIMD_TARGET=baseline -D ISH_LOG_LEVEL=info -o ish main.mojo"
 debug = "pixi run mojo build -D ISH_LOG_LEVEL=debug --debug-level line-tables --march native -o ish main.mojo"
 pkglib = "pixi run mojo package ./ishlib"
 testlib = "pixi run mojo test tests -I . --co && pixi run mojo test tests -I ."
