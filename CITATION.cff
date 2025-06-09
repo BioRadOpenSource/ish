@@ -5,8 +5,7 @@ authors:
   given-names: "Seth"
   orcid: "https://orcid.org/0009-0002-0915-9459"
 title: "ish"
-version: 1.1.0
-# DOI to be added when preprint is live
-# doi: 10.5281/zenodo.1234
-date-released: 2025-06-06
+version: 1.1.1
+doi: https://doi.org/10.1101/2025.06.04.657890
+date-released: 2025-06-09
 url: "https://github.com/BioRadOpenSource/ish"
