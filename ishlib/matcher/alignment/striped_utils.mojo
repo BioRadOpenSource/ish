@@ -1,4 +1,6 @@
 from memory import memset_zero
+from sys import llvm_intrinsic
+
 from ishlib.matcher.alignment import AlignedMemory
 
 
@@ -8,26 +10,34 @@ fn saturating_sub[
 ](lhs: SIMD[data, width], rhs: SIMD[data, width]) -> SIMD[data, width]:
     """Saturating SIMD subtraction.
 
-    https://stackoverflow.com/questions/33481295/saturating-subtract-add-for-unsigned-bytes
+    https://llvm.org/docs/LangRef.html#llvm-usub-sat-intrinsics
+    https://llvm.org/docs/LangRef.html#llvm-ssub-sat-intrinsics
     """
-    constrained[data.is_unsigned()]()
-    var resp = lhs - rhs
-    resp &= -(resp <= lhs).cast[data]()
-    return resp
+    constrained[data.is_integral()]()
+
+    @parameter
+    if data.is_unsigned():
+        return llvm_intrinsic["llvm.usub.sat", __type_of(lhs)](lhs, rhs)
+    else:
+        return llvm_intrinsic["llvm.ssub.sat", __type_of(lhs)](lhs, rhs)
 
 
 @always_inline
 fn saturating_add[
     data: DType, width: Int
 ](lhs: SIMD[data, width], rhs: SIMD[data, width]) -> SIMD[data, width]:
-    """Saturating SIMD subtraction.
+    """Saturating SIMD addition.
 
-    https://stackoverflow.com/questions/33481295/saturating-subtract-add-for-unsigned-bytes
+    https://llvm.org/docs/LangRef.html#llvm-uadd-sat-intrinsics
+    https://llvm.org/docs/LangRef.html#llvm-sadd-sat-intrinsics
     """
-    constrained[data.is_unsigned()]()
-    var resp = lhs + rhs
-    resp |= -(resp < lhs).cast[data]()
-    return resp
+    constrained[data.is_integral()]()
+
+    @parameter
+    if data.is_unsigned():
+        return llvm_intrinsic["llvm.uadd.sat", __type_of(lhs)](lhs, rhs)
+    else:
+        return llvm_intrinsic["llvm.sadd.sat", __type_of(lhs)](lhs, rhs)
 
 
 @value
