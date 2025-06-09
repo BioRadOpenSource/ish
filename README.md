@@ -132,6 +132,10 @@ This is a benchmarking tool based on `parasail_aligner`.
 > 
 > `ish-aligner` and all variations of it are for development purposes only.
 
+## Further Reading
+
+The associated paper can be found [here](https://www.biorxiv.org/content/10.1101/2025.06.04.657890v1).
+
 ## Future Work
 
 - Support multiple queries
