@@ -2,10 +2,14 @@ version: 2.1
 
 jobs:
   test:
-    docker:
-      - image: cimg/base:current
+    machine:
+      image: linux-cuda-12:default
+      resource_class: gpu.nvidia.medium
+    # docker:
+    #   - image: cimg/base:current
     steps:
       - checkout
+      - run: nvidia-smi
       - run:
           name: Check DCO Sign-offs
           command: |
