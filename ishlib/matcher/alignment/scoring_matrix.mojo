@@ -175,11 +175,11 @@ alias ACTGN0 = InlineArray[Int8, 25](
 
 @value
 @register_passable
-struct MatrixKind:
+struct MatrixKind(Sized, Stringable, Writable):
     var value: UInt8
     alias ASCII = Self(0)
     alias ACTGN = Self(1)
-    alias ACTGN0= Self(2)
+    alias ACTGN0 = Self(2)
     alias BLOSUM62 = Self(3)
 
     @staticmethod
@@ -411,7 +411,7 @@ struct ScoringMatrix:
         var score = 0
         var out = List[UInt8](capacity=len(seq))
         for value in seq:
-            var encoded = self.ascii_to_encoding[Int(value[])]
+            var encoded = self.ascii_to_encoding[Int(value)]
             score += Int(self.get(encoded, encoded))
             out.append(encoded)
         return (out, score)
@@ -427,7 +427,7 @@ struct ScoringMatrix:
     fn convert_ascii_to_encoding(read self, seq: Span[UInt8]) -> List[UInt8]:
         var out = List[UInt8](capacity=len(seq))
         for value in seq:
-            out.append(self.ascii_to_encoding[Int(value[])])
+            out.append(self.ascii_to_encoding[Int(value)])
         return out
 
     @always_inline
@@ -436,7 +436,7 @@ struct ScoringMatrix:
     ) -> List[UInt8]:
         var out = List[UInt8](capacity=len(seq))
         for value in seq:
-            out.append(self.ascii_to_encoding[Int(value[])])
+            out.append(self.ascii_to_encoding[Int(value)])
         return out
 
     @always_inline
@@ -447,22 +447,22 @@ struct ScoringMatrix:
     fn convert_ascii_to_encoding(
         read self, owned seq: List[UInt8]
     ) -> List[UInt8]:
-        for value in seq:
-            value[] = self.ascii_to_encoding[Int(value[])]
+        for ref value in seq:
+            value = self.ascii_to_encoding[Int(value)]
         return seq
 
     @always_inline
     fn convert_encoding_to_ascii(read self, mut seq: List[UInt8]):
-        for value in seq:
-            value[] = self.encoding_to_ascii[Int(value[])]
+        for ref value in seq:
+            value = self.encoding_to_ascii[Int(value)]
 
     @always_inline
     fn convert_encoding_to_ascii(
         read self, read seq: Span[UInt8]
     ) -> List[UInt8]:
         var out = List[UInt8](capacity=len(seq))
-        for value in seq:
-            out.append(self.encoding_to_ascii[Int(value[])])
+        for ref value in seq:
+            out.append(self.encoding_to_ascii[Int(value)])
         return out
 
     @always_inline
