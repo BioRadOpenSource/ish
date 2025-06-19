@@ -1,4 +1,3 @@
-from ExtraMojo.io import MovableWriter
 from ExtraMojo.io.buffered import BufferedWriter
 
 from time.time import perf_counter
@@ -63,14 +62,14 @@ struct ParallelFastxSearchRunner[M: Matcher]:
     var matcher: M
 
     fn run_search[
-        W: MovableWriter
+        W: Movable & Writer
     ](mut self, mut writer: BufferedWriter[W]) raises:
         # Peek only the first file to determine fastq or not, assume not-binary
         var peek = peek_file[record_type = RecordType.FASTX](
             self.settings.files[0]
         )
         for file in self.settings.files:
-            var f = file[]  # force copy
+            var f = file  # force copy
             Logger.debug("Processing", f)
             if peek.is_fastq:
                 self.run_search_on_file[is_fastq=True](f, writer)
@@ -78,7 +77,7 @@ struct ParallelFastxSearchRunner[M: Matcher]:
                 self.run_search_on_file[is_fastq=False](f, writer)
 
     fn run_search_on_file[
-        W: MovableWriter, *, is_fastq: Bool = False
+        W: Movable & Writer, *, is_fastq: Bool = False
     ](mut self, file: Path, mut writer: BufferedWriter[W]) raises:
         # TODO: pass an enocoder to the FastaReader
         var reader = FastxReader[read_comment=False](
@@ -199,7 +198,7 @@ struct GpuParallelFastxSearchRunner[
         self.matcher = matcher
 
     fn run_search[
-        W: MovableWriter
+        W: Movable & Writer
     ](mut self, mut writer: BufferedWriter[W]) raises:
         # Peek the first file to get the suggested size, then use that for all of them.
         # Assume non-binary
@@ -255,7 +254,7 @@ struct GpuParallelFastxSearchRunner[
         return ctxs
 
     fn search_files[
-        W: MovableWriter,
+        W: Movable & Writer,
         max_query_length: UInt = 200,
         max_target_length: UInt = 1024,
     ](
@@ -284,7 +283,7 @@ struct GpuParallelFastxSearchRunner[
                 ](f, ctxs, writer)
 
     fn run_search_on_file[
-        W: MovableWriter,
+        W: Movable & Writer,
         max_query_length: UInt = 200,
         max_target_length: UInt = 1024,
         *,

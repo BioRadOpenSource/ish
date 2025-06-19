@@ -115,7 +115,7 @@ trait GpuMatcher(Matcher):
         ...
 
 
-trait Searchable(Copyable, Movable, CollectionElement):
+trait Searchable(Copyable, Copyable, Movable, Movable):
     fn buffer_to_search(ref self) -> Span[UInt8, __origin_of(self)]:
         ...
 

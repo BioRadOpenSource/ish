@@ -1,4 +1,3 @@
-from ExtraMojo.io import MovableWriter
 from ExtraMojo.io.buffered import BufferedWriter
 
 from ishlib import RED, PURPLE, GREEN, ByteSpanWriter, RecordType
@@ -19,21 +18,21 @@ struct LineSearchRunner[M: Matcher]:
     var matcher: M
 
     fn run_search[
-        W: MovableWriter
+        W: Movable & Writer
     ](mut self, mut writer: BufferedWriter[W]) raises:
         # Simple thing first?
         for file in self.settings.files:
-            var f = file[]  # force copy
+            var f = file  # force copy
             var peek = peek_file[record_type = RecordType.LINE](f)
             if peek.is_binary:
                 if self.settings.verbose:
-                    Logger.warn("Skipping binary file:", file[])
+                    Logger.warn("Skipping binary file:", file)
                 continue
             Logger.debug("Processing", f)
             self.run_search_on_file(f, writer)
 
     fn run_search_on_file[
-        W: MovableWriter
+        W: Movable & Writer
     ](mut self, path: Path, mut writer: BufferedWriter[W]) raises:
         var file = String(path)
         var reader = BufferedReader(GZFile(file, "r"))

@@ -432,7 +432,7 @@ fn test_compare_vs_c_ssw_align() raises:
     )
     var rev_pattern = List[UInt8](capacity=len(read_seq))
     for char in reversed(read_seq):
-        rev_pattern.append(char[])
+        rev_pattern.append(char)
     var rev_profile = Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
         Span(rev_pattern), matrix, ScoreSize.Adaptive
     )
@@ -483,7 +483,7 @@ fn test_compare_vs_c_ssw_align2() raises:
     )
     var rev_pattern = List[UInt8](capacity=len(read_seq))
     for char in reversed(read_seq):
-        rev_pattern.append(char[])
+        rev_pattern.append(char)
     var rev_profile = Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
         Span(rev_pattern), matrix, ScoreSize.Adaptive
     )
@@ -533,7 +533,7 @@ fn test_compare_vs_c_ssw_align3() raises:
     )
     var rev_pattern = List[UInt8](capacity=len(read_seq))
     for char in reversed(read_seq):
-        rev_pattern.append(char[])
+        rev_pattern.append(char)
     var rev_profile = Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
         Span(rev_pattern), matrix, ScoreSize.Adaptive
     )

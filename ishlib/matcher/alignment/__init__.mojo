@@ -43,7 +43,9 @@ fn create_reversed(input: Span[UInt8]) -> List[UInt8]:
     return ret
 
 
-struct AlignedMemory[dtype: DType, width: Int, alignment: Int]:
+struct AlignedMemory[dtype: DType, width: Int, alignment: Int](
+    Copyable, Movable, Sized
+):
     var ptr: UnsafePointer[SIMD[dtype, width], alignment=alignment]
     var length: Int
 

@@ -66,7 +66,7 @@ SFRKIYTDLGWKFTPL
 """
 
 
-@value
+@fieldwise_init
 struct TestCase(Copyable, Movable):
     var in_data: String
     var pattern: List[UInt8]
@@ -132,7 +132,7 @@ def test_cases():
     for c in TestCase.cases():
         var dir = TemporaryDirectory()
         var input = Path(dir.name) / "input.txt"
-        input.write_text(c[].in_data)
+        input.write_text(c.in_data)
         var output = Path(dir.name) / "output.txt"
 
         var settings = List[SearcherSettings]()
@@ -149,49 +149,49 @@ def test_cases():
                         settings.append(
                             SearcherSettings(
                                 files=List[Path](input),  # Fill
-                                pattern=c[].pattern,  # Fill
-                                matrix_kind=c[].matrix_kind,
+                                pattern=c.pattern,  # Fill
+                                matrix_kind=c.matrix_kind,
                                 score_threshold=0.8,
                                 output_file=output,  # Fill
                                 gap_open_penalty=3,
                                 gap_extension_penalty=1,
-                                match_algo=String(algo[]),
-                                record_type=c[].record_type,
-                                threads=num_threads[],
+                                match_algo=String(algo),
+                                record_type=c.record_type,
+                                threads=num_threads,
                                 batch_size=268435456,  # default
-                                max_gpus=max_gpus[],
+                                max_gpus=max_gpus,
                                 tty_info=TTYInfoResult(False, 0, 0),
-                                sg_ends_free=sg[],
+                                sg_ends_free=sg,
                                 verbose=False,
                             )
                         )
 
         for setting in settings:
             var info = String("{}, {}, {}, {}, {}, {}").format(
-                String(c[].matrix_kind),
-                String(c[].record_type),
-                String(setting[].match_algo),
-                String(setting[].threads),
-                String(setting[].max_gpus),
-                setting[].sg_ends_free.__str__(),
+                String(c.matrix_kind),
+                String(c.record_type),
+                String(setting.match_algo),
+                String(setting.threads),
+                String(setting.max_gpus),
+                setting.sg_ends_free.__str__(),
             )
             # print("Doing test for:", info)
             var writer = BufferedWriter(open(output, "w"))
-            do_search(setting[], writer^)
+            do_search(setting, writer^)
             var out = output.read_text()
-            if c[].record_type == "fastx":
-                assert_equal(out.upper(), c[].expected.upper(), info)
+            if c.record_type == "fastx":
+                assert_equal(out.upper(), c.expected.upper(), info)
             else:
                 assert_equal(
                     out,
-                    c[].expected,
+                    c.expected,
                     String("{}, {}, {}, {}, {}, {}").format(
-                        String(c[].matrix_kind),
-                        String(c[].record_type),
-                        String(setting[].match_algo),
-                        String(setting[].threads),
-                        String(setting[].max_gpus),
-                        setting[].sg_ends_free.__str__(),
+                        String(c.matrix_kind),
+                        String(c.record_type),
+                        String(setting.match_algo),
+                        String(setting.threads),
+                        String(setting.max_gpus),
+                        setting.sg_ends_free.__str__(),
                     ),
                 )
 
