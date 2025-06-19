@@ -275,7 +275,7 @@ fn expand_files_to_search(files: List[String]) raises -> List[Path]:
     var out = List[Path]()
 
     for p in files:
-        var path = Path(p[])
+        var path = Path(p)
         if path.is_dir():
             out.extend(walk_dir[ignore_dot_files=True](path))
         else:

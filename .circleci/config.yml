@@ -31,6 +31,7 @@ jobs:
           name: Install Mojo and deps
           command: |
             export PATH="$PATH:/home/circleci/.pixi/bin"
+            pixi global install rattler-build
             pixi install --locked
       - run:
           name: Run tests
