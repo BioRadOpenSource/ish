@@ -1,6 +1,5 @@
 from time.time import perf_counter
 
-from ExtraMojo.io import MovableWriter
 from ExtraMojo.io.buffered import BufferedWriter
 
 from ishlib.gpu import has_gpu
@@ -23,7 +22,7 @@ from ishlib.vendor.log import Logger
 
 
 fn do_search[
-    W: MovableWriter
+    W: Movable & Writer
 ](settings: SearcherSettings, owned writer: BufferedWriter[W]) raises:
     Logger.info(
         # fmt: off

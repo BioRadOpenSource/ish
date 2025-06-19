@@ -1,6 +1,5 @@
 import sys
 from sys.param_env import env_get_string
-from utils import write_args
 
 
 @value
@@ -58,7 +57,7 @@ alias RESET = "\x1b[0m"
 
 
 @value
-struct Logger[colorize: Bool = True](CollectionElement):
+struct Logger[colorize: Bool = True](Copyable, Movable):
     alias LEVEL: LogLevel = LogLevel.from_str(
         env_get_string["ISH_LOG_LEVEL", "nolog"]()
     )
@@ -86,7 +85,10 @@ struct Logger[colorize: Bool = True](CollectionElement):
         stderr.write("[")
         LogLevel.Info.write_to(stderr)
         stderr.write("] ")
-        write_args(stderr, values, sep=sep, end=end)
+
+        @parameter
+        for i in range(0, values.__len__()):
+            print(values[i], sep=sep, end=end, file=stderr)
 
     @always_inline
     @staticmethod
@@ -110,7 +112,10 @@ struct Logger[colorize: Bool = True](CollectionElement):
         stderr.write("[")
         LogLevel.Timing.write_to(stderr)
         stderr.write("] ")
-        write_args(stderr, values, sep=sep, end=end)
+
+        @parameter
+        for i in range(0, values.__len__()):
+            print(values[i], sep=sep, end=end, file=stderr)
 
         @parameter
         if colorize:
@@ -133,7 +138,10 @@ struct Logger[colorize: Bool = True](CollectionElement):
         stderr.write("[")
         LogLevel.Debug.write_to(stderr)
         stderr.write("] ")
-        write_args(stderr, values, sep=sep, end=end)
+
+        @parameter
+        for i in range(0, values.__len__()):
+            print(values[i], sep=sep, end=end, file=stderr)
 
     @always_inline
     @staticmethod
@@ -156,7 +164,10 @@ struct Logger[colorize: Bool = True](CollectionElement):
         stderr.write("[")
         LogLevel.Error.write_to(stderr)
         stderr.write("] ")
-        write_args(stderr, values, sep=sep, end=end)
+
+        @parameter
+        for i in range(0, values.__len__()):
+            print(values[i], sep=sep, end=end, file=stderr)
 
         @parameter
         if colorize:
@@ -183,7 +194,10 @@ struct Logger[colorize: Bool = True](CollectionElement):
         stderr.write("[")
         LogLevel.Warn.write_to(stderr)
         stderr.write("] ")
-        write_args(stderr, values, sep=sep, end=end)
+
+        @parameter
+        for i in range(0, values.__len__()):
+            print(values[i], sep=sep, end=end, file=stderr)
 
         @parameter
         if colorize:

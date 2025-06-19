@@ -63,8 +63,8 @@ fn parallel_starts_ends[
 
     # Create the buffers
     var host_buffer_create_start = perf_counter()
-    for ctx in ctxs:
-        ctx[].set_block_info(
+    for ref ctx in ctxs:
+        ctx.set_block_info(
             targets_per_device,
             len(matcher.encoded_pattern()),
             matcher.matrix_len(),
@@ -74,10 +74,10 @@ fn parallel_starts_ends[
             settings.sg_ends_free,
             max_target_length=max_target_length,
         )
-        ctx[].host_create_input_buffers()
+        ctx.host_create_input_buffers()
 
     for ctx in ctxs:
-        ctx[].synchronize()
+        ctx.synchronize()
     var host_buffers_created = perf_counter()
     Logger.timing(
         "Host buffer creation time:",
@@ -108,16 +108,16 @@ fn parallel_starts_ends[
     Logger.timing("Buffer fill time:", buffers_filled - buffer_fill_start)
 
     # Launch Kernel
-    for ctx in ctxs:
-        ctx[].device_create_input_buffers()
-        ctx[].copy_inputs_to_device()
-        ctx[].device_create_output_buffers()
+    for ref ctx in ctxs:
+        ctx.device_create_input_buffers()
+        ctx.copy_inputs_to_device()
+        ctx.device_create_output_buffers()
         Logger.debug("Created device output buffers")
-        ctx[].launch_kernel()
+        ctx.launch_kernel()
         Logger.debug("Launched kernel")
-        ctx[].host_create_output_buffers()
+        ctx.host_create_output_buffers()
         Logger.debug("Created host output buffers")
-        ctx[].copy_outputs_to_host()
+        ctx.copy_outputs_to_host()
 
     # Process the long seqs
     var cpu_start = perf_counter()
@@ -127,7 +127,7 @@ fn parallel_starts_ends[
 
     # Get outputs
     for ctx in ctxs:
-        ctx[].synchronize()
+        ctx.synchronize()
         # ctx[].copy_outputs_to_host()
     var gpu_done = perf_counter()
     Logger.timing("GPU processing time (with cpu):", gpu_done - buffers_filled)
@@ -141,14 +141,14 @@ fn parallel_starts_ends[
     total_items = 0
     for ctx in ctxs:
         var end = min(
-            total_items + ctx[].block_info.value().num_targets, len(seqs)
+            total_items + ctx.block_info.value().num_targets, len(seqs)
         )
         var starts_start = perf_counter()
         cpu_parallel_starts[where_computed = WhereComputed.Gpu](
             matcher,
             settings,
-            ctx[].host_scores.value().as_span().get_immutable(),
-            ctx[].host_target_ends.value().as_span().get_immutable(),
+            ctx.host_scores.value().as_span().get_immutable(),
+            ctx.host_target_ends.value().as_span().get_immutable(),
             seqs[total_items:end],
             outputs,
             total_items,

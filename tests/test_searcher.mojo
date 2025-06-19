@@ -87,13 +87,13 @@ def test_line_ascii_search():
                             output_file=output,  # Fill
                             gap_open_penalty=3,
                             gap_extension_penalty=1,
-                            match_algo=String(algo[]),
+                            match_algo=String(algo),
                             record_type="line",
-                            threads=num_threads[],
+                            threads=num_threads,
                             batch_size=268435456,  # default
-                            max_gpus=max_gpus[],
+                            max_gpus=max_gpus,
                             tty_info=TTYInfoResult(False, 0, 0),
-                            sg_ends_free=sg[],
+                            sg_ends_free=sg,
                             verbose=False,
                         )
                     )
@@ -105,15 +105,15 @@ And this is just a very long line that goes on for longer than any of the other 
 
     for setting in settings:
         var writer = BufferedWriter(open(output, "w"))
-        do_search(setting[], writer^)
+        do_search(setting, writer^)
         assert_equal(
             output.read_text(),
             expected,
             String("{}, {}, {}, {}").format(
-                String(setting[].match_algo),
-                String(setting[].threads),
-                String(setting[].max_gpus),
-                setting[].sg_ends_free.__str__(),
+                String(setting.match_algo),
+                String(setting.threads),
+                String(setting.max_gpus),
+                setting.sg_ends_free.__str__(),
             ),
         )
 
@@ -146,13 +146,13 @@ def test_fasta_actgn_search():
                             output_file=output,  # Fill
                             gap_open_penalty=3,
                             gap_extension_penalty=1,
-                            match_algo=String(algo[]),
+                            match_algo=String(algo),
                             record_type="fastx",
-                            threads=num_threads[],
+                            threads=num_threads,
                             batch_size=268435456,  # default
-                            max_gpus=max_gpus[],
+                            max_gpus=max_gpus,
                             tty_info=TTYInfoResult(False, 0, 0),
-                            sg_ends_free=sg[],
+                            sg_ends_free=sg,
                             verbose=False,
                         )
                     )
@@ -163,13 +163,13 @@ ACTGACTGACGACGACGACTAATAGNNNNACTGANNNATCATCTAGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG
 
     for setting in settings:
         var writer = BufferedWriter(open(output, "w"))
-        do_search(setting[], writer^)
+        do_search(setting, writer^)
         var found = output.read_text()
         assert_equal(
             found.upper(),
             expected.upper(),
             String("max_gpus {}, num_threads {}, algo {}").format(
-                setting[].max_gpus, setting[].threads, setting[].match_algo
+                setting.max_gpus, setting.threads, setting.match_algo
             ),
         )
 
@@ -203,13 +203,13 @@ def test_fasta_blosum62_search():
                             output_file=output,  # Fill
                             gap_open_penalty=3,
                             gap_extension_penalty=1,
-                            match_algo=String(algo[]),
+                            match_algo=String(algo),
                             record_type="fastx",
-                            threads=num_threads[],
+                            threads=num_threads,
                             batch_size=268435456,  # default
-                            max_gpus=max_gpus[],
+                            max_gpus=max_gpus,
                             tty_info=TTYInfoResult(False, 0, 0),
-                            sg_ends_free=sg[],
+                            sg_ends_free=sg,
                             verbose=False,
                         )
                     )
@@ -220,12 +220,12 @@ MAFSAEDVLKEYDRRRRMEALLLSLYYPNDRKLLDYKEWSPPRVQVECPKAPVEWNNPPSEKGLIVGHFSGIKYKGEKAQ
 
     for setting in settings:
         var writer = BufferedWriter(open(output, "w"))
-        do_search(setting[], writer^)
+        do_search(setting, writer^)
         assert_equal(
             output.read_text().upper(),
             expected.upper(),
             String("max_gpus {}, num_threads {}, algo {}").format(
-                setting[].max_gpus, setting[].threads, setting[].match_algo
+                setting.max_gpus, setting.threads, setting.match_algo
             ),
         )
 
