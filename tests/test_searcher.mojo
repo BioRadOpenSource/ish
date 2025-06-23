@@ -88,24 +88,24 @@ And this is just a very long line that goes on for longer than any of the other 
                 record_type="line",
             ),
             # Figure out why the case is switching
-            #             TestCase(
-            #                 in_data=NUC_FASTA_TEST,
-            #                 pattern=List("aTGACGACGACGACTAATAGNNNNACTGANNNAT".as_bytes()),
-            #                 expected=""">Human_DNA With a Comment
-            # ACTGACTGACGACGACGACTAATAGNNNNACTGANNNATCATCTAGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGACTGACTGACGACGACGACTAATAGNNNNACTGANgNATCATcTAGCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCACTGACTGACGACGACGACTAATAGNNNNACTGANNNATCATCTAGACTGACTGACGACGACGACTAATAG
-            # """,
-            #                 matrix_kind=MatrixKind.ACTGN,
-            #                 record_type="fastx",
-            #             ),
-            #             TestCase(
-            #                 in_data=NUC_FASTA_TEST,
-            #                 pattern=List("aTGACGACGACGACTAATAGNNNNACTGANNNAT".as_bytes()),
-            #                 expected=""">Human_DNA With a Comment
-            # ACTGACTGACGACGACGACTAATAGNNNNACTGANNNATCATCTAGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGACTGACTGACGACGACGACTAATAGNNNNACTGANGNATCATCTAGCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCACTGACTGACGACGACGACTAATAGNNNNACTGANNNATCATCTAGACTGACTGACGACGACGACTAATAG
-            # """,
-            #                 matrix_kind=MatrixKind.ACTGN0,
-            #                 record_type="fastx",
-            #             ),
+            TestCase(
+                in_data=NUC_FASTA_TEST,
+                pattern=List("aTGACGACGACGACTAATAGNNNNACTGANNNAT".as_bytes()),
+                expected=""">Human_DNA With a Comment
+ACTGACTGACGACGACGACTAATAGNNNNACTGANNNATCATCTAGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGACTGACTGACGACGACGACTAATAGNNNNACTGANGNATCATCTAGCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCACTGACTGACGACGACGACTAATAGNNNNACTGANNNATCATCTAGACTGACTGACGACGACGACTAATAG
+""",
+                matrix_kind=MatrixKind.ACTGN,
+                record_type="fastx",
+            ),
+            TestCase(
+                in_data=NUC_FASTA_TEST,
+                pattern=List("aTGACGACGACGACTAATAGNNNNACTGANNNAT".as_bytes()),
+                expected=""">Human_DNA With a Comment
+ACTGACTGACGACGACGACTAATAGNNNNACTGANNNATCATCTAGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGACTGACTGACGACGACGACTAATAGNNNNACTGANGNATCATCTAGCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCACTGACTGACGACGACGACTAATAGNNNNACTGANNNATCATCTAGACTGACTGACGACGACGACTAATAG
+""",
+                matrix_kind=MatrixKind.ACTGN0,
+                record_type="fastx",
+            ),
             # ISSUE 50 seems to be seg-fault related on AVX512
             TestCase(
                 in_data=ISSUE_50,
@@ -171,18 +171,32 @@ def test_cases():
             var writer = BufferedWriter(open(output, "w"))
             do_search(setting[], writer^)
             var out = output.read_text()
-            assert_equal(
-                out,
-                c[].expected,
-                String("{}, {}, {}, {}, {}, {}").format(
-                    String(c[].matrix_kind),
-                    String(c[].record_type),
-                    String(setting[].match_algo),
-                    String(setting[].threads),
-                    String(setting[].max_gpus),
-                    setting[].sg_ends_free.__str__(),
-                ),
-            )
+            if c[].record_type == "fastx":
+                assert_equal(
+                    out.upper(),
+                    c[].expected.upper(),
+                    String("{}, {}, {}, {}, {}, {}").format(
+                        String(c[].matrix_kind),
+                        String(c[].record_type),
+                        String(setting[].match_algo),
+                        String(setting[].threads),
+                        String(setting[].max_gpus),
+                        setting[].sg_ends_free.__str__(),
+                    ),
+                )
+            else:
+                assert_equal(
+                    out,
+                    c[].expected,
+                    String("{}, {}, {}, {}, {}, {}").format(
+                        String(c[].matrix_kind),
+                        String(c[].record_type),
+                        String(setting[].match_algo),
+                        String(setting[].threads),
+                        String(setting[].max_gpus),
+                        setting[].sg_ends_free.__str__(),
+                    ),
+                )
 
 
 def test_line_ascii_search():

@@ -3,7 +3,8 @@ from ExtraMojo.io.buffered import BufferedWriter
 
 from time.time import perf_counter
 
-from ishlib import RED, PURPLE, GREEN
+
+from ishlib import RED, PURPLE, GREEN, RESET
 from ishlib.formats.fastx import ByteFastxRecord
 from ishlib.formats.fasta import (
     FastaReader,
