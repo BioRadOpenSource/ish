@@ -54,6 +54,9 @@ struct FastxSearchRunner[M: Matcher]:
 
             var m = self.matcher.first_match(seq, self.settings.pattern)
             if m:
+                # Convert back to ascii - needed for uniformity of casing changes
+                for i in range(0, len(seq)):
+                    seq[i] = self.matcher.convert_encoding_to_ascii(seq[i])
                 writer.write(">")
                 writer.write_bytes(reader.name.as_span())
                 writer.write("\n")
@@ -61,18 +64,16 @@ struct FastxSearchRunner[M: Matcher]:
                     self.settings.tty_info.is_a_tty
                     and self.settings.is_output_stdout()
                 ):
-                    writer.write_bytes(
-                        reader.seq.as_span()[0 : m.value().start]
-                    )
+                    writer.write_bytes(Span(seq)[0 : m.value().start])
                     writer.write(RED)
                     writer.write_bytes(
-                        reader.seq.as_span()[m.value().start : m.value().end]
+                        Span(seq)[m.value().start : m.value().end]
                     )
                     writer.write()
                     writer.write(RESET)
-                    writer.write_bytes(reader.seq.as_span()[m.value().end :])
+                    writer.write_bytes(Span(seq)[m.value().end :])
                 else:
-                    writer.write_bytes(reader.seq.as_span())
+                    writer.write_bytes(seq)
 
                 # Handle FASTQ Case
                 @parameter
