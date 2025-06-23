@@ -39,6 +39,11 @@ ACAGACAGACGACGACGACAAAAAGNNNNACAGANNNAACAACAAG
 GATACAGATACAGATACAGATACA
 """
 
+alias ISSUE_50 = """
+>test1
+AGCTACGACGACT
+"""
+
 alias AA_FASTA_TEST = """
 >sp|Q6GZX4|001R_FRG3G Putative transcription factor 001R OS=Frog virus 3 (isolate Goorha) GN=FV3-001R PE=4 SV=1 Variant 1
 MMMMMMMMMMMMMMMMMMEALLLSLYYPNDRKLLDYKEWSPPRVQVECPKAPVEWNNPPS
@@ -59,6 +64,125 @@ AKIKAYNLTVEGVEGFVRYSRVTKQHVAAFLKELRHSKQYENVNLIHYILTDKRVDIQHL
 EKDLVKDFKALVESAHRMRQGHMINVKYILYQLLKKHGHGPDGPDILTVKTGSKGVLYDD
 SFRKIYTDLGWKFTPL
 """
+
+
+@value
+struct TestCase(Copyable, Movable):
+    var in_data: String
+    var pattern: List[UInt8]
+    var expected: String
+    var matrix_kind: MatrixKind
+    var record_type: String
+
+    @staticmethod
+    fn cases() -> List[Self]:
+        return List(
+            TestCase(
+                in_data=ASCII_TEXT,
+                pattern=List("needle".as_bytes()),
+                expected="""The needle is hidden in here.
+I'm not sure what the needle is.
+And this is just a very long line that goes on for longer than any of the other lines to make sure needle things are working okay on that front as well when the lines get really long.
+""",
+                matrix_kind=MatrixKind.ASCII,
+                record_type="line",
+            ),
+            # Figure out why the case is switching
+            #             TestCase(
+            #                 in_data=NUC_FASTA_TEST,
+            #                 pattern=List("aTGACGACGACGACTAATAGNNNNACTGANNNAT".as_bytes()),
+            #                 expected=""">Human_DNA With a Comment
+            # ACTGACTGACGACGACGACTAATAGNNNNACTGANNNATCATCTAGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGACTGACTGACGACGACGACTAATAGNNNNACTGANgNATCATcTAGCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCACTGACTGACGACGACGACTAATAGNNNNACTGANNNATCATCTAGACTGACTGACGACGACGACTAATAG
+            # """,
+            #                 matrix_kind=MatrixKind.ACTGN,
+            #                 record_type="fastx",
+            #             ),
+            #             TestCase(
+            #                 in_data=NUC_FASTA_TEST,
+            #                 pattern=List("aTGACGACGACGACTAATAGNNNNACTGANNNAT".as_bytes()),
+            #                 expected=""">Human_DNA With a Comment
+            # ACTGACTGACGACGACGACTAATAGNNNNACTGANNNATCATCTAGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGACTGACTGACGACGACGACTAATAGNNNNACTGANGNATCATCTAGCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCACTGACTGACGACGACGACTAATAGNNNNACTGANNNATCATCTAGACTGACTGACGACGACGACTAATAG
+            # """,
+            #                 matrix_kind=MatrixKind.ACTGN0,
+            #                 record_type="fastx",
+            #             ),
+            # ISSUE 50 seems to be seg-fault related on AVX512
+            TestCase(
+                in_data=ISSUE_50,
+                pattern=List("AGCATCG".as_bytes()),
+                expected="""""",
+                matrix_kind=MatrixKind.ACTGN,
+                record_type="fastx",
+            ),
+            TestCase(
+                in_data=AA_FASTA_TEST,
+                pattern=List(
+                    "MAFSAEDVLKEYDRRRRMEALLLSLYYPNDRKLLDYKEWSPPRVQVECPKAPVEWNNPPS"
+                    .as_bytes()
+                ),
+                expected=""">sp|Q6GZX4|001R_FRG3G Putative transcription factor 001R OS=Frog virus 3 (isolate Goorha) GN=FV3-001R PE=4 SV=1 Variant 2
+MAFSAEDVLKEYDRRRRMEALLLSLYYPNDRKLLDYKEWSPPRVQVECPKAPVEWNNPPSEKGLIVGHFSGIKYKGEKAQASEVDVNKMCCWVSKFKDAMRRYQGIQTCKIPGKVLSDLDAKIKAYNLTVEGVEGFVRYSRVTKQHVAAFLKELRHSKQYENVNLIHYILTDKRVDIQHLEKDLVKDFKALVESAHRMRQGHMINVKYILYQLLKKHGHGPDGPDILTVKTGSKGVLYDDSFRKIYTDLGWKFTPL
+""",
+                matrix_kind=MatrixKind.BLOSUM62,
+                record_type="fastx",
+            ),
+        )
+
+
+def test_cases():
+    for c in TestCase.cases():
+        var dir = TemporaryDirectory()
+        var input = Path(dir.name) / "input.txt"
+        input.write_text(c[].in_data)
+        var output = Path(dir.name) / "output.txt"
+
+        var settings = List[SearcherSettings]()
+        for algo in List(
+            # "naive_exact",
+            String("striped-local"),
+            String("striped-semi-global"),
+            # "basic-local",
+            # "basic-semi-global",
+        ):
+            for num_threads in List(0, 1, 2):
+                for max_gpus in List(0, 1, 2):
+                    for sg in List(SGEF.TTTT, SGEF.FFTT):
+                        settings.append(
+                            SearcherSettings(
+                                files=List[Path](input),  # Fill
+                                pattern=c[].pattern,  # Fill
+                                matrix_kind=c[].matrix_kind,
+                                score_threshold=0.8,
+                                output_file=output,  # Fill
+                                gap_open_penalty=3,
+                                gap_extension_penalty=1,
+                                match_algo=String(algo[]),
+                                record_type=c[].record_type,
+                                threads=num_threads[],
+                                batch_size=268435456,  # default
+                                max_gpus=max_gpus[],
+                                tty_info=TTYInfoResult(False, 0, 0),
+                                sg_ends_free=sg[],
+                                verbose=False,
+                            )
+                        )
+
+        for setting in settings:
+            var writer = BufferedWriter(open(output, "w"))
+            do_search(setting[], writer^)
+            var out = output.read_text()
+            assert_equal(
+                out,
+                c[].expected,
+                String("{}, {}, {}, {}, {}, {}").format(
+                    String(c[].matrix_kind),
+                    String(c[].record_type),
+                    String(setting[].match_algo),
+                    String(setting[].threads),
+                    String(setting[].max_gpus),
+                    setting[].sg_ends_free.__str__(),
+                ),
+            )
 
 
 def test_line_ascii_search():
@@ -174,6 +298,62 @@ ACTGACTGACGACGACGACTAATAGNNNNACTGANNNATCATCTAGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG
         )
 
 
+def test_fasta_actgn0_search():
+    var dir = TemporaryDirectory()
+    var input = Path(dir.name) / "input.txt"
+    input.write_text(NUC_FASTA_TEST)
+    var output = Path(dir.name) / "output.txt"
+
+    var settings = List[SearcherSettings]()
+    for algo in List(
+        # "naive_exact",
+        String("striped-local"),
+        String("striped-semi-global"),
+        # "basic-local",
+        # "basic-semi-global",
+    ):
+        for num_threads in List(0, 1, 2):
+            for max_gpus in List(0, 1, 2):
+                for sg in List(SGEF.TTTT, SGEF.FFTT):
+                    settings.append(
+                        SearcherSettings(
+                            files=List[Path](input),  # Fill
+                            pattern=List(
+                                "TGACGACGACGACTAATAGNNNNACTGANNNAT".as_bytes()
+                            ),  # Fill
+                            matrix_kind=MatrixKind.ACTGN0,
+                            score_threshold=0.99,
+                            output_file=output,  # Fill
+                            gap_open_penalty=3,
+                            gap_extension_penalty=1,
+                            match_algo=String(algo[]),
+                            record_type="fastx",
+                            threads=num_threads[],
+                            batch_size=268435456,  # default
+                            max_gpus=max_gpus[],
+                            tty_info=TTYInfoResult(False, 0, 0),
+                            sg_ends_free=sg[],
+                            verbose=False,
+                        )
+                    )
+
+    var expected = """>Human_DNA With a Comment
+ACTGACTGACGACGACGACTAATAGNNNNACTGANNNATCATCTAGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGACTGACTGACGACGACGACTAATAGNNNNACTGANGNATCATCTAGCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCACTGACTGACGACGACGACTAATAGNNNNACTGANNNATCATCTAGACTGACTGACGACGACGACTAATAG
+"""
+
+    for setting in settings:
+        var writer = BufferedWriter(open(output, "w"))
+        do_search(setting[], writer^)
+        var found = output.read_text()
+        assert_equal(
+            found.upper(),
+            expected.upper(),
+            String("max_gpus {}, num_threads {}, algo {}").format(
+                setting[].max_gpus, setting[].threads, setting[].match_algo
+            ),
+        )
+
+
 def test_fasta_blosum62_search():
     var dir = TemporaryDirectory()
     var input = Path(dir.name) / "input.txt"
@@ -231,6 +411,8 @@ MAFSAEDVLKEYDRRRRMEALLLSLYYPNDRKLLDYKEWSPPRVQVECPKAPVEWNNPPSEKGLIVGHFSGIKYKGEKAQ
 
 
 def main():
+    test_cases()
     test_line_ascii_search()
     test_fasta_actgn_search()
+    test_fasta_actgn0_search()
     test_fasta_blosum62_search()
