@@ -1,5 +1,6 @@
 """Striped Semi-Global Alignment."""
 
+from benchmark import keep
 from builtin.math import max
 from collections import InlineArray
 from math import sqrt, iota
@@ -113,6 +114,8 @@ struct Profile[
             for i in range(0, segment_length):
                 var j = i
                 for segment_idx in range(0, size):
+                    keep(t_idx)
+                    keep(segment_idx)
                     p[t_idx][segment_idx] = (
                         bias if j
                         >= len(query) else (
