@@ -4,6 +4,8 @@
 # v1.2.0 (06-19-2025)
 
 - Upgrade to Mojo 25.4
+- Fix issue with [AVX512](https://github.com/BioRadOpenSource/ish/issues/50) via [PR](https://github.com/BioRadOpenSource/ish/pull/51) 
+- [Apply](https://github.com/BioRadOpenSource/ish/pull/48) suggestion from @soraros to use llvm intrinsic for saturating add and subtract
 
 # v1.1.1 (06-07-2025)
 

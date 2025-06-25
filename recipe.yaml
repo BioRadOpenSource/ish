@@ -11,8 +11,10 @@ package:
   version: ${{ version }}
 
 source:
-  - git: https://github.com/BioRadOpenSource/ish.git
-    rev: 707e862d216cd2b9cae05cc65caaa78ca36f7311 
+  # - git: https://github.com/BioRadOpenSource/ish.git
+  #   rev: 707e862d216cd2b9cae05cc65caaa78ca36f7311 
+  path: .
+  use_gitignore: true
 
 build:
   number: 0
