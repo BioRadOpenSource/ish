@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/prefix-dev/recipe-format/main/schema.json
 
 context:
-  version: "1.2.1"
+  version: "1.2.2"
   modular_version: "=25.4"
   extramojo_version: "=0.15"
 

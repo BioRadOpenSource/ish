@@ -118,24 +118,29 @@ struct Profile[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
         var length = Int(score_matrix.size * segment_length)
         var profile = AlignedMemory[T, size, size](length)
 
-        # Generate query profile and rearrange query sequence and calculate the weight of match/mismatch
         var p = profile.as_span()
-        var t_idx = 0
+
+        var bias_typed = bias.cast[T]()
+
         for nt in range(0, score_matrix.size):
+            var nt_base_idx = nt * segment_length
+
             for i in range(0, segment_length):
-                var j = i
-                for segment_idx in range(0, size):
-                    keep(t_idx)
-                    keep(segment_idx)
-                    p[t_idx][segment_idx] = (
-                        bias if j
-                        >= len(query) else (
-                            score_matrix.get(nt, Int(query[j]))
-                            + bias.cast[DType.int8]()
-                        ).cast[DType.uint8]()
-                    ).cast[T]()
-                    j += segment_length
-                t_idx += 1
+                var simd_vector = SIMD[T, size]()
+
+                @parameter
+                for lane in range(size):
+                    var query_pos = i + lane * segment_length
+                    if query_pos < len(query):
+                        var score = score_matrix.get(nt, Int(query[query_pos]))
+                        simd_vector[lane] = (
+                            score + bias.cast[DType.int8]()
+                        ).cast[T]()
+                    else:
+                        simd_vector[lane] = bias_typed
+
+                p[nt_base_idx + i] = simd_vector
+
         return profile
 
 
@@ -294,7 +299,9 @@ fn sw[
     p_vecs.init_columns(len(reference))
     var max_score = UInt8(0).cast[dt]()
     var end_query: Int32 = query_len - 1
-    var end_reference: Int32 = -1  # 0 based best alignment ending point; initialized as isn't aligned -1
+    var end_reference: Int32 = (
+        -1
+    )  # 0 based best alignment ending point; initialized as isn't aligned -1
     var segment_length = p_vecs.segment_length
 
     # Note:
