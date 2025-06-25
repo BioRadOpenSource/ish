@@ -1,6 +1,10 @@
 
 # Next
 
+# v1.2.2 (06-25-2025)
+
+- Improved fix for [AVX512](https://github.com/BioRadOpenSource/ish/issues/50) without using `keep`
+
 # v1.2.1 (06-25-2025)
 
 - Fixed bug in logging module related to update from Mojo 24.3 to 24.4 replacing `write_args`.
