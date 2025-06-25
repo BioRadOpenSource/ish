@@ -1,6 +1,10 @@
 
 # Next
 
+# v1.2.1 (06-25-2025)
+
+- Fixed bug in logging module related to update from Mojo 24.3 to 24.4 replacing `write_args`.
+
 # v1.2.0 (06-19-2025)
 
 - Upgrade to Mojo 25.4

@@ -88,7 +88,8 @@ struct Logger[colorize: Bool = True](Copyable, Movable):
 
         @parameter
         for i in range(0, values.__len__()):
-            print(values[i], sep=sep, end=end, file=stderr)
+            print(values[i], end=sep, file=stderr)
+        print(end=end, file=stderr)
 
     @always_inline
     @staticmethod
@@ -115,7 +116,8 @@ struct Logger[colorize: Bool = True](Copyable, Movable):
 
         @parameter
         for i in range(0, values.__len__()):
-            print(values[i], sep=sep, end=end, file=stderr)
+            print(values[i], end=sep, file=stderr)
+        print(end=end, file=stderr)
 
         @parameter
         if colorize:
@@ -141,7 +143,8 @@ struct Logger[colorize: Bool = True](Copyable, Movable):
 
         @parameter
         for i in range(0, values.__len__()):
-            print(values[i], sep=sep, end=end, file=stderr)
+            print(values[i], end=sep, file=stderr)
+        print(end=end, file=stderr)
 
     @always_inline
     @staticmethod
@@ -167,7 +170,8 @@ struct Logger[colorize: Bool = True](Copyable, Movable):
 
         @parameter
         for i in range(0, values.__len__()):
-            print(values[i], sep=sep, end=end, file=stderr)
+            print(values[i], end=sep, file=stderr)
+        print(end=end, file=stderr)
 
         @parameter
         if colorize:
@@ -197,7 +201,8 @@ struct Logger[colorize: Bool = True](Copyable, Movable):
 
         @parameter
         for i in range(0, values.__len__()):
-            print(values[i], sep=sep, end=end, file=stderr)
+            print(values[i], end=sep, file=stderr)
+        print(end=end, file=stderr)
 
         @parameter
         if colorize:
