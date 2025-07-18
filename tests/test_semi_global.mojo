@@ -90,7 +90,7 @@ fn test_exact_match_striped() raises:
     var target = score_matrix.convert_ascii_to_encoding("ACGT".as_bytes())
 
     var profile = Profile[
-        16, 8, SmallType = DType.uint8, LargeType = DType.uint16
+        16, 8, SmallType = DType.int8, LargeType = DType.int16
     ](query, score_matrix, ScoreSize.Adaptive)
 
     # Test all combinations of free gaps
@@ -112,13 +112,12 @@ fn test_exact_match_striped() raises:
     for i in range(len(configs)):
         var config = configs[i]
 
-        var result = semi_global_aln[DType.uint16, 8](
+        var result = semi_global_aln[DType.int16, 8](
             target,
             len(query),
             gap_open_penalty=3,
             gap_extension_penalty=1,
             profile=profile.profile_large.value().as_span(),
-            bias=profile.bias.cast[DType.uint16](),
             max_score=profile.max_score,
             min_score=profile.min_score,
             free_query_start_gaps=config.q_start,
@@ -212,20 +211,19 @@ fn test_query_substring_striped() raises:
     rev_query.reverse()
     rev_target.reverse()
     var profile = Profile[
-        16, 8, SmallType = DType.uint8, LargeType = DType.uint16
+        16, 8, SmallType = DType.int8, LargeType = DType.int16
     ](query, score_matrix, ScoreSize.Adaptive)
     var rev_profile = Profile[
-        16, 8, SmallType = DType.uint8, LargeType = DType.uint16
+        16, 8, SmallType = DType.int8, LargeType = DType.int16
     ](rev_query, score_matrix, ScoreSize.Adaptive)
 
     # Test with free target ends (query should align without gaps)
-    var result = semi_global_aln[DType.uint16, 8](
+    var result = semi_global_aln[DType.int16, 8](
         target,
         len(query),
         gap_open_penalty=3,
         gap_extension_penalty=1,
         profile=profile.profile_large.value().as_span(),
-        bias=profile.bias.cast[DType.uint16](),
         max_score=profile.max_score,
         min_score=profile.min_score,
         free_query_start_gaps=False,
@@ -239,14 +237,13 @@ fn test_query_substring_striped() raises:
     assert_equal(result.reference, 5, "Target end should be at index 5")
 
     # Test with start/end detection
-    var alignment = semi_global_aln_start_end[DType.uint16, 8](
+    var alignment = semi_global_aln_start_end[DType.int16, 8](
         reference=target,
         query_len=len(query),
         gap_open_penalty=3,
         gap_extension_penalty=1,
         profile=profile.profile_large.value().as_span(),
         rev_profile=rev_profile.profile_large.value().as_span(),
-        bias=profile.bias.cast[DType.uint16](),
         max_score=profile.max_score,
         min_score=profile.min_score,
         free_query_start_gaps=False,
@@ -282,20 +279,19 @@ fn test_target_substring() raises:
     rev_query.reverse()
     rev_target.reverse()
     var profile = Profile[
-        16, 8, SmallType = DType.uint8, LargeType = DType.uint16
+        16, 8, SmallType = DType.int8, LargeType = DType.int16
     ](query, score_matrix, ScoreSize.Adaptive)
     var rev_profile = Profile[
-        16, 8, SmallType = DType.uint8, LargeType = DType.uint16
+        16, 8, SmallType = DType.int8, LargeType = DType.int16
     ](rev_query, score_matrix, ScoreSize.Adaptive)
 
     # Test with free query ends (target should align without gaps)
-    var result = semi_global_aln[DType.uint16, 8](
+    var result = semi_global_aln[DType.int16, 8](
         target,
         len(query),
         gap_open_penalty=3,
         gap_extension_penalty=1,
         profile=profile.profile_large.value().as_span(),
-        bias=profile.bias.cast[DType.uint16](),
         max_score=profile.max_score,
         min_score=profile.min_score,
         free_query_start_gaps=True,
@@ -309,14 +305,13 @@ fn test_target_substring() raises:
     assert_equal(result.reference, 3, "Target end should be at index 3")
 
     # Test with start/end detection
-    var alignment = semi_global_aln_start_end[DType.uint16, 8](
+    var alignment = semi_global_aln_start_end[DType.int16, 8](
         reference=target,
         query_len=len(query),
         gap_open_penalty=3,
         gap_extension_penalty=1,
         profile=profile.profile_large.value().as_span(),
         rev_profile=rev_profile.profile_large.value().as_span(),
-        bias=profile.bias.cast[DType.uint16](),
         max_score=profile.max_score,
         min_score=profile.min_score,
         free_query_start_gaps=True,
@@ -792,17 +787,16 @@ fn test_partial_match_with_mismatch_striped() raises:
         "ACTT".as_bytes()
     )  # Last base is different
     var profile = Profile[
-        16, 8, SmallType = DType.uint8, LargeType = DType.uint16
+        16, 8, SmallType = DType.int8, LargeType = DType.int16
     ](query, score_matrix, ScoreSize.Adaptive)
 
     # No free ends config
-    var result = semi_global_aln[DType.uint16, 8](
+    var result = semi_global_aln[DType.int16, 8](
         target,
         len(query),
         gap_open_penalty=3,
         gap_extension_penalty=1,
         profile=profile.profile_large.value().as_span(),
-        bias=profile.bias.cast[DType.uint16](),
         max_score=profile.max_score,
         min_score=profile.min_score,
         free_query_start_gaps=False,
@@ -814,13 +808,12 @@ fn test_partial_match_with_mismatch_striped() raises:
     assert_equal(result.score, 4, "Partial match with mismatch should score 4")
 
     # With free query end - should still align through the mismatch
-    result = semi_global_aln[DType.uint16, 8](
+    result = semi_global_aln[DType.int16, 8](
         target,
         len(query),
         gap_open_penalty=3,
         gap_extension_penalty=1,
         profile=profile.profile_large.value().as_span(),
-        bias=profile.bias.cast[DType.uint16](),
         max_score=profile.max_score,
         min_score=profile.min_score,
         free_query_start_gaps=False,
@@ -886,17 +879,16 @@ fn test_alignment_striped_regression() raises:
     rev_query.reverse()
     rev_target.reverse()
     var profile = Profile[
-        16, 8, SmallType = DType.uint8, LargeType = DType.uint16
+        16, 8, SmallType = DType.int8, LargeType = DType.int16
     ](query, score_matrix, ScoreSize.Adaptive)
 
     # No free ends config
-    var result = semi_global_aln[DType.uint16, 8](
+    var result = semi_global_aln[DType.int16, 8](
         target,
         len(query),
         gap_open_penalty=3,
         gap_extension_penalty=1,
         profile=profile.profile_large.value().as_span(),
-        bias=profile.bias.cast[DType.uint16](),
         max_score=profile.max_score,
         min_score=profile.min_score,
         free_query_start_gaps=True,
@@ -922,20 +914,19 @@ fn test_alignment_with_gap_striped() raises:
     rev_query.reverse()
     rev_target.reverse()
     var profile = Profile[
-        16, 8, SmallType = DType.uint8, LargeType = DType.uint16
+        16, 8, SmallType = DType.int8, LargeType = DType.int16
     ](query, score_matrix, ScoreSize.Adaptive)
     var rev_profile = Profile[
-        16, 8, SmallType = DType.uint8, LargeType = DType.uint16
+        16, 8, SmallType = DType.int8, LargeType = DType.int16
     ](rev_query, score_matrix, ScoreSize.Adaptive)
 
     # No free ends config
-    var result = semi_global_aln[DType.uint16, 8](
+    var result = semi_global_aln[DType.int16, 8](
         target,
         len(query),
         gap_open_penalty=3,
         gap_extension_penalty=1,
         profile=profile.profile_large.value().as_span(),
-        bias=profile.bias.cast[DType.uint16](),
         max_score=profile.max_score,
         min_score=profile.min_score,
         free_query_start_gaps=False,
@@ -947,14 +938,13 @@ fn test_alignment_with_gap_striped() raises:
     assert_equal(result.score, 5, "Alignment with gap should score 5")
 
     # Test with start/end detection
-    var alignment = semi_global_aln_start_end[DType.uint16, 8](
+    var alignment = semi_global_aln_start_end[DType.int16, 8](
         reference=target,
         query_len=len(query),
         gap_open_penalty=3,
         gap_extension_penalty=1,
         profile=profile.profile_large.value().as_span(),
         rev_profile=rev_profile.profile_large.value().as_span(),
-        bias=profile.bias.cast[DType.uint16](),
         max_score=profile.max_score,
         min_score=profile.min_score,
         free_query_start_gaps=False,
@@ -974,17 +964,16 @@ fn test_no_match_striped() raises:
     var query = score_matrix.convert_ascii_to_encoding("AAAA".as_bytes())
     var target = score_matrix.convert_ascii_to_encoding("CCCC".as_bytes())
     var profile = Profile[
-        16, 8, SmallType = DType.uint8, LargeType = DType.uint16
+        16, 8, SmallType = DType.int8, LargeType = DType.int16
     ](query, score_matrix, ScoreSize.Adaptive)
 
     # With all ends free
-    var result = semi_global_aln[DType.uint16, 8](
+    var result = semi_global_aln[DType.int16, 8](
         target,
         len(query),
         gap_open_penalty=3,
         gap_extension_penalty=1,
         profile=profile.profile_large.value().as_span(),
-        bias=profile.bias.cast[DType.uint16](),
         max_score=profile.max_score,
         min_score=profile.min_score,
         free_query_start_gaps=True,
@@ -998,13 +987,12 @@ fn test_no_match_striped() raises:
     )
 
     # With no free ends
-    result = semi_global_aln[DType.uint16, 8](
+    result = semi_global_aln[DType.int16, 8](
         target,
         len(query),
         gap_open_penalty=3,
-        gap_extension_penalty=1,
+        gap_extension_penalty=2,
         profile=profile.profile_large.value().as_span(),
-        bias=profile.bias.cast[DType.uint16](),
         max_score=profile.max_score,
         min_score=profile.min_score,
         free_query_start_gaps=False,
@@ -1013,7 +1001,7 @@ fn test_no_match_striped() raises:
         free_target_end_gaps=False,
     ).best
 
-    assert_equal(result.score, -8, "No match with no free ends should score -8")
+    assert_equal(result.score, -8, "No match with no free ends should score -6")
 
 
 fn test_empty_sequences_striped() raises:
@@ -1023,17 +1011,16 @@ fn test_empty_sequences_striped() raises:
     var empty_clone = empty.copy()
     var nonempty = score_matrix.convert_ascii_to_encoding("ACGT".as_bytes())
     var profile = Profile[
-        16, 8, SmallType = DType.uint8, LargeType = DType.uint16
+        16, 8, SmallType = DType.int8, LargeType = DType.int16
     ](empty, score_matrix, ScoreSize.Adaptive)
 
     # One empty sequence with free start/end gaps on query
-    var result = semi_global_aln[DType.uint16, 8](
+    var result = semi_global_aln[DType.int16, 8](
         nonempty,
         len(empty),
         gap_open_penalty=3,
         gap_extension_penalty=1,
         profile=profile.profile_large.value().as_span(),
-        bias=profile.bias.cast[DType.uint16](),
         max_score=profile.max_score,
         min_score=profile.min_score,
         free_query_start_gaps=True,
@@ -1050,16 +1037,15 @@ fn test_empty_sequences_striped() raises:
 
     # Both empty sequences
     var empty_profile = Profile[
-        16, 8, SmallType = DType.uint8, LargeType = DType.uint16
+        16, 8, SmallType = DType.int8, LargeType = DType.int16
     ](empty, score_matrix, ScoreSize.Adaptive)
 
-    var ret = semi_global_aln[DType.uint16, 8](
+    var ret = semi_global_aln[DType.int16, 8](
         empty_clone,
         len(empty),
         gap_open_penalty=3,
         gap_extension_penalty=1,
         profile=empty_profile.profile_large.value().as_span(),
-        bias=empty_profile.bias.cast[DType.uint16](),
         max_score=profile.max_score,
         min_score=profile.min_score,
         free_query_start_gaps=False,
@@ -1082,10 +1068,10 @@ fn test_complex_case_striped() raises:
     rev_query.reverse()
     rev_target.reverse()
     var profile = Profile[
-        16, 8, SmallType = DType.uint8, LargeType = DType.uint16
+        16, 8, SmallType = DType.int8, LargeType = DType.int16
     ](query, score_matrix, ScoreSize.Adaptive)
     var rev_profile = Profile[
-        16, 8, SmallType = DType.uint8, LargeType = DType.uint16
+        16, 8, SmallType = DType.int8, LargeType = DType.int16
     ](rev_query, score_matrix, ScoreSize.Adaptive)
 
     # Test with various free end configurations
@@ -1107,13 +1093,12 @@ fn test_complex_case_striped() raises:
     for i in range(len(configs)):
         var config = configs[i]
 
-        var result = semi_global_aln[DType.uint16, 8](
+        var result = semi_global_aln[DType.int16, 8](
             target,
             len(query),
             gap_open_penalty=3,
             gap_extension_penalty=1,
             profile=profile.profile_large.value().as_span(),
-            bias=profile.bias.cast[DType.uint16](),
             max_score=profile.max_score,
             min_score=profile.min_score,
             free_query_start_gaps=config.q_start,
@@ -1144,7 +1129,7 @@ fn test_complex_case_striped() raises:
             and not config.t_start
             and not config.t_end
         ):
-            var alignment = semi_global_aln_start_end[DType.uint16, 8](
+            var alignment = semi_global_aln_start_end[DType.int16, 8](
                 reference=target,
                 query_len=len(query),
                 gap_open_penalty=3,
@@ -1153,7 +1138,6 @@ fn test_complex_case_striped() raises:
                 max_score=profile.max_score,
                 min_score=profile.min_score,
                 rev_profile=rev_profile.profile_large.value().as_span(),
-                bias=profile.bias.cast[DType.uint16](),
                 free_query_start_gaps=config.q_start,
                 free_query_end_gaps=config.q_end,
                 free_target_start_gaps=config.t_start,
@@ -1190,10 +1174,10 @@ fn test_complex_case_striped_small() raises:
     rev_query.reverse()
     rev_target.reverse()
     var profile = Profile[
-        16, 8, SmallType = DType.uint8, LargeType = DType.uint16
+        16, 8, SmallType = DType.int8, LargeType = DType.int16
     ](query, score_matrix, ScoreSize.Adaptive)
     var rev_profile = Profile[
-        16, 8, SmallType = DType.uint8, LargeType = DType.uint16
+        16, 8, SmallType = DType.int8, LargeType = DType.int16
     ](rev_query, score_matrix, ScoreSize.Adaptive)
 
     # Test with various free end configurations
@@ -1215,13 +1199,12 @@ fn test_complex_case_striped_small() raises:
     for i in range(len(configs)):
         var config = configs[i]
 
-        var result = semi_global_aln[DType.uint8, 16](
+        var result = semi_global_aln[DType.int8, 16](
             target,
             len(query),
             gap_open_penalty=3,
             gap_extension_penalty=1,
             profile=profile.profile_small.value().as_span(),
-            bias=profile.bias.cast[DType.uint8](),
             max_score=profile.max_score,
             min_score=profile.min_score,
             free_query_start_gaps=config.q_start,
@@ -1252,14 +1235,13 @@ fn test_complex_case_striped_small() raises:
             and not config.t_start
             and not config.t_end
         ):
-            var alignment = semi_global_aln_start_end[DType.uint8, 16](
+            var alignment = semi_global_aln_start_end[DType.int8, 16](
                 reference=target,
                 query_len=len(query),
                 gap_open_penalty=3,
                 gap_extension_penalty=1,
                 profile=profile.profile_small.value().as_span(),
                 rev_profile=rev_profile.profile_small.value().as_span(),
-                bias=profile.bias.cast[DType.uint8](),
                 max_score=profile.max_score,
                 min_score=profile.min_score,
                 free_query_start_gaps=config.q_start,
@@ -1295,21 +1277,20 @@ fn test_reversed_alignment_striped() raises:
     var rev_query = query.copy()
     rev_query.reverse()
     var profile = Profile[
-        16, 8, SmallType = DType.uint8, LargeType = DType.uint16
+        16, 8, SmallType = DType.int8, LargeType = DType.int16
     ](query, score_matrix, ScoreSize.Adaptive)
     var rev_profile = Profile[
-        16, 8, SmallType = DType.uint8, LargeType = DType.uint16
+        16, 8, SmallType = DType.int8, LargeType = DType.int16
     ](rev_query, score_matrix, ScoreSize.Adaptive)
 
     # The alignment should find target within query
-    var alignment = semi_global_aln_start_end[DType.uint16, 8](
+    var alignment = semi_global_aln_start_end[DType.int16, 8](
         reference=target,
         query_len=len(query),
         gap_open_penalty=3,
         gap_extension_penalty=1,
         profile=profile.profile_large.value().as_span(),
         rev_profile=rev_profile.profile_large.value().as_span(),
-        bias=profile.bias.cast[DType.uint16](),
         max_score=profile.max_score,
         min_score=profile.min_score,
         free_query_start_gaps=True,
@@ -1349,16 +1330,15 @@ fn test_biological_example_striped() raises:
     rev_gene.reverse()
     rev_genome.reverse()
     var profile = Profile[
-        16, 8, SmallType = DType.uint8, LargeType = DType.uint16
+        16, 8, SmallType = DType.int8, LargeType = DType.int16
     ](gene, score_matrix, ScoreSize.Adaptive)
 
-    var result = semi_global_aln[DType.uint16, 8](
+    var result = semi_global_aln[DType.int16, 8](
         genome,
         len(gene),
         gap_open_penalty=3,
         gap_extension_penalty=1,
         profile=profile.profile_large.value().as_span(),
-        bias=profile.bias.cast[DType.uint16](),
         max_score=profile.max_score,
         min_score=profile.min_score,
         free_query_start_gaps=False,
@@ -1374,22 +1354,21 @@ fn test_biological_example_striped() raises:
     rev_gene = gene.copy()
     rev_gene.reverse()
     var mid_profile = Profile[
-        16, 8, SmallType = DType.uint8, LargeType = DType.uint16
+        16, 8, SmallType = DType.int8, LargeType = DType.int16
     ](gene, score_matrix, ScoreSize.Adaptive)
     var mid_rev_profile = Profile[
-        16, 8, SmallType = DType.uint8, LargeType = DType.uint16
+        16, 8, SmallType = DType.int8, LargeType = DType.int16
     ](rev_gene, score_matrix, ScoreSize.Adaptive)
 
     # ATGGCGTGCAATGCCCGGTACGT
     # -------------CCCGGT----
-    var alignment = semi_global_aln_start_end[DType.uint16, 8](
+    var alignment = semi_global_aln_start_end[DType.int16, 8](
         reference=genome,
         query_len=len(gene),
         gap_open_penalty=3,
         gap_extension_penalty=1,
         profile=mid_profile.profile_large.value().as_span(),
         rev_profile=mid_rev_profile.profile_large.value().as_span(),
-        bias=mid_profile.bias.cast[DType.uint16](),
         max_score=profile.max_score,
         min_score=profile.min_score,
         free_query_start_gaps=False,
@@ -1412,20 +1391,19 @@ fn test_biological_example_striped() raises:
     rev_gene = gene.copy()
     rev_gene.reverse()
     var end_profile = Profile[
-        16, 8, SmallType = DType.uint8, LargeType = DType.uint16
+        16, 8, SmallType = DType.int8, LargeType = DType.int16
     ](gene, score_matrix, ScoreSize.Adaptive)
     var end_rev_profile = Profile[
-        16, 8, SmallType = DType.uint8, LargeType = DType.uint16
+        16, 8, SmallType = DType.int8, LargeType = DType.int16
     ](rev_gene, score_matrix, ScoreSize.Adaptive)
 
-    alignment = semi_global_aln_start_end[DType.uint16, 8](
+    alignment = semi_global_aln_start_end[DType.int16, 8](
         reference=genome,
         query_len=len(gene),
         gap_open_penalty=3,
         gap_extension_penalty=1,
         profile=end_profile.profile_large.value().as_span(),
         rev_profile=end_rev_profile.profile_large.value().as_span(),
-        bias=end_profile.bias.cast[DType.uint16](),
         max_score=profile.max_score,
         min_score=profile.min_score,
         free_query_start_gaps=False,

@@ -23,8 +23,8 @@ from ishlib.matcher.alignment.striped_utils import (
 struct Profile[
     SIMD_SMALL_WIDTH: Int,
     SIMD_LARGE_WIDTH: Int,
-    SmallType: DType = DType.uint8,
-    LargeType: DType = DType.uint16,
+    SmallType: DType = DType.int8,
+    LargeType: DType = DType.int16,
 ]:
     alias smallVProfile = AlignedMemory[
         SmallType, SIMD_SMALL_WIDTH, SIMD_SMALL_WIDTH
@@ -37,7 +37,6 @@ struct Profile[
     var profile_large: Optional[Self.largeVProfile]
     var query_len: Int32
     var alphabet_size: UInt32
-    var bias: UInt8
     var max_score: Int8
     var min_score: Int8
 
@@ -51,47 +50,41 @@ struct Profile[
 
         i.e. ACTG should be 0, 1, 2, 3
         """
-        constrained[SmallType.is_unsigned(), "SmallType must be unsigned"]()
-        constrained[LargeType.is_unsigned(), "LargeType must be unsigned"]()
+        constrained[SmallType.is_signed(), "SmallType must be unsigned"]()
+        constrained[LargeType.is_signed(), "LargeType must be unsigned"]()
         # print("Intializing a profile for a query of len", len(query))
         var profile_small: Optional[Self.smallVProfile] = None
         var profile_large: Optional[Self.largeVProfile] = None
-        var bias: UInt8
         var max_score: Int8
         var min_score: Int8
         # Find the bias to use in the substitution matrix
         # The bias will be smallest value in the scoring matrix
-        var bias_tmp: Int8 = 0
         var min_tmp: Int8 = 0
         var max_tmp: Int8 = 0
         for i in range(0, len(score_matrix.values)):
             var score = score_matrix.values[i]
-            if score < bias_tmp:
-                bias_tmp = score_matrix.values[i]
             if score < min_tmp:
                 min_tmp = score
             if score > max_tmp:
                 max_tmp = score
-        bias = abs(bias_tmp).cast[DType.uint8]()
         min_score = min_tmp
         max_score = max_tmp
 
         if score_size == ScoreSize.Byte or score_size == ScoreSize.Adaptive:
             profile_small = Self.generate_query_profile[
                 SmallType, SIMD_SMALL_WIDTH
-            ](query, score_matrix, bias)
+            ](query, score_matrix)
 
         if score_size == ScoreSize.Word or score_size == ScoreSize.Adaptive:
             profile_large = Self.generate_query_profile[
                 LargeType, SIMD_LARGE_WIDTH
-            ](query, score_matrix, bias)
+            ](query, score_matrix)
 
         return Self(
             profile_small,
             profile_large,
             len(query),
             score_matrix.size,
-            bias,
             max_score,
             min_score,
         )
@@ -99,9 +92,9 @@ struct Profile[
     @staticmethod
     fn generate_query_profile[
         T: DType, size: Int
-    ](
-        query: Span[UInt8], read score_matrix: ScoringMatrix, bias: UInt8
-    ) -> AlignedMemory[T, size, size]:
+    ](query: Span[UInt8], read score_matrix: ScoringMatrix) -> AlignedMemory[
+        T, size, size
+    ]:
         """Divide the query into segments."""
         var segment_length = (len(query) + size - 1) // size
         var length = Int(score_matrix.size * segment_length)
@@ -117,11 +110,8 @@ struct Profile[
                     keep(t_idx)
                     keep(segment_idx)
                     p[t_idx][segment_idx] = (
-                        bias if j
-                        >= len(query) else (
-                            score_matrix.get(nt, Int(query[j]))
-                            + bias.cast[DType.int8]()
-                        ).cast[DType.uint8]()
+                        0 if j
+                        >= len(query) else score_matrix.get(nt, Int(query[j]))
                     ).cast[T]()
                     j += segment_length
                 t_idx += 1
@@ -137,7 +127,6 @@ fn semi_global_aln_start_end[
     gap_extension_penalty: SIMD[dt, 1],
     profile: Span[SIMD[dt, width]],
     rev_profile: Span[SIMD[dt, width]],
-    bias: Scalar[dt],
     max_score: Int8,
     min_score: Int8,
     *,
@@ -145,7 +134,7 @@ fn semi_global_aln_start_end[
     free_query_end_gaps: Bool = False,
     free_target_start_gaps: Bool = False,
     free_target_end_gaps: Bool = False,
-    score_cutoff: Int32 = 1,
+    score_cutoff: Float32 = 1.0,
 ) -> Optional[AlignmentStartEndResult]:
     # TODO: use the version with overflow checking?
     # Since saturation happens trivially easily at u8... maybe not.
@@ -157,7 +146,6 @@ fn semi_global_aln_start_end[
         gap_open_penalty,
         gap_extension_penalty,
         profile,
-        bias,
         max_score,
         min_score,
         free_query_start_gaps=free_query_start_gaps,
@@ -166,8 +154,13 @@ fn semi_global_aln_start_end[
         free_target_end_gaps=free_target_end_gaps,
     )
 
-    if forward.best.score < score_cutoff:
+    if Float32(forward.best.score) < score_cutoff:
         return None
+
+    # TODO: I think theoretically we can shorten this further if we
+    # pass in info about the optimal alignment score. the longest
+    # possible alignment would be query_len + ((optimal_score * cutoff) / gap_extension) + 1(for gap start)
+    # or something like that
 
     var rev_reference = create_reversed(
         reference[0 : Int(forward.best.reference) + 1]
@@ -180,7 +173,6 @@ fn semi_global_aln_start_end[
         gap_open_penalty,
         gap_extension_penalty,
         rev_profile,
-        bias,
         max_score,
         min_score,
         # Note the swapped free gaps
@@ -226,7 +218,6 @@ fn semi_global_aln_with_saturation_check[
             gap_open_penalty=gap_open_penalty.cast[SmallType](),
             gap_extension_penalty=gap_extension_penalty.cast[SmallType](),
             profile=profile.profile_small.value().as_span(),
-            bias=profile.bias.cast[SmallType](),
             max_score=profile.max_score,
             min_score=profile.min_score,
             free_query_start_gaps=free_query_start_gaps,
@@ -244,7 +235,6 @@ fn semi_global_aln_with_saturation_check[
             gap_open_penalty=gap_open_penalty.cast[LargeType](),
             gap_extension_penalty=gap_extension_penalty.cast[LargeType](),
             profile=profile.profile_large.value().as_span(),
-            bias=profile.bias.cast[LargeType](),
             max_score=profile.max_score,
             min_score=profile.min_score,
             free_query_start_gaps=free_query_start_gaps,
@@ -267,7 +257,6 @@ fn semi_global_aln[
     gap_open_penalty: SIMD[dt, 1],
     gap_extension_penalty: SIMD[dt, 1],
     profile: Span[SIMD[dt, width]],
-    bias: Scalar[dt],
     max_score: Int8,
     min_score: Int8,
     *,
@@ -277,30 +266,31 @@ fn semi_global_aln[
     free_target_end_gaps: Bool = False,
 ) -> AlignmentResult:
     """Semi-global alignment."""
-    constrained[dt.is_unsigned(), "dt must be unsigned"]()
+    constrained[dt.is_signed(), "dt must be unsigned"]()
     alias NUM = Scalar[dt]
     alias MIN = NUM.MIN_FINITE
     alias MAX = NUM.MAX_FINITE
-    alias ZERO = MAX // 2  # we are pretending to be a signed int and just shifting up.
+    alias ZERO = 0
 
     if query_len == 0 or len(reference) == 0:
         return AlignmentResult(AlignmentEnd(0, 0, 0))
 
     var end_query: Int32 = query_len - 1
-    var end_reference: Int32 = -1  # 0 based best alignment ending point; initialized as isn't aligned -1
+    var end_reference: Int32 = (
+        -1
+    )  # 0 based best alignment ending point; initialized as isn't aligned -1
     var segment_length = (query_len + width - 1) // width
     var offset = (query_len - 1) % segment_length
     var position = (width - 1) - (query_len - 1) // segment_length
     var v_pos_mask = SIMD[dt, width](position) == iota[dt, width]().reversed()
 
-    var score = MIN
     var zero = SIMD[dt, width](ZERO)
     var pv_h_store = AlignedMemory[dt, width, width](Int(segment_length))
     # Contains scores from the previous row that will be loaded for calculation
     var pv_h_load = AlignedMemory[dt, width, width](Int(segment_length))
     # Tracks scores for alignments that end with gaps in the query seq (horizontal gaps in visualization)
     var pv_e = AlignedMemory[dt, width, width](Int(segment_length))
-    var boundary = List[SIMD[dt, 1]](capacity=len(reference) + 1)
+    var boundary = List[SIMD[dt, 1]](unsafe_uninit_length=len(reference) + 1)
 
     # TODO: better handling for overflows on setup, just return a new return type.
     # Init H and E
@@ -309,51 +299,48 @@ fn semi_global_aln[
         var h = zero
         var e = zero
         for seg_num in range(0, width):
-            var tmp = Int32(ZERO) if free_query_start_gaps else (
-                Int32(ZERO)
-                - (
-                    Int32(gap_open_penalty)
-                    + Int32(gap_extension_penalty)
-                    * (seg_num * segment_length + i)
+            var tmp = ZERO if free_query_start_gaps else (
+                (
+                    -gap_open_penalty
+                    - gap_extension_penalty
+                    * (seg_num * segment_length + i).cast[dt]()
                 )
-            ).cast[DType.int32]()
-            h[seg_num] = MIN if tmp < Int32(MIN) else tmp.cast[dt]()
-            tmp = tmp - Int32(gap_open_penalty)
-            e[seg_num] = MIN if tmp < Int32(MIN) else tmp.cast[dt]()
+            )
+            h[seg_num] = MIN if tmp < MIN else tmp
+            tmp = tmp - gap_open_penalty
+            e[seg_num] = MIN if tmp < MIN else tmp
         pv_h_store[index] = h
         pv_e[index] = e
         index += 1
 
     # Init upper boundary
-    boundary.append(ZERO)
+    # boundary.append(ZERO)
+    boundary.unsafe_set(0, ZERO)
     for i in range(1, len(reference) + 1):
-        var tmp = Int32(ZERO) if free_target_start_gaps else (
-            -Int32(gap_open_penalty + (gap_extension_penalty * (i - 1)))
-            + Int32(ZERO)
+        var tmp = ZERO if free_target_start_gaps else (
+            -gap_open_penalty - gap_extension_penalty * (i - 1)
         )
-        boundary.append(MIN if tmp < Int32(MIN) else tmp.cast[dt]())
+        boundary.unsafe_set(i, MIN if tmp < MIN else tmp)
+        # boundary.append(MIN if tmp < MIN else tmp)
 
     var v_gap_open = SIMD[dt, width](gap_open_penalty)  # aka: vGap0
     var v_gap_ext = SIMD[dt, width](gap_extension_penalty)  # aka: vGapE
 
     var v_neg_limit: SIMD[dt, width]
-    var v_neg_limit_saturation: SIMD[dt, width]
-    if -Int32(gap_open_penalty) < Int32(min_score):
+    if -gap_open_penalty < min_score.cast[dt]():
         v_neg_limit = MIN + gap_open_penalty + 1
-        v_neg_limit_saturation = MAX - gap_open_penalty - 1
     else:
-        # this is a gross set of casting to allow the possibly negative matrix min
-        v_neg_limit = (Int32(MIN) + Int32(abs(min_score)) + Int32(1)).cast[dt]()
-        v_neg_limit_saturation = (
-            Int32(MAX) - Int32(abs(min_score)) - Int32(1)
-        ).cast[dt]()
+        v_neg_limit = MIN - min_score.cast[dt]() + 1
+    var score = v_neg_limit[0]
 
-    var v_pos_limit = SIMD[dt, width](Int32(MAX) - Int32(max_score) - 1)
+    var v_pos_limit = SIMD[dt, width](MAX - max_score.cast[dt]() - 1)
 
-    var v_saturation_check_max = min(v_pos_limit, v_neg_limit_saturation)
-    var v_saturation_check_max_reference = v_saturation_check_max
+    var v_saturation_check_min = v_pos_limit
+    var v_saturation_check_max = v_neg_limit
     var v_max_h = v_neg_limit
-    var v_bias = SIMD[dt, width](bias)
+
+    var ref_ptr = reference.unsafe_ptr()
+    var profile_ptr = profile.unsafe_ptr()
 
     # Note:
     # H - Score for match / mismatch (diagonal move)
@@ -366,18 +353,17 @@ fn semi_global_aln[
         v_h = v_h.shift_right[1]()
 
         # Select the right vector from the query profile
-        var profile_idx = reference[i].cast[DType.int32]() * segment_length
+        var profile_idx = UInt(ref_ptr[i]) * segment_length
         # Swap the two score buffers
         swap(pv_h_load, pv_h_store)
 
         # Insert the boundary condition
-        v_h[0] = boundary[i]
+        v_h[0] = boundary.unsafe_get(i)
 
         # Inner loop to process the query sequence
         for j in range(0, segment_length):
             # Add profile score to
-            v_h = saturating_add(v_h, profile[profile_idx + j])
-            v_h = saturating_sub(v_h, v_bias)
+            v_h = saturating_add(v_h, profile_ptr[profile_idx + j])
             v_e = pv_e[j]
 
             # Get max from current_cell_score, horizontal gap, and vertical gap score
@@ -389,12 +375,10 @@ fn semi_global_aln[
 
             @parameter
             if do_saturation_check:
-                v_saturation_check_max = max(
-                    v_saturation_check_max, v_h - v_neg_limit
-                )
-                v_saturation_check_max = max(
-                    v_saturation_check_max, v_e - v_neg_limit
-                )
+                v_saturation_check_max = max(v_saturation_check_max, v_h)
+                v_saturation_check_min = max(v_saturation_check_min, v_h)
+                v_saturation_check_min = max(v_saturation_check_min, v_e)
+                v_saturation_check_min = max(v_saturation_check_min, v_f)
 
             # update vE
             v_h = saturating_sub(v_h, v_gap_open)
@@ -410,42 +394,44 @@ fn semi_global_aln[
             v_h = pv_h_load[j]
 
         # Lazy_F loop, disallows adjacent insertion and then deletion from SWPS3
-        # Possible speedup - check if v_f has any updates to start with
-        var break_out = False
-        for _k in range(0, width):
-            var tmp = (ZERO - gap_open_penalty).cast[
-                DType.int32
-            ]() if free_target_start_gaps else (
-                boundary[i + 1] - gap_open_penalty
-            ).cast[
-                DType.int32
-            ]()
-            var tmp2 = MIN if tmp < Int32(MIN) else tmp.cast[dt]()
+        @parameter
+        @always_inline
+        fn lazy_f():
+            @parameter
+            for _k in range(0, width):
+                var tmp = (
+                    ZERO - gap_open_penalty
+                ) if free_target_start_gaps else (
+                    boundary.unsafe_get(i + 1) - gap_open_penalty
+                )
+                var tmp2 = MIN if tmp < MIN else tmp.cast[dt]()
 
-            v_f = v_f.shift_right[1]()
-            v_f[0] = tmp2
+                v_f = v_f.shift_right[1]()
+                v_f[0] = tmp2
 
-            for j in range(0, segment_length):
-                v_h = pv_h_store[j]
-                v_h = max(v_h, v_f)
+                for j in range(0, segment_length):
+                    v_h = pv_h_store[j]
+                    v_h = max(v_h, v_f)
 
-                pv_h_store[j] = v_h
+                    pv_h_store[j] = v_h
 
-                @parameter
-                if do_saturation_check:
-                    v_saturation_check_max = max(
-                        v_saturation_check_max, v_h - v_neg_limit
-                    )
+                    @parameter
+                    if do_saturation_check:
+                        v_saturation_check_max = max(
+                            v_saturation_check_max, v_h
+                        )
+                        v_saturation_check_min = max(
+                            v_saturation_check_min, v_h
+                        )
 
-                v_h = saturating_sub(v_h, v_gap_open)
-                v_f = saturating_sub(v_f, v_gap_ext)
+                    v_h = saturating_sub(v_h, v_gap_open)
+                    v_f = saturating_sub(v_f, v_gap_ext)
 
-                # Early termination check
-                if not (v_f > v_h).reduce_or():
-                    break_out = True
-                    break
-            if break_out:
-                break
+                    # Early termination check - match C version exactly
+                    if not (v_f > v_h).reduce_or():
+                        return
+
+        lazy_f()
 
         # Extract vector containing last value from the column
         v_h = pv_h_store[offset]
@@ -494,7 +480,8 @@ fn semi_global_aln[
     @parameter
     if do_saturation_check:
         if (
-            (v_saturation_check_max > v_saturation_check_max_reference)
+            (v_saturation_check_max > v_pos_limit)
+            | (v_saturation_check_min < v_neg_limit)
         ).reduce_or():
             return AlignmentResult(
                 AlignmentEnd(0, 0, 0), overflow_detected=True
@@ -502,7 +489,7 @@ fn semi_global_aln[
 
     var bests = AlignmentResult(
         AlignmentEnd(
-            score.cast[DType.int32]() - ZERO.cast[DType.int32](),
+            score.cast[DType.int32](),
             end_reference,
             end_query,
         ),

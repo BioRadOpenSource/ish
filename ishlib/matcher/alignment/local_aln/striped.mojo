@@ -152,7 +152,7 @@ fn ssw_align[
     gap_extension_penalty: UInt8 = 1,
     return_only_alignment_end: Bool = False,
     mask_length: Int32 = 15,  # for second best score
-    score_cutoff: Int32 = 0,
+    score_cutoff: Float32 = 0.0,
 ) -> Optional[Alignment]:
     # Find the alignment scores and ending positions
     var bests: AlignmentResult
@@ -212,7 +212,7 @@ fn ssw_align[
         Logger.warn("Failed to provide a valid query profile")
         return None
 
-    if bests.best.score <= score_cutoff:
+    if Float32(bests.best.score) <= score_cutoff:
         Logger.debug("Worse than cutoff")
         return None
 
@@ -294,7 +294,9 @@ fn sw[
     p_vecs.init_columns(len(reference))
     var max_score = UInt8(0).cast[dt]()
     var end_query: Int32 = query_len - 1
-    var end_reference: Int32 = -1  # 0 based best alignment ending point; initialized as isn't aligned -1
+    var end_reference: Int32 = (
+        -1
+    )  # 0 based best alignment ending point; initialized as isn't aligned -1
     var segment_length = p_vecs.segment_length
 
     # Note:

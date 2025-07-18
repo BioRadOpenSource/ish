@@ -25,8 +25,12 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
     var rev_pattern: List[UInt8]
     var max_score: Int
     # var rev_haystack_buffer: List[UInt8]
-    var profile: Profile[Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH]
-    var reverse_profile: Profile[Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH]
+    var profile: Profile[
+        Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH, DType.int8, DType.int16
+    ]
+    var reverse_profile: Profile[
+        Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH, DType.int8, DType.int16
+    ]
     var matrix: ScoringMatrix
     var _matrix_kind: MatrixKind
     var gap_open: UInt
@@ -43,7 +47,12 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
         gap_open: UInt = 3,
         gap_extend: UInt = 1,
     ):
-        Logger.info("Performing matching with StripedSemiGlobalMatcher.")
+        Logger.info(
+            "Performing matching with StripedSemiGlobalMatcher, u8/u16 widths",
+            Self.SIMD_U8_WIDTH,
+            "/",
+            Self.SIMD_U16_WIDTH,
+        )
         self.gap_open = gap_open
         self.gap_extend = gap_extend
         self._score_threshold = score_threshold
@@ -55,13 +64,13 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
             self.max_score,
         ) = self.matrix.convert_ascii_to_encoding_and_score(pattern)
         self.rev_pattern = create_reversed(self.pattern)
-        var profile = Profile[Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH](
-            self.pattern, self.matrix, ScoreSize.Word
-        )
+        var profile = Profile[
+            Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH, DType.int8, DType.int16
+        ](self.pattern, self.matrix, ScoreSize.Word)
         self.profile = profile
-        var reverse_profile = Profile[Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH](
-            self.rev_pattern, self.matrix, ScoreSize.Word
-        )
+        var reverse_profile = Profile[
+            Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH, DType.int8, DType.int16
+        ](self.rev_pattern, self.matrix, ScoreSize.Word)
         self.reverse_profile = reverse_profile
 
     fn first_match(
@@ -76,14 +85,13 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
             gap_extension_penalty=self.gap_extend,
             profile=self.profile.profile_large.value().as_span(),
             rev_profile=self.reverse_profile.profile_large.value().as_span(),
-            bias=self.profile.bias.cast[DType.uint16](),
             max_score=self.profile.max_score,
             min_score=self.profile.min_score,
             free_query_start_gaps=self.sg_ends_free.query_start,
             free_query_end_gaps=self.sg_ends_free.query_end,
             free_target_start_gaps=self.sg_ends_free.target_start,
             free_target_end_gaps=self.sg_ends_free.target_end,
-            score_cutoff=Int32(len(self.pattern)),
+            score_cutoff=self.max_alignment_score() * self.score_threshold(),
         )
         if (
             result
@@ -107,7 +115,6 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
             gap_open_penalty=self.gap_open,
             gap_extension_penalty=self.gap_extend,
             profile=self.reverse_profile.profile_large.value().as_span(),
-            bias=self.profile.bias.cast[DType.uint16](),
             max_score=self.profile.max_score,
             min_score=self.profile.min_score,
             free_query_start_gaps=self.sg_ends_free.query_end,

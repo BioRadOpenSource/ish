@@ -59,6 +59,7 @@ struct AlignedMemory[dtype: DType, width: Int, alignment: Int](
         if zero_mem:
             memset_zero(self.ptr, self.length)
 
+    @always_inline
     fn __getitem__[
         I: Indexer
     ](ref self, offset: I) -> ref [self] SIMD[dtype, width]:
@@ -78,9 +79,11 @@ struct AlignedMemory[dtype: DType, width: Int, alignment: Int](
     fn __del__(owned self):
         self.ptr.free()
 
+    @always_inline
     fn __len__(read self) -> Int:
         return self.length
 
+    @always_inline
     fn as_span(
         ref self,
     ) -> Span[SIMD[self.dtype, self.width], __origin_of(self)]:
