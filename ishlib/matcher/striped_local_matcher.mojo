@@ -70,7 +70,8 @@ struct StripedLocalMatcher[mut: Bool, //, origin: Origin[mut]](Matcher):
             gap_open_penalty=self.gap_open,
             gap_extension_penalty=self.gap_extend,
             reverse_profile=self.reverse_profile,
-            score_cutoff=-1,
+            score_cutoff=self.score_threshold()
+            * Float32(self.max_alignment_score()),
         )
 
         if (

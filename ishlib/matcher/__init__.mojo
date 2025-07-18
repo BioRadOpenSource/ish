@@ -16,10 +16,16 @@ fn simd_width_selector[dtype: DType]() -> Int:
     constrained[sizeof[Scalar[dtype]]() <= 16, "dytpe size too large."]()
     alias target = env_get_string["ISH_SIMD_TARGET", "none"]().lower()
     alias SSE_U8_SIZE = 16
+    alias AVX_256_U8_SIZE = 32
+    alias AVX_512_U8_SIZE = 64
 
     @parameter
-    if target == "baseline":
+    if target == "baseline" or target == "sse":
         return SSE_U8_SIZE // sizeof[Scalar[dtype]]()
+    elif target == "avx256":
+        return AVX_256_U8_SIZE // sizeof[Scalar[dtype]]()
+    elif target == "avx512":
+        return AVX_512_U8_SIZE // sizeof[Scalar[dtype]]()
     else:
         return simdwidthof[dtype]()
 

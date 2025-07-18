@@ -188,7 +188,7 @@ struct ByteFastaRecord:
             seq_bytes = scoring_matrix.convert_ascii_to_encoding(seq_bytes)
         var rev = List[UInt8](capacity=len(seq_bytes))
         for s in reversed(seq_bytes):
-            rev.append(s[])
+            rev.append(s)
         self.name = name^
         self.seq = seq_bytes^
         self.rev = rev^
@@ -329,26 +329,26 @@ struct BenchmarkResults(ToDelimited):
         var gcups = 0.0
 
         for result in results:
-            total_query_seqs += result[].total_query_seqs
-            total_target_seqs += result[].total_target_seqs
-            runtime_secs += result[].runtime_secs
-            cells_updated += result[].cells_updated
-            gcups += result[].gcups
+            total_query_seqs += result.total_query_seqs
+            total_target_seqs += result.total_target_seqs
+            runtime_secs += result.runtime_secs
+            cells_updated += result.cells_updated
+            gcups += result.gcups
 
-            if query_len != result[].query_len:
+            if query_len != result.query_len:
                 # TODO: may want to change this if we want to process multiple queries in one go.
                 raise "Mismatching query len"
-            if matrix != result[].matrix:
+            if matrix != result.matrix:
                 raise "Mismatching matrix"
-            if gap_open != result[].gap_open:
+            if gap_open != result.gap_open:
                 raise "Mismatching gap open"
-            if gap_extend != result[].gap_extend:
+            if gap_extend != result.gap_extend:
                 raise "Mismatching gap extend"
-            if u8_width != result[].u8_width:
+            if u8_width != result.u8_width:
                 raise "Mismatching u8 width"
-            if u16_width != result[].u16_width:
+            if u16_width != result.u16_width:
                 raise "Mismatching u16 width"
-            if score_size != result[].score_size:
+            if score_size != result.score_size:
                 raise "Mismatching score size"
 
         return Self(
@@ -518,7 +518,7 @@ fn bench_striped_local(
     )
     for q in queries:
         profiles.append(
-            Profiles[SIMD_U8_WIDTH, SIMD_U16_WIDTH](q[], matrix, score_size)
+            Profiles[SIMD_U8_WIDTH, SIMD_U16_WIDTH](q, matrix, score_size)
         )
     var prep_end = perf_counter()
     print("Setup Time:", prep_end - prep_start, file=stderr)
@@ -644,7 +644,7 @@ fn bench_striped_semi_global(
     for q in queries:
         profiles.append(
             SemiGlobalProfiles[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
-                q[], matrix, score_size
+                q, matrix, score_size
             )
         )
     var prep_end = perf_counter()

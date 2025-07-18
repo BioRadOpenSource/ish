@@ -1,6 +1,13 @@
 
 # Next
 
+# v1.3.0 (07-21-2025)
+
+- Switch to using signed ints instead of unsigned for semi-global
+- Fix alignment score check used to decided whether or not to do the reverse alignment for semi-global and local alignment
+- Allow specifying simd width via a flag at comple time
+- Fix / updates the bench_aligner for current stable Mojo
+
 # v1.2.1 (06-25-2025)
 
 - Fixed bug in logging module related to update from Mojo 24.3 to 24.4 replacing `write_args`.

@@ -157,7 +157,9 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
         max_devices: Int,
     ) raises -> List[Self]:
         var ret = List[Self]()
-        for i in range(0, min(DeviceContext.number_of_devices(), max_devices)):
+        for i in range(
+            0, min(DeviceContext.number_of_devices(), min(1, max_devices))
+        ):
             var device = DeviceContext(i)
             # Triple check it's a gpu
             if device.api() == "cuda" or device.api() == "hip":

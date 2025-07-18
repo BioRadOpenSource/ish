@@ -135,7 +135,7 @@ struct SearcherSettings:
             OptConfig(
                 "batch-size",
                 OptKind.IntLike,
-                default_value=String("268435456"),
+                default_value=String("4294967296"),
                 # TODO: elaborate on this for GPU batch sizing, with multiple devices.
                 description=(
                     "The number of bytes in a parallel processing batch. Note"
@@ -244,6 +244,8 @@ struct SearcherSettings:
             var expanded_files = expand_files_to_search(files)
 
             var max_gpus = opts.get_int("max-gpus")
+            if max_gpus > 1:
+                max_gpus = 0
 
             var tty = TTYInfo()
 
