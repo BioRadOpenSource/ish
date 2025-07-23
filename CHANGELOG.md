@@ -1,6 +1,10 @@
 
 # Next
 
+# v1.3.1 (07-23-2025)
+
+- Revert to lockfile from v1.2.1 to workaround modular-community package `regex` and conda channel ordering.
+
 # v1.3.0 (07-21-2025)
 
 - Switch to using signed ints instead of unsigned for semi-global
