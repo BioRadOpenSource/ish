@@ -1,18 +1,18 @@
 [workspace]
 authors = ["Seth Stadick <seth_stadick@bio-rad.com>"]
 channels = [
-    #"https://conda.modular.com/max-nightly",
-    "conda-forge",
+    "https://conda.modular.com/max-nightly",
     "https://conda.modular.com/max",
     "https://repo.prefix.dev/modular-community",
     "https://prefix.dev/pixi-build-backends",
+    "conda-forge",
 ]
 platforms = ["osx-arm64", "linux-64", "linux-aarch64"]
 preview = ["pixi-build"]
 
 [package]
 name = "ish"
-version = "1.3.0"
+version = "1.3.1"
 license = "Apache-2.0"
 
 [package.build]
