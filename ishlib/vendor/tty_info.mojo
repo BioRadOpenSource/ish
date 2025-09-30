@@ -20,7 +20,7 @@ fn main() raises:
 """
 
 from sys import ffi
-from sys.info import os_is_macos
+from sys.info import CompilationTarget
 from memory import UnsafePointer
 
 alias c_int = Int32
@@ -38,7 +38,7 @@ alias STDERR_FD: Int = 2
 @parameter
 fn _TIOCGWINSZ() -> c_ulong:
     """ioctl command for window size."""
-    if os_is_macos():
+    if CompilationTarget.is_macos():
         return 0x40087468
     else:
         return 0x5413
@@ -50,7 +50,7 @@ alias _ioctl_fn_type = fn (
 """ioctl function type"""
 
 
-@value
+@fieldwise_init
 @register_passable("trivial")
 struct Info:
     """Info on the TTY for a file descriptor."""
@@ -63,14 +63,14 @@ struct Info:
     """The number of cols of the TTY (horizontal)."""
 
 
-@value
+@fieldwise_init
 struct TTYInfo:
     var lib_handle: ffi.DLHandle
 
     @staticmethod
     fn _get_libname() -> StaticString:
         @parameter
-        if os_is_macos():
+        if CompilationTarget.is_macos():
             return "libc.dylib"
         else:
             return "libc.so.6"

@@ -19,14 +19,14 @@ from ishlib.matcher.alignment.striped_utils import (
 from ishlib.vendor.log import Logger
 
 
-@value
-struct Cigar:
+@fieldwise_init
+struct Cigar(Copyable, Movable):
     var seq: List[UInt32]
 
 
-@value
+@fieldwise_init
 @register_passable
-struct ReferenceDirection:
+struct ReferenceDirection(ImplicitlyCopyable):
     """Direction of the reference sequence."""
 
     var value: UInt8
@@ -37,7 +37,7 @@ struct ReferenceDirection:
         return self.value == other.value
 
 
-@value
+@fieldwise_init
 @register_passable("trivial")
 struct Alignment:
     var score1: Int32
@@ -47,8 +47,8 @@ struct Alignment:
     var read_end1: Int32
 
 
-@value
-struct Profile[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
+@fieldwise_init
+struct Profile[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int](Copyable, Movable):
     alias ByteVProfile = AlignedMemory[
         DType.uint8, SIMD_U8_WIDTH, SIMD_U8_WIDTH
     ]
@@ -136,7 +136,7 @@ struct Profile[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
                     ).cast[T]()
                     j += segment_length
                 t_idx += 1
-        return profile
+        return profile^
 
 
 fn ssw_align[
@@ -386,7 +386,7 @@ fn sw[
                 v_f = saturating_sub(v_f, v_gap_ext)
 
                 # Early termination check
-                if not (v_f > v_h).reduce_or():
+                if not v_f.gt(v_h).reduce_or():
                     break_out = True
                     break
             if break_out:
@@ -394,7 +394,7 @@ fn sw[
 
         # Check for new max score
         v_max_score = max(v_max_score, v_max_column)
-        var equal_vector = v_max_mark == v_max_score
+        var equal_vector = v_max_mark.eq(v_max_score)
         if not equal_vector.reduce_and():
             # find max score in vector
             var temp = v_max_score.reduce_max()

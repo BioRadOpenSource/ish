@@ -6,7 +6,7 @@
 from bit import next_power_of_two
 from pathlib import Path
 
-from ExtraMojo.bstr.memchr import memchr_wide, memchr
+from extramojo.bstr.memchr import memchr_wide, memchr
 
 from ishlib.vendor.zlib import GZFile
 from ishlib.vendor.kseq import KRead, BufferedReader, FastxReader
@@ -16,7 +16,7 @@ alias PEEK_SIZE: Int = 8192  # This is the initial read size done by zlib
 alias DEFAULT_MAX_LENGTH = 1024
 
 
-@value
+@fieldwise_init
 struct PeekFindings:
     var is_binary: Bool
     var suggested_max_length: UInt
@@ -101,7 +101,7 @@ fn peek_file[
     )
 
 
-@value
+@fieldwise_init
 struct SpanReader[origin: ImmutableOrigin](KRead):
     var data: Span[UInt8, origin]
     var index: Int

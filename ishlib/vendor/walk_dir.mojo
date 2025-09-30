@@ -48,4 +48,4 @@ fn walk_dir[
                 out.append(child)
             elif child.is_dir():
                 to_examine.append(child)
-    return out
+    return out^

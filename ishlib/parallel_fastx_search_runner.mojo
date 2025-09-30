@@ -1,4 +1,4 @@
-from ExtraMojo.io.buffered import BufferedWriter
+from extramojo.io.buffered import BufferedWriter
 
 from time.time import perf_counter
 
@@ -42,7 +42,7 @@ from pathlib import Path
 from sys import stdout, info
 
 
-@value
+@fieldwise_init
 struct SeqAndIndex(SearchableWithIndex):
     var seq: ByteFastxRecord
     var orig_index: UInt
@@ -56,7 +56,7 @@ struct SeqAndIndex(SearchableWithIndex):
         return self.orig_index
 
 
-@value
+@fieldwise_init
 struct ParallelFastxSearchRunner[M: Matcher]:
     var settings: SearcherSettings
     var matcher: M
@@ -117,7 +117,7 @@ struct ParallelFastxSearchRunner[M: Matcher]:
                         seq,
                     )
                 bytes_saved += record.size_in_bytes()
-                sequences.append(SeqAndIndex(record, seq_number))
+                sequences.append(SeqAndIndex(record^, seq_number))
                 seq_number += 1
 
             if bytes_saved >= self.settings.batch_size or not do_work:
@@ -182,7 +182,6 @@ struct ParallelFastxSearchRunner[M: Matcher]:
         writer.close()
 
 
-@value
 struct GpuParallelFastxSearchRunner[
     M: GpuMatcher,
     max_query_length: UInt = 200,
@@ -194,15 +193,15 @@ struct GpuParallelFastxSearchRunner[
     var matcher: M
 
     fn __init__(out self, settings: SearcherSettings, matcher: M) raises:
-        self.settings = settings
-        self.matcher = matcher
+        self.settings = settings.copy()
+        self.matcher = matcher.copy()
 
     fn run_search[
         W: Movable & Writer
     ](mut self, mut writer: BufferedWriter[W]) raises:
         # Peek the first file to get the suggested size, then use that for all of them.
         # Assume non-binary
-        var files = self.settings.files
+        var files = self.settings.files.copy()
         var first_peek = peek_file[
             record_type = RecordType.FASTX, check_record_size=True
         ](files[0])
@@ -221,8 +220,8 @@ struct GpuParallelFastxSearchRunner[
                 ]()
                 self.search_files[
                     W,
-                    max_query_length=max_query_length,
-                    max_target_length=max_target_length,
+                    max_query_length,
+                    max_target_length,
                 ](files, ctxs, writer, first_peek)
                 return
         else:
@@ -231,9 +230,9 @@ struct GpuParallelFastxSearchRunner[
                 " be sent to CPU, consider running with max-gpus set to 0."
             )
             var ctxs = self.create_ctxs[max_query_length, 4096]()
-            self.search_files[
-                W, max_query_length=max_query_length, max_target_length=4096
-            ](files, ctxs, writer, first_peek)
+            self.search_files[W, max_query_length, 4096](
+                files, ctxs, writer, first_peek
+            )
 
     fn create_ctxs[
         max_query_length: UInt = 200, max_target_length: UInt = 1024
@@ -251,7 +250,7 @@ struct GpuParallelFastxSearchRunner[
             max_target_length=max_target_length,
             max_devices=self.settings.max_gpus,
         )
-        return ctxs
+        return ctxs^
 
     fn search_files[
         W: Movable & Writer,
@@ -364,13 +363,13 @@ struct GpuParallelFastxSearchRunner[
                 if len(reader.seq) > max_target_length:
                     cpu_sequences.append(
                         SeqAndIndex(
-                            record,
+                            record^,
                             seq_index,
                         )
                     )
                 else:
                     bytes_saved += max_target_length
-                    sequences.append(SeqAndIndex(record, seq_index))
+                    sequences.append(SeqAndIndex(record^, seq_index))
 
             seq_index += 1
             if (

@@ -1,4 +1,4 @@
-from ExtraMojo.io.buffered import BufferedWriter
+from extramojo.io.buffered import BufferedWriter
 
 from ishlib import RED, PURPLE, GREEN
 from ishlib import ByteSpanWriter, RecordType
@@ -36,7 +36,7 @@ from sys import stdout, info
 from time.time import perf_counter
 
 
-@value
+@fieldwise_init
 struct LineAndIndex(SearchableWithIndex):
     var line: List[UInt8]
     var orig_index: UInt
@@ -48,7 +48,7 @@ struct LineAndIndex(SearchableWithIndex):
         return self.orig_index
 
 
-@value
+@fieldwise_init
 struct ParallelLineSearchRunner[M: Matcher]:
     var settings: SearcherSettings
     var matcher: M
@@ -93,7 +93,7 @@ struct ParallelLineSearchRunner[M: Matcher]:
                         self.matcher.convert_ascii_to_encoding(buffer[i])
                     )
                 bytes_saved += len(line)
-                lines.append(LineAndIndex(line, batch_line_number))
+                lines.append(LineAndIndex(line^, batch_line_number))
                 batch_line_number += 1
 
             if bytes_saved >= self.settings.batch_size or not do_work:
@@ -161,7 +161,6 @@ struct ParallelLineSearchRunner[M: Matcher]:
         writer.close()
 
 
-@value
 struct GpuParallelLineSearchRunner[
     M: GpuMatcher,
     max_query_length: UInt = 200,
@@ -173,8 +172,8 @@ struct GpuParallelLineSearchRunner[
     var matcher: M
 
     fn __init__(out self, settings: SearcherSettings, matcher: M) raises:
-        self.settings = settings
-        self.matcher = matcher
+        self.settings = settings.copy()
+        self.matcher = matcher.copy()
 
     fn run_search[
         W: Movable & Writer
@@ -183,7 +182,7 @@ struct GpuParallelLineSearchRunner[
         # Still peek each for binary
 
         # First non-binary file
-        var files = self.settings.files
+        var files = self.settings.files.copy()
         var first_peek = peek_file[
             record_type = RecordType.LINE, check_record_size=True
         ](files[0])
@@ -212,8 +211,8 @@ struct GpuParallelLineSearchRunner[
                     ]()
                     self.search_files[
                         W,
-                        max_query_length=max_query_length,
-                        max_target_length=max_target_length,
+                        max_query_length,
+                        max_target_length,
                     ](files, ctxs, writer)
                     return
             else:
@@ -222,9 +221,9 @@ struct GpuParallelLineSearchRunner[
                     " be sent to CPU, consider running with max-gpus set to 0."
                 )
                 var ctxs = self.create_ctxs[max_query_length, 4096]()
-                self.search_files[
-                    W, max_query_length=max_query_length, max_target_length=4096
-                ](files, ctxs, writer)
+                self.search_files[W, max_query_length, 4096](
+                    files, ctxs, writer
+                )
 
         choose_max_target_length(first_peek.suggested_max_length)
 
@@ -244,7 +243,7 @@ struct GpuParallelLineSearchRunner[
             max_target_length=max_target_length,
             max_devices=self.settings.max_gpus,
         )
-        return ctxs
+        return ctxs^
 
     fn search_files[
         W: Movable & Writer,
@@ -348,10 +347,10 @@ struct GpuParallelLineSearchRunner[
                         self.matcher.convert_ascii_to_encoding(buffer[i])
                     )
                 if len(line) > max_target_length:
-                    cpu_sequences.append(LineAndIndex(line, seq_index))
+                    cpu_sequences.append(LineAndIndex(line^, seq_index))
                 else:
                     bytes_saved += max_target_length
-                    sequences.append(LineAndIndex(line, seq_index))
+                    sequences.append(LineAndIndex(line^, seq_index))
 
             seq_index += 1
             if (

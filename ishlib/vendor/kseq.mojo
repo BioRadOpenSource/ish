@@ -24,7 +24,7 @@ from memory import UnsafePointer, memcpy
 
 from time.time import perf_counter
 
-from ExtraMojo.bstr.memchr import memchr
+from extramojo.bstr.memchr import memchr
 
 
 alias ASCII_NEWLINE = ord("\n")
@@ -36,7 +36,7 @@ alias ASCII_FASTQ_RECORD_START = ord("@")
 alias ASCII_FASTQ_SEPARATOR = ord("+")
 
 
-@value
+@fieldwise_init
 @register_passable("trivial")
 struct SearchChar:
     var value: Int32
@@ -53,7 +53,7 @@ struct SearchChar:
         return UInt8(self.value)
 
 
-struct ByteString(Sized):
+struct ByteString(Copyable, Movable, Sized):
     # TODO: add address_space
     var size: UInt32
     var cap: UInt32
@@ -66,10 +66,10 @@ struct ByteString(Sized):
         if capacity > 0:
             self.resize(capacity)
 
-    fn __del__(owned self):
+    fn __del__(deinit self):
         self.ptr.free()
 
-    fn __moveinit__(out self, owned other: Self):
+    fn __moveinit__(out self, deinit other: Self):
         self.ptr = other.ptr
         self.size = other.size
         self.cap = other.cap
@@ -210,14 +210,14 @@ struct BufferedReader[R: KRead](Movable):
     var end_of_file: Bool
     var reader: R
 
-    fn __init__(out self, owned reader: R):
+    fn __init__(out self, var reader: R):
         self.buffer = ByteString(1024 * 128)
         self.start = 0
         self.end = 0
         self.end_of_file = False
         self.reader = reader^
 
-    fn __moveinit__(out self, owned other: Self):
+    fn __moveinit__(out self, deinit other: Self):
         self.buffer = other.buffer^
         self.start = other.start
         self.end = other.end
@@ -324,7 +324,7 @@ struct BufferedReader[R: KRead](Movable):
         return len(buffer)
 
 
-@value
+@fieldwise_init
 struct FastxRecord:
     var name: ByteString
     var seq: ByteString
@@ -340,7 +340,7 @@ struct FastxReader[R: KRead, read_comment: Bool = True](Movable):
     var reader: BufferedReader[R]
     var last_char: Int32
 
-    fn __init__(out self, owned reader: BufferedReader[R]):
+    fn __init__(out self, var reader: BufferedReader[R]):
         self.reader = reader^
         self.name = ByteString()
         self.seq = ByteString()
@@ -349,7 +349,7 @@ struct FastxReader[R: KRead, read_comment: Bool = True](Movable):
         self.comment = ByteString()
         self.last_char = 0
 
-    fn __moveinit__(out self, owned other: Self):
+    fn __moveinit__(out self, deinit other: Self):
         self.name = other.name^
         self.seq = other.seq^
         self.qual = other.qual^
@@ -357,15 +357,15 @@ struct FastxReader[R: KRead, read_comment: Bool = True](Movable):
         self.reader = other.reader^
         self.last_char = other.last_char
 
-    fn to_owned(read self) -> FastxRecord:
+    fn to_var(read self) -> FastxRecord:
         var qual: Optional[ByteString] = None
         var comment: Optional[ByteString] = None
         if self.qual.size > 0:
-            qual = self.qual
+            qual = self.qual.copy()
         if self.comment.size > 0:
-            comment = self.comment
+            comment = self.comment.copy()
 
-        return FastxRecord(self.name, self.seq, qual, comment)
+        return FastxRecord(self.name.copy(), self.seq.copy(), qual, comment)
 
     fn read(mut self) raises -> Int:
         """Read a single record into the reused FastxReader buffers.

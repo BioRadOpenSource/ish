@@ -3,7 +3,7 @@ from sys.info import alignof
 from gpu.host import DeviceBuffer
 
 
-@value
+@fieldwise_init
 struct StorageFormat:
     var value: Int
     alias ColumnMajor = Self(0)
@@ -13,7 +13,6 @@ struct StorageFormat:
         return self.value == other.value
 
 
-@value
 struct Dynamic2DMatrix[
     storage_format: StorageFormat = StorageFormat.RowMajor,
 ]:

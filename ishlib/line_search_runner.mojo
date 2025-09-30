@@ -1,4 +1,4 @@
-from ExtraMojo.io.buffered import BufferedWriter
+from extramojo.io.buffered import BufferedWriter
 
 from ishlib import RED, PURPLE, GREEN, ByteSpanWriter, RecordType
 from ishlib.matcher import Matcher
@@ -12,7 +12,7 @@ from pathlib import Path
 from sys import stdout
 
 
-@value
+@fieldwise_init
 struct LineSearchRunner[M: Matcher]:
     var settings: SearcherSettings
     var matcher: M

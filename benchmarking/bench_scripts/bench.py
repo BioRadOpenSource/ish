@@ -1,58 +1,56 @@
 import csv
 import io
+from pathlib import Path
 import sys
 import subprocess as sp
 from dataclasses import dataclass
-from typing import Optional, List
+from typing import Literal, Optional, List
+
+import defopt
 
 # Requries ish-aligner to have been compiled for the 3 widths of interest: (128, 256, 512)
-ISH_128 = "/home/ubuntu/dev/ish/ish-aligner-128"
-ISH_256 = "/home/ubuntu/dev/ish/ish-aligner-256"
-ISH_512 = "/home/ubuntu/dev/ish/ish-aligner-512"
-ISH_GPU = "/home/ubuntu/dev/ish/ish-aligner-gpu"
-
-PARASAIL_ALIGNER = "/home/ubuntu/dev/parasail/apps/parasail_aligner"
+# ISH_128 = "/home/ubuntu/dev/ish/ish-aligner-128"
+# ISH_256 = "/home/ubuntu/dev/ish/ish-aligner-256"
+# ISH_512 = "/home/ubuntu/dev/ish/ish-aligner-512"
+# ISH_GPU = "/home/ubuntu/dev/ish/ish-aligner-gpu"
+# curl https://ftp.uniprot.org/pub/databases/uniprot/previous_releases/release-2015_11/knowledgebase/uniprot_sprot-only2015_11.tar.gz --output uniprot_sprot-only2015_11.tar.gz
+# REF_DB = "/home/ubuntu/data/uniprot_sprot_5x.fasta"
 
 # From parasail data dir
 # https://github.com/jeffdaily/parasail/tree/600fb26151ff19899ee39a214972dcf2b9b11ed7/data
 QUERY_SEQS = {
-    "/home/ubuntu/dev/parasail/data/P56980.fasta": 24,
-    "/home/ubuntu/dev/parasail/data/O29181.fasta": 63,
-    "/home/ubuntu/dev/parasail/data/O60341.fasta": 852,
-    "/home/ubuntu/dev/parasail/data/P00762.fasta": 246,
-    "/home/ubuntu/dev/parasail/data/P01008.fasta": 464,
-    "/home/ubuntu/dev/parasail/data/P01111.fasta": 189,
-    "/home/ubuntu/dev/parasail/data/P02232.fasta": 144,
-    "/home/ubuntu/dev/parasail/data/P03435.fasta": 567,
-    "/home/ubuntu/dev/parasail/data/P03630.fasta": 127,
-    "/home/ubuntu/dev/parasail/data/P03989.fasta": 362,
-    "/home/ubuntu/dev/parasail/data/P04775.fasta": 2005,
-    "/home/ubuntu/dev/parasail/data/P05013.fasta": 189,
-    "/home/ubuntu/dev/parasail/data/P07327.fasta": 375,
-    "/home/ubuntu/dev/parasail/data/P07756.fasta": 1500,
-    "/home/ubuntu/dev/parasail/data/P08519.fasta": 4548,
-    "/home/ubuntu/dev/parasail/data/P0C6B8.fasta": 3564,
-    "/home/ubuntu/dev/parasail/data/P10635.fasta": 497,
-    "/home/ubuntu/dev/parasail/data/P14942.fasta": 222,
-    "/home/ubuntu/dev/parasail/data/P19096.fasta": 2504,
-    "/home/ubuntu/dev/parasail/data/P20930.fasta": 4061,
-    "/home/ubuntu/dev/parasail/data/P21177.fasta": 729,
-    "/home/ubuntu/dev/parasail/data/P25705.fasta": 553,
-    "/home/ubuntu/dev/parasail/data/P27895.fasta": 1000,
-    "/home/ubuntu/dev/parasail/data/P28167.fasta": 3005,
-    "/home/ubuntu/dev/parasail/data/P33450.fasta": 5147,
-    "/home/ubuntu/dev/parasail/data/P42357.fasta": 657,
-    "/home/ubuntu/dev/parasail/data/P53765.fasta": 255,
-    "/home/ubuntu/dev/parasail/data/P58229.fasta": 511,
-    "/home/ubuntu/dev/parasail/data/Q7TMA5.fasta": 4743,
-    "/home/ubuntu/dev/parasail/data/Q8ZGB4.fasta": 361,
-    "/home/ubuntu/dev/parasail/data/Q9UKN1.fasta": 5478,
+    "P56980.fasta": 24,
+    "O29181.fasta": 63,
+    "O60341.fasta": 852,
+    "P00762.fasta": 246,
+    "P01008.fasta": 464,
+    "P01111.fasta": 189,
+    "P02232.fasta": 144,
+    "P03435.fasta": 567,
+    "P03630.fasta": 127,
+    "P03989.fasta": 362,
+    "P04775.fasta": 2005,
+    "P05013.fasta": 189,
+    "P07327.fasta": 375,
+    "P07756.fasta": 1500,
+    "P08519.fasta": 4548,
+    "P0C6B8.fasta": 3564,
+    "P10635.fasta": 497,
+    "P14942.fasta": 222,
+    "P19096.fasta": 2504,
+    "P20930.fasta": 4061,
+    "P21177.fasta": 729,
+    "P25705.fasta": 553,
+    "P27895.fasta": 1000,
+    "P28167.fasta": 3005,
+    "P33450.fasta": 5147,
+    "P42357.fasta": 657,
+    "P53765.fasta": 255,
+    "P58229.fasta": 511,
+    "Q7TMA5.fasta": 4743,
+    "Q8ZGB4.fasta": 361,
+    "Q9UKN1.fasta": 5478,
 }
-
-MATRIX = ["blosum62", "blosum50"]
-
-# curl https://ftp.uniprot.org/pub/databases/uniprot/previous_releases/release-2015_11/knowledgebase/uniprot_sprot-only2015_11.tar.gz --output uniprot_sprot-only2015_11.tar.gz
-REF_DB = "/home/ubuntu/data/uniprot_sprot_5x.fasta"
 
 
 @dataclass
@@ -114,7 +112,9 @@ class BenchmarkResults:
             )
 
     @staticmethod
-    def from_ish_csv_str(csv_str: str, aligner: str, devices: int = 0) -> List["BenchmarkResults"]:
+    def from_ish_csv_str(
+        csv_str: str, aligner: str, devices: int = 0
+    ) -> List["BenchmarkResults"]:
         csv_file = io.StringIO(csv_str)
         reader = csv.DictReader(
             csv_file,
@@ -149,7 +149,7 @@ class BenchmarkResults:
         blob_str: str,
         query_len: int,
         instruction_set: str,
-        score_size: int,
+        score_size: str,
         aligner: str,
     ) -> "BenchmarkResults":
         file = io.StringIO(blob_str)
@@ -198,7 +198,7 @@ def run_parasail_aligner(
     gap_open_score=3,
     gap_ext_score=1,
     *,
-    algo="sg"
+    algo="sg",
 ):
 
     scoring_matrix = scoring_matrix.lower()
@@ -212,7 +212,9 @@ def run_parasail_aligner(
         raise ValueError("Invalid score size")
 
     algorithm = (
-        f"{algo}_striped_" + (instruction_set if instruction_set else "") + f"_{score_size}"
+        f"{algo}_striped_"
+        + (instruction_set if instruction_set else "")
+        + f"_{score_size}"
     )
 
     # fmt: off
@@ -239,7 +241,7 @@ def run_parasail_aligner(
         result = BenchmarkResults.from_parasail_blob_str(
             out.stdout,
             query_len=query_len,
-            instruction_set=instruction_set,
+            instruction_set=instruction_set if instruction_set else "",
             score_size=score_size,
             aligner="parasail_aligner",
         )
@@ -261,7 +263,7 @@ def run_ish_aligner(
     iterations=3,
     devices=0,
     *,
-    algo="striped-local"
+    algo="striped-local",
 ) -> Optional[BenchmarkResults]:
     # fmt: off
     args = [
@@ -286,7 +288,9 @@ def run_ish_aligner(
         if "overflow" in out.stdout:
             print("Overflow, no result for: ", " ".join(args), file=sys.stderr)
             return None
-        result = BenchmarkResults.from_ish_csv_str(out.stdout, aligner="ish-aligner", devices=devices)[
+        result = BenchmarkResults.from_ish_csv_str(
+            out.stdout, aligner="ish-aligner", devices=devices
+        )[
             0
         ]  # Only take the first item since we're running this in such a way that only one will be there anyways
     except sp.CalledProcessError as e:
@@ -295,30 +299,53 @@ def run_ish_aligner(
     return result
 
 
-def main():
+ScoreSize = Literal["byte", "word", "adaptive"]
+ParasailInstructionSet = Literal["sse41_128", "neon_128", "avx2_256"]
+IshAlgorithm = Literal[
+    "basic-semi-global-gpu-parallel", "striped-semi-global", "striped-local"
+]
+ParasailAlgorithm = Literal["sg", "sw"]
+
+
+def main(
+    *,
+    ish_binaries: list[Path],
+    ish_algorithm: IshAlgorithm,
+    parasail_aligner_binary: Path = Path(""),
+    parasail_algorithm: ParasailAlgorithm = "sg",
+    query_seqs_base_dir: Path,
+    ref_data: Path,
+    score_sizes: list[ScoreSize],
+    parasail_instruction_sets: list[ParasailInstructionSet] = [],
+    output_dir: Path,
+    devices: int = 1,
+    iterations: int = 3
+):
 
     # score_sizes = ["byte", "word", "adaptive"]
-    score_sizes = ["word"]
+    # score_sizes = ["word"]
 
     writer = csv.DictWriter(sys.stdout, fieldnames=BenchmarkResults.HEADERS)
     writer.writeheader()
 
     results: List[BenchmarkResults] = []
-    for ish in [ISH_GPU]: #, ISH_256, ISH_512]:
+    for ish in ish_binaries:  # , ISH_256, ISH_512]:
         for score_size in score_sizes:
-            for device in range(0, 4):
+            for device in range(0, devices):
                 for query in QUERY_SEQS.keys():
-                    print(f"Running {ish} on {query} with {score_size}", file=sys.stderr)
+                    print(
+                        f"Running {ish} on {query} with {score_size}", file=sys.stderr
+                    )
                     r = run_ish_aligner(
-                        ish,
-                        query,
-                        REF_DB,
+                        str(ish),
+                        str(Path(query_seqs_base_dir) / query),
+                        str(ref_data),
                         score_size=score_size,
                         scoring_matrix="Blosum62",
-                        output_file="/home/ubuntu/outputs/ish-aligner.csv",
-                        iterations=3,
-                        algo="basic-semi-global-gpu-parallel",
-                        devices = device + 1
+                        output_file=str(output_dir / "ish-aligner-result.csv"),
+                        iterations=iterations,
+                        algo=ish_algorithm,
+                        devices=device + 1,
                     )
                     if r:
                         writer.writerow(
@@ -341,23 +368,20 @@ def main():
                         )
                         results.append(r)
 
-    for inst in []:
-    # for inst in ["sse41_128"]:
-    # for inst in ["sse41_128", "avx2_256"]:
-    # for inst in ["neon_128"]:
+    for inst in parasail_instruction_sets:
         for score_size in score_sizes:
             for query, query_len in QUERY_SEQS.items():
-                print(f"Running {PARASAIL_ALIGNER} on {query}", file=sys.stderr)
+                print(f"Running {parasail_aligner_binary} on {query}", file=sys.stderr)
                 r = run_parasail_aligner(
-                    PARASAIL_ALIGNER,
-                    REF_DB,
-                    query,
+                    str(parasail_aligner_binary),
+                    str(ref_data),
+                    str(Path(query_seqs_base_dir) / query),
                     query_len,
                     instruction_set=inst,
                     score_size=score_size,
                     scoring_matrix="Blosum62",
-                    output_file="/home/ubuntu/outputs/parasail-aligner.csv",
-                    algo="sg"
+                    output_file=str(output_dir / "parasail-aligner-result.csv"),
+                    algo=parasail_algorithm,
                 )
                 if r:
                     writer.writerow(
@@ -379,8 +403,8 @@ def main():
                     )
                     results.append(r)
 
-    #BenchmarkResults.to_csv(results)
+    # BenchmarkResults.to_csv(results)
 
 
 if __name__ == "__main__":
-    main()
+    defopt.run(main)

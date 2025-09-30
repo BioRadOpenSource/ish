@@ -41,8 +41,8 @@ fn smith_waterman(
         for _ in range(0, cols):
             score_row.append(0)
             traceback_row.append(0)
-        score_matrix.append(score_row)
-        traceback_matrix.append(traceback_row)
+        score_matrix.append(score_row^)
+        traceback_matrix.append(traceback_row^)
 
     var max_score: Int16 = 0
     var max_pos = (0, 0)
@@ -84,7 +84,8 @@ fn smith_waterman(
     # Traceback
     var align1 = List[UInt8]()
     var align2 = List[UInt8]()
-    i, j = max_pos
+    i = max_pos[0]
+    j = max_pos[1]
     var end = i
 
     while i > 0 and j > 0 and score_matrix[i][j] > 0:

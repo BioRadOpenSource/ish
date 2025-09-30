@@ -14,8 +14,8 @@ from ishlib.matcher.alignment.semi_global_aln.striped import (
 )
 
 
-@value
-struct FreeGapTest(StringableRaising):
+@fieldwise_init
+struct FreeGapTest(Copyable, Movable, StringableRaising):
     var q_start: Bool
     var q_end: Bool
     var t_start: Bool
@@ -51,7 +51,7 @@ fn test_exact_match() raises:
     configs.append(FreeGapTest(True, True, True, True, 8))  # All free
 
     for i in range(len(configs)):
-        var config = configs[i]
+        var config = configs[i].copy()
 
         var result = semi_global_parasail(
             query,
@@ -110,7 +110,7 @@ fn test_exact_match_striped() raises:
     configs.append(FreeGapTest(True, True, True, True, 8))  # All free
 
     for i in range(len(configs)):
-        var config = configs[i]
+        var config = configs[i].copy()
 
         var result = semi_global_aln[DType.int16, 8](
             target,
@@ -586,7 +586,7 @@ fn test_complex_case() raises:
     configs.append(FreeGapTest(True, True, True, True, 10))  # All free
 
     for i in range(len(configs)):
-        var config = configs[i]
+        var config = configs[i].copy()
 
         var result = semi_global_parasail(
             query,
@@ -1091,7 +1091,7 @@ fn test_complex_case_striped() raises:
     configs.append(FreeGapTest(True, True, True, True, 10))  # All free
 
     for i in range(len(configs)):
-        var config = configs[i]
+        var config = configs[i].copy()
 
         var result = semi_global_aln[DType.int16, 8](
             target,
@@ -1197,7 +1197,7 @@ fn test_complex_case_striped_small() raises:
     configs.append(FreeGapTest(True, True, True, True, 10))  # All free
 
     for i in range(len(configs)):
-        var config = configs[i]
+        var config = configs[i].copy()
 
         var result = semi_global_aln[DType.int8, 16](
             target,

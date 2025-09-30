@@ -73,9 +73,9 @@ fn needleman_wunsch_full_naive[
             h_row.append(0)
             e_row.append(0)
             f_row.append(0)
-        H.append(h_row)
-        E.append(e_row)
-        F.append(f_row)
+        H.append(h_row^)
+        E.append(e_row^)
+        F.append(f_row^)
 
     # Base cases
     H[0][0] = 0  # To left corner is always zero
@@ -222,9 +222,12 @@ fn needleman_wunsch_parasail[
             var E_ext = E + gap_extension_penalty
             E = max(E_open, E_ext)
 
-            var H_dag = NWH + scoring_matrix.get(
-                Int(query[j - 1]), Int(target[i - 1])
-            ).cast[DT]()
+            var H_dag = (
+                NWH
+                + scoring_matrix.get(
+                    Int(query[j - 1]), Int(target[i - 1])
+                ).cast[DT]()
+            )
             WH = max(max(H_dag, E), F[j])
             H[j] = WH
 

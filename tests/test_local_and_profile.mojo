@@ -1,6 +1,6 @@
 from math import iota, sqrt
 from memory import Span
-from sys.info import simdwidthof
+from sys.info import simd_width_of
 from testing import assert_equal, assert_true
 
 from ishlib.matcher.alignment.local_aln.striped import (
@@ -12,8 +12,8 @@ from ishlib.matcher.alignment.local_aln.striped import (
     ReferenceDirection,
 )
 
-alias SIMD_U8_WIDTH = 16  # simdwidthof[UInt8]()
-alias SIMD_U16_WIDTH = 8  # simdwidthof[UInt16]()
+alias SIMD_U8_WIDTH = 16  # simd_width_of[UInt8]()
+alias SIMD_U16_WIDTH = 8  # simd_width_of[UInt16]()
 
 
 fn test_profile() raises:
@@ -30,7 +30,7 @@ fn test_profile() raises:
     for i in range(0, alphabet_size):
         a.append(i)
         b.append(i)
-    var matrix = ScoringMatrix(values, sqrt(len(values)), a, b)
+    var matrix = ScoringMatrix(values^, sqrt(len(values)), a^, b^)
 
     var profile = Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
         Span(query), matrix, ScoreSize.Adaptive
@@ -389,9 +389,9 @@ fn test_sw_byte_comprehensive() raises:
 fn test_compare_vs_c() raises:
     var matrix = ScoringMatrix.actgn_matrix()
     var reference = List("CAGCCTTTCTGACCCGGAAATCAAAATAGGCACAACAAA".as_bytes())
-    var ref_seq = matrix.convert_ascii_to_encoding(reference)
+    var ref_seq = matrix.convert_ascii_to_encoding(reference^)
     var read = List("CTGAGCCGGTAAATC".as_bytes())
-    var read_seq = matrix.convert_ascii_to_encoding(read)
+    var read_seq = matrix.convert_ascii_to_encoding(read^)
 
     # Create query profile
     var profile = Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
@@ -422,9 +422,9 @@ fn test_compare_vs_c() raises:
 fn test_compare_vs_c_ssw_align() raises:
     var matrix = ScoringMatrix.actgn_matrix()
     var reference = List("CAGCCTTTCTGACCCGGAAATCAAAATAGGCACAACAAA".as_bytes())
-    var ref_seq = matrix.convert_ascii_to_encoding(reference)
+    var ref_seq = matrix.convert_ascii_to_encoding(reference^)
     var read = List("CTGAGCCGGTAAATC".as_bytes())
-    var read_seq = matrix.convert_ascii_to_encoding(read)
+    var read_seq = matrix.convert_ascii_to_encoding(read^)
 
     # Create query profile
     var profile = Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
@@ -470,12 +470,12 @@ fn test_compare_vs_c_ssw_align2() raises:
         "CAGCCTTTCTGACCCGGAAATCAAAATAGGCACAACAAACAGCCTTTCTGACCCGGAAATCAAAATAGGCACAACAAA"
         .as_bytes()
     )
-    var ref_seq = matrix.convert_ascii_to_encoding(reference)
+    var ref_seq = matrix.convert_ascii_to_encoding(reference^)
     var read = List(
         "CTGAGCCGGTAAATCCTGAGCCGGTAAATCCTGAGCCGGTAAATCCTGAGCCGGTAAATCCTGAGCCGGTAAATCCTGAGCCGGTAAATCCTGAGCCGGTAAATC"
         .as_bytes()
     )
-    var read_seq = matrix.convert_ascii_to_encoding(read)
+    var read_seq = matrix.convert_ascii_to_encoding(read^)
 
     # Create query profile
     var profile = Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
@@ -520,12 +520,12 @@ fn test_compare_vs_c_ssw_align3() raises:
         "CAGCCTTTCTGACCCGGAAATCAAAATAGGCACAACAAACAGCCTTTCTGACCCGGAAATCAAAATAGGCACAACAAA"
         .as_bytes()
     )
-    var ref_seq = matrix.convert_ascii_to_encoding(reference)
+    var ref_seq = matrix.convert_ascii_to_encoding(reference^)
     var read = List(
         "CTGAGCCGGTAAATCCTGAGCCGGTAAATCCTGAGCCGGTAAATCCTGAGCCGGTAAATCCTGAGCCGGTAAATCCTGAGCCGGTAAATCCTGAGCCGGTAAATC"
         .as_bytes()
     )
-    var read_seq = matrix.convert_ascii_to_encoding(read)
+    var read_seq = matrix.convert_ascii_to_encoding(read^)
 
     # Create query profile
     var profile = Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
@@ -563,10 +563,6 @@ fn test_compare_vs_c_ssw_align3() raises:
     print(alignment.read_begin1, alignment.read_end1)
     assert_equal(alignment.read_end1, 74)
     assert_equal(alignment.read_begin1, 3)
-
-
-from ExtraMojo.utils.ir import dump_ir
-from ishlib.matcher.alignment.ssw_align import AlignmentResult, ProfileVectors
 
 
 @export

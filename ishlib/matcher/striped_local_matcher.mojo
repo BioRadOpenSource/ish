@@ -1,7 +1,7 @@
 """Smith-Waterman local alignment."""
 from gpu.host import DeviceContext
 from sys.info import (
-    simdwidthof,
+    simd_width_of,
 )
 
 from ishlib.vendor.log import Logger
@@ -15,7 +15,7 @@ from ishlib.matcher.alignment.local_aln.striped import (
 )
 
 
-@value
+@fieldwise_init
 struct StripedLocalMatcher[mut: Bool, //, origin: Origin[mut]](Matcher):
     alias SIMD_U8_WIDTH = simd_width_selector[DType.uint8]()
     alias SIMD_U16_WIDTH = simd_width_selector[DType.uint16]()
@@ -43,19 +43,20 @@ struct StripedLocalMatcher[mut: Bool, //, origin: Origin[mut]](Matcher):
         self.gap_extend = gap_extend
         self._score_threshold = score_threshold
         self.matrix = matrix_kind.matrix()
-        (
-            self.pattern,
-            self.max_score,
-        ) = self.matrix.convert_ascii_to_encoding_and_score(pattern)
+        var encoding_and_score = (
+            self.matrix.convert_ascii_to_encoding_and_score(pattern)
+        )
+        self.pattern = encoding_and_score[0].take()
+        self.max_score = encoding_and_score[1].take()
         self.rev_pattern = create_reversed(self.pattern)
         var profile = Profile[Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH](
             self.pattern, self.matrix, ScoreSize.Adaptive
         )
-        self.profile = profile
+        self.profile = profile^
         var reverse_profile = Profile[Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH](
             self.rev_pattern, self.matrix, ScoreSize.Adaptive
         )
-        self.reverse_profile = reverse_profile
+        self.reverse_profile = reverse_profile^
 
     fn first_match(
         read self, haystack: Span[UInt8], _pattern: Span[UInt8]

@@ -1,7 +1,6 @@
 from collections import Optional
 from collections.string import StringSlice
 from memory import Span, AddressSpace, UnsafePointer
-from sys.info import alignof
 
 from ishlib.gpu.dynamic_2d_matrix import Dynamic2DMatrix, StorageFormat
 from ishlib.matcher.alignment import AlignmentResult, TargetSpan
@@ -11,9 +10,9 @@ from ishlib.matcher.alignment.scoring_matrix import (
 )
 
 
-@value
+@fieldwise_init
 @register_passable("trivial")
-struct SGResult(StringableRaising):
+struct SGResult(ImplicitlyCopyable):
     var query: Int
     """0-based inclusive index in the query."""
     var target: Int
@@ -175,9 +174,12 @@ fn semi_global_parasail[
             var E_open = WH + gap_open_penalty
             var E_ext = E + gap_extension_penalty
             E = max(E_open, E_ext)
-            var H_dag = NWH + scoring_matrix.get(
-                Int(target[i - 1]), Int(query[j - 1])
-            ).cast[DT]()
+            var H_dag = (
+                NWH
+                + scoring_matrix.get(
+                    Int(target[i - 1]), Int(query[j - 1])
+                ).cast[DT]()
+            )
             WH = max(max(H_dag, E), F[j])
             H[j] = WH
 
@@ -338,14 +340,17 @@ fn semi_global_parasail_gpu[
             var E_open = WH + gap_open_penalty
             var E_ext = E + gap_extension_penalty
             E = max(E_open, E_ext)
-            var H_dag = NWH + scoring_matrix.get(
-                Int(
-                    target_tensor[
-                        coords.cord2idx(i - 1, target_of_interest_column)
-                    ]
-                ),
-                Int(query_ptr[j - 1]),
-            ).cast[DT]()
+            var H_dag = (
+                NWH
+                + scoring_matrix.get(
+                    Int(
+                        target_tensor[
+                            coords.cord2idx(i - 1, target_of_interest_column)
+                        ]
+                    ),
+                    Int(query_ptr[j - 1]),
+                ).cast[DT]()
+            )
             WH = max(max(H_dag, E), F[j])
             H[j] = WH
 
@@ -374,14 +379,19 @@ fn semi_global_parasail_gpu[
         var E_open = WH + gap_open_penalty
         var E_ext = E + gap_extension_penalty
         E = max(E_open, E_ext)
-        var H_dag = NWH + scoring_matrix.get(
-            Int(
-                target_tensor[
-                    coords.cord2idx(target_len - 1, target_of_interest_column)
-                ]
-            ),
-            Int(query_ptr[j - 1]),
-        ).cast[DT]()
+        var H_dag = (
+            NWH
+            + scoring_matrix.get(
+                Int(
+                    target_tensor[
+                        coords.cord2idx(
+                            target_len - 1, target_of_interest_column
+                        )
+                    ]
+                ),
+                Int(query_ptr[j - 1]),
+            ).cast[DT]()
+        )
         WH = max(max(H_dag, E), F[j])
         H[j] = WH
 

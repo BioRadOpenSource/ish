@@ -1,6 +1,6 @@
 """Smith-Waterman local alignment."""
 from gpu.host import DeviceContext
-from sys.info import simdwidthof
+from sys.info import simd_width_of
 
 from ishlib.gpu.kernels.semi_global import gpu_align_coarse
 from ishlib.matcher import Matcher, MatchResult, simd_width_selector
@@ -16,7 +16,7 @@ from ishlib.searcher_settings import SemiGlobalEndsFreeness
 from ishlib.vendor.log import Logger
 
 
-@value
+@fieldwise_init
 struct StripedSemiGlobalMatcher(GpuMatcher):
     alias SIMD_U8_WIDTH = simd_width_selector[DType.uint8]()
     alias SIMD_U16_WIDTH = simd_width_selector[DType.uint16]()
@@ -57,21 +57,22 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
         self.gap_extend = gap_extend
         self._score_threshold = score_threshold
         self.matrix = matrix_kind.matrix()
-        self._matrix_kind = matrix_kind
-        self.sg_ends_free = sg_ends_free
-        (
-            self.pattern,
-            self.max_score,
-        ) = self.matrix.convert_ascii_to_encoding_and_score(pattern)
+        self._matrix_kind = matrix_kind.copy()
+        self.sg_ends_free = sg_ends_free.copy()
+        var encoding_and_score = (
+            self.matrix.convert_ascii_to_encoding_and_score(pattern)
+        )
+        self.pattern = encoding_and_score[0].take()
+        self.max_score = encoding_and_score[1].take()
         self.rev_pattern = create_reversed(self.pattern)
         var profile = Profile[
             Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH, DType.int8, DType.int16
         ](self.pattern, self.matrix, ScoreSize.Word)
-        self.profile = profile
+        self.profile = profile^
         var reverse_profile = Profile[
             Self.SIMD_U8_WIDTH, Self.SIMD_U16_WIDTH, DType.int8, DType.int16
         ](self.rev_pattern, self.matrix, ScoreSize.Word)
-        self.reverse_profile = reverse_profile
+        self.reverse_profile = reverse_profile^
 
     fn first_match(
         read self, haystack: Span[UInt8], _pattern: Span[UInt8]
@@ -272,10 +273,8 @@ struct StripedSemiGlobalMatcher(GpuMatcher):
                 ends_free.target_end,
             )
         else:
-            Logger.warn(
-                "No valid MatrixKind set for gpu_align_coarse: ",
-                String(matrix_kind),
-            )
+            # NOTE: Cannot use print/Logger here - this code runs on GPU device
+            # Falling back to ASCII matrix kind
             gpu_align_coarse[
                 MatrixKind.ASCII, max_query_length, max_target_length
             ](

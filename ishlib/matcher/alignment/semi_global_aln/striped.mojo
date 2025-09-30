@@ -19,13 +19,13 @@ from ishlib.matcher.alignment.striped_utils import (
 )
 
 
-@value
+@fieldwise_init
 struct Profile[
     SIMD_SMALL_WIDTH: Int,
     SIMD_LARGE_WIDTH: Int,
     SmallType: DType = DType.int8,
     LargeType: DType = DType.int16,
-]:
+](Copyable, Movable):
     alias smallVProfile = AlignedMemory[
         SmallType, SIMD_SMALL_WIDTH, SIMD_SMALL_WIDTH
     ]
@@ -115,7 +115,7 @@ struct Profile[
                     ).cast[T]()
                     j += segment_length
                 t_idx += 1
-        return profile
+        return profile^
 
 
 fn semi_global_aln_start_end[
@@ -282,7 +282,7 @@ fn semi_global_aln[
     var segment_length = (query_len + width - 1) // width
     var offset = (query_len - 1) % segment_length
     var position = (width - 1) - (query_len - 1) // segment_length
-    var v_pos_mask = SIMD[dt, width](position) == iota[dt, width]().reversed()
+    var v_pos_mask = SIMD[dt, width](position).eq(iota[dt, width]().reversed())
 
     var zero = SIMD[dt, width](ZERO)
     var pv_h_store = AlignedMemory[dt, width, width](Int(segment_length))
@@ -428,14 +428,14 @@ fn semi_global_aln[
                     v_f = saturating_sub(v_f, v_gap_ext)
 
                     # Early termination check - match C version exactly
-                    if not (v_f > v_h).reduce_or():
+                    if not v_f.gt(v_h).reduce_or():
                         return
 
         lazy_f()
 
         # Extract vector containing last value from the column
         v_h = pv_h_store[offset]
-        var v_compare = v_pos_mask & (v_h > v_max_h)
+        var v_compare = v_pos_mask & v_h.gt(v_max_h)
         v_max_h = max(v_h, v_max_h)
         if v_compare.reduce_or():
             end_reference = i
@@ -480,8 +480,8 @@ fn semi_global_aln[
     @parameter
     if do_saturation_check:
         if (
-            (v_saturation_check_max > v_pos_limit)
-            | (v_saturation_check_min < v_neg_limit)
+            v_saturation_check_max.gt(v_pos_limit)
+            | v_saturation_check_min.lt(v_neg_limit)
         ).reduce_or():
             return AlignmentResult(
                 AlignmentEnd(0, 0, 0), overflow_detected=True

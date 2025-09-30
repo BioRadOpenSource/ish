@@ -1,7 +1,7 @@
 from collections import Optional
 from gpu.host import DeviceBuffer
 from memory import Span, UnsafePointer
-from sys.info import sizeof, simdwidthof
+from sys.info import size_of, simd_width_of
 from sys.param_env import env_get_string
 
 from ishlib.matcher.alignment.scoring_matrix import MatrixKind
@@ -11,9 +11,9 @@ from ishlib.searcher_settings import SemiGlobalEndsFreeness
 fn simd_width_selector[dtype: DType]() -> Int:
     """Select a SIMD width for a given type.
 
-    This will override the `simdwidthof` if the env var ISH_SIMD_TARGET=baseline
+    This will override the `simd_width_of` if the env var ISH_SIMD_TARGET=baseline
     """
-    constrained[sizeof[Scalar[dtype]]() <= 16, "dytpe size too large."]()
+    constrained[size_of[Scalar[dtype]]() <= 16, "dytpe size too large."]()
     alias target = env_get_string["ISH_SIMD_TARGET", "none"]().lower()
     alias SSE_U8_SIZE = 16
     alias AVX_256_U8_SIZE = 32
@@ -21,16 +21,16 @@ fn simd_width_selector[dtype: DType]() -> Int:
 
     @parameter
     if target == "baseline" or target == "sse":
-        return SSE_U8_SIZE // sizeof[Scalar[dtype]]()
+        return SSE_U8_SIZE // size_of[Scalar[dtype]]()
     elif target == "avx256":
-        return AVX_256_U8_SIZE // sizeof[Scalar[dtype]]()
+        return AVX_256_U8_SIZE // size_of[Scalar[dtype]]()
     elif target == "avx512":
-        return AVX_512_U8_SIZE // sizeof[Scalar[dtype]]()
+        return AVX_512_U8_SIZE // size_of[Scalar[dtype]]()
     else:
-        return simdwidthof[dtype]()
+        return simd_width_of[dtype]()
 
 
-@value
+@fieldwise_init
 @register_passable("trivial")
 struct MatchResult:
     """The start and end of the match, (start, end]."""
@@ -131,9 +131,9 @@ trait SearchableWithIndex(Searchable):
         ...
 
 
-@value
+@fieldwise_init
 @register_passable
-struct WhereComputed:
+struct WhereComputed(ImplicitlyCopyable):
     var value: Int
     alias Cpu = Self(0)
     alias Gpu = Self(1)
@@ -142,9 +142,9 @@ struct WhereComputed:
         return self.value == other.value
 
 
-@value
+@fieldwise_init
 @register_passable
-struct ComputedMatchResult:
+struct ComputedMatchResult(Copyable, Movable):
     var result: MatchResult
     var where_computed: WhereComputed
     var index: UInt

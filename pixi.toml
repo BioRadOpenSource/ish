@@ -1,43 +1,261 @@
 [workspace]
 authors = ["Seth Stadick <seth_stadick@bio-rad.com>"]
 channels = [
-    "https://conda.modular.com/max-nightly",
+    #"https://conda.modular.com/max-nightly",
+    "https://prefix.dev/conda-forge",
     "https://conda.modular.com/max",
-    "https://repo.prefix.dev/modular-community",
-    "https://prefix.dev/pixi-build-backends",
-    "conda-forge",
+    # "https://repo.prefix.dev/modular-community",
 ]
 platforms = ["osx-arm64", "linux-64", "linux-aarch64"]
 preview = ["pixi-build"]
 
 [package]
 name = "ish"
-version = "1.3.1"
+version = "1.4.0"
 license = "Apache-2.0"
 
 [package.build]
-backend = { name = "pixi-build-rattler-build", version = "0.1.*" }
+backend = { name = "pixi-build-mojo", version = "0.*" }
+channels = [
+    "https://prefix.dev/pixi-build-backends",
+    "https://prefix.dev/conda-forge",
+]
+
+[package.host-dependencies]
+mojo-compiler = "=0.25.6"
+
+[package.build-dependencies]
+mojo-compiler = "=0.25.6"
+extramojo = { git = "https://github.com/ExtraMojo/ExtraMojo.git" }
+zlib = ">=1.3.1,<2"
+
+[package.run-dependencies]
+mojo-compiler = "=0.25.6"
+zlib = ">=1.3.1,<2"
 
 
 [tasks]
-build = "pixi run mojo build -D ISH_LOG_LEVEL=info --march native -o ish main.mojo"
-build_generic = "pixi run mojo build -D ISH_SIMD_TARGET=baseline -D ISH_LOG_LEVEL=info -o ish main.mojo"
-debug = "pixi run mojo build -D ISH_LOG_LEVEL=debug --debug-level line-tables --march native -o ish main.mojo"
-pkglib = "pixi run mojo package ./ishlib"
-testlib = "pixi run mojo test tests -I . --co && pixi run mojo test tests -I ."
+build = "mojo build -D ISH_LOG_LEVEL=info --march native -o ish main.mojo"
+build_generic = "mojo build -D ISH_SIMD_TARGET=baseline -D ISH_LOG_LEVEL=info -o ish main.mojo"
+debug = "mojo build -D ISH_LOG_LEVEL=debug --debug-level line-tables --march native -o ish main.mojo"
+pkglib = "mojo package ./ishlib"
+testlib = "mojo test tests -I . --co && pixi run mojo test tests -I ."
 
 # Bench the gpu fun in ish using Bench
-build-bench-gpu = "pixi run mojo build -D ISH_LOG_LEVEL=timing --march native -I . -o bench-gpu ./benchmarking/ish_bench_aligner_gpu_only.mojo"
+build-bench-gpu = "mojo build -D ISH_LOG_LEVEL=timing --march native -I . -o bench-gpu ./benchmarking/ish_bench_aligner_gpu_only.mojo"
 
 # Bench any algorithm using internal timings
-build-bench = "pixi run mojo build -D SIMD_MOD=1 --march native  -I . -o ish-aligner ./benchmarking/ish_bench_aligner.mojo"
-build-bench-128 = "pixi run mojo build -D SIMD_MOD=4 --march native  -I . -o ish-aligner-128 ./benchmarking/ish_bench_aligner.mojo"
-build-bench-256 = "pixi run mojo build -D SIMD_MOD=2 --march native  -I . -o ish-aligner-256 ./benchmarking/ish_bench_aligner.mojo"
-build-bench-512 = "pixi run mojo build -D SIMD_MOD=1 --march native  -I . -o ish-aligner-512 ./benchmarking/ish_bench_aligner.mojo"
-build-bench-gpu-all = "pixi run mojo build -D ISH_LOG_LEVEL=timing -D SIMD_MOD=1 --march native  -I . -o ish-aligner-gpu ./benchmarking/ish_bench_aligner_gpu.mojo"
+build-bench = "mojo build -D SIMD_MOD='none' --march native  -I . -o ish-aligner ./benchmarking/ish_bench_aligner.mojo"
+build-bench-128 = "mojo build -D SIMD_MOD='sse' --march native  -I . -o ish-aligner-128 ./benchmarking/ish_bench_aligner.mojo"
+build-bench-256 = "mojo build -D SIMD_MOD='avx2' --march native  -I . -o ish-aligner-256 ./benchmarking/ish_bench_aligner.mojo"
+build-bench-512 = "mojo build -D SIMD_MOD='avx512' --march native  -I . -o ish-aligner-512 ./benchmarking/ish_bench_aligner.mojo"
+build-bench-gpu-all = "mojo build -D ISH_LOG_LEVEL=timing -D SIMD_MOD='none' --march native  -I . -o ish-aligner-gpu ./benchmarking/ish_bench_aligner_gpu.mojo"
+
+
+# Below here all all tasks for running benchmarks
+
+[tasks.get-bench-data]
+cmd = """
+mkdir -p bench/data && 
+cd bench/data && 
+git clone https://github.com/jeffdaily/parasail && 
+mkdir refdata && 
+cd refdata && 
+curl https://ftp.uniprot.org/pub/databases/uniprot/previous_releases/release-2015_11/knowledgebase/uniprot_sprot-only2015_11.tar.gz --output uniprot_sprot-only2015_11.tar.gz && tar -xvzf uniprot_sprot-only2015_11.tar.gz && 
+gunzip uniprot_sprot.fasta.gz &&
+awk 'BEGIN {RS=">"} NR > 1  && NR < 12 { printf ">%s", $0 }' uniprot_sprot.fasta > uniprot_sprot.small.fasta && 
+cat uniprot_sprot.fasta uniprot_sprot.fasta uniprot_sprot.fasta uniprot_sprot.fasta uniprot_sprot.fasta > uniprot_sprot_5x.fasta &&
+cat uniprot_sprot_5x.fasta uniprot_sprot_5x.fasta > uniprot_sprot_10x.fasta 
+"""
+outputs = ["bench/data/**/*.fasta"]
+
+[tasks.compile-parasail]
+depends-on = ["get-bench-data"]
+cmd = """
+cd bench/data/parasail &&
+autoreconf -fi &&
+./configure &&
+make -j $(nproc)
+"""
+outputs = ["bench/data/parasail/apps/parasail_aligner"]
+
+[tasks.run-bench-sw]
+depends-on = [
+    "compile-parasail",
+    "build-bench-128",
+    "build-bench-256",
+    "build-bench-512",
+]
+cmd = """
+bash -c '
+  mkdir -p bench_results/sw/plots &&
+  ARCH=$(uname -m) &&
+  ARCH_INFO="${ARCH_INFO:-$ARCH: $(lscpu | grep \"Model name\" | cut -d: -f2 | xargs || echo \"Unknown CPU\")}" &&
+  if [[ "$ARCH" == "x86_64" ]]; then
+      PARASAIL_INSTS="sse41_128 avx2_256"
+      ISH_BINS="$(readlink -f ish-aligner-128) $(readlink -f ish-aligner-256) $(readlink -f ish-aligner-512)"
+  elif [[ "$ARCH" == "aarch64" || "$ARCH" == "arm64" ]]; then
+      PARASAIL_INSTS="neon_128"
+      ISH_BINS="$(readlink -f ish-aligner-128)"
+  else
+      echo "Unsupported architecture: $ARCH" >&2
+      exit 1
+  fi &&
+  python benchmarking/bench_scripts/bench.py \
+      --ish-binaries $ISH_BINS \
+      --ish-algorithm striped-local \
+      --parasail-aligner-binary $(readlink -f ./bench/data/parasail/apps/parasail_aligner) \
+      --parasail-algorithm sw \
+      --score-size adaptive \
+      --query-seqs-base-dir ./bench/data/parasail/data/ \
+      --ref-data bench/data/refdata/uniprot_sprot.fasta \
+      --parasail-instruction-set $PARASAIL_INSTS \
+      --output-dir ./bench_results/sw/ \
+      > ./bench_results/sw/benchmark_results.csv &&
+  python benchmarking/bench_scripts/plot.py \
+      ./bench_results/sw/benchmark_results.csv \
+      "$ARCH_INFO" \
+      ./bench_results/sw
+'
+"""
+outputs = [
+    "./bench_results/sw/*.csv",
+    "./bench_results/sw/benchmark_results.csv",
+]
+
+[tasks.run-bench-sg]
+depends-on = [
+    "compile-parasail",
+    "build-bench-128",
+    "build-bench-256",
+    "build-bench-512",
+]
+cmd = """
+bash -c '
+  mkdir -p bench_results/sg/plots &&
+  ARCH=$(uname -m) &&
+  ARCH_INFO="${ARCH_INFO:-$ARCH: $(lscpu | grep \"Model name\" | cut -d: -f2 | xargs || echo \"Unknown CPU\")}" &&
+  if [[ "$ARCH" == "x86_64" ]]; then
+      PARASAIL_INSTS="sse41_128 avx2_256"
+      ISH_BINS="$(readlink -f ish-aligner-128) $(readlink -f ish-aligner-256) $(readlink -f ish-aligner-512)"
+  elif [[ "$ARCH" == "aarch64" || "$ARCH" == "arm64" ]]; then
+      PARASAIL_INSTS="neon_128"
+      ISH_BINS="$(readlink -f ish-aligner-128)"
+  else
+      echo "Unsupported architecture: $ARCH" >&2
+      exit 1
+  fi &&
+  python benchmarking/bench_scripts/bench.py \
+      --ish-binaries $ISH_BINS \
+      --ish-algorithm striped-semi-global \
+      --parasail-aligner-binary $(readlink -f ./bench/data/parasail/apps/parasail_aligner) \
+      --parasail-algorithm sg \
+      --score-size word \
+      --query-seqs-base-dir ./bench/data/parasail/data/ \
+      --ref-data bench/data/refdata/uniprot_sprot.fasta \
+      --parasail-instruction-set $PARASAIL_INSTS \
+      --output-dir ./bench_results/sg/ \
+      > ./bench_results/sg/benchmark_results.csv &&
+  python benchmarking/bench_scripts/plot.py \
+      ./bench_results/sg/benchmark_results.csv \
+      "$ARCH_INFO" \
+      ./bench_results/sg
+'
+"""
+outputs = [
+    "./bench_results/sg/*.csv",
+    "./bench_results/sg/benchmark_results.csv",
+]
+
+
+[tasks.run-bench-gpu]
+depends-on = ["get-bench-data", "build-bench-gpu-all"]
+cmd = """
+bash -c '
+  mkdir -p bench_results/gpu/plots &&
+  if command -v nvidia-smi &> /dev/null; then
+      GPU_INFO=$(nvidia-smi --query-gpu=name --format=csv,noheader | head -n1 | sed "s/NVIDIA //;s/GeForce //;s/-.*//" | xargs)
+  elif command -v rocm-smi &> /dev/null; then
+      GPU_INFO=$(rocm-smi --showproductname | grep "GPU" | head -n1 | awk "{print $NF}" | sed "s/AMD //;s/Radeon //" | xargs)
+  elif command -v lspci &> /dev/null; then
+      GPU_INFO=$(lspci | grep -ioE "(NVIDIA|Radeon|GeForce|RTX|GTX|Quadro|Tesla|RX)[^[]*" | head -n1 | sed "s/NVIDIA //;s/GeForce //;s/Radeon //;s/Corporation //" | xargs)
+  else
+      echo "No suported GPU Found" && exit 1
+  fi &&
+  python benchmarking/bench_scripts/bench.py \
+      --ish-binaries $(readlink -f ./ish-aligner-gpu) \
+      --ish-algorithm basic-semi-global-gpu-parallel \
+      --score-size word \
+      --query-seqs-base-dir ./bench/data/parasail/data/ \
+      --ref-data bench/data/refdata/uniprot_sprot_5x.fasta \
+      --devices 4 \
+      --iterations 1 \
+      --output-dir ./bench_results/gpu/ \
+      > ./bench_results/gpu/benchmark_results.csv &&
+  python benchmarking/bench_scripts/plot.py \
+      --is-gpu \
+      ./bench_results/gpu/benchmark_results.csv \
+      "$GPU_INFO" \
+      ./bench_results/gpu
+'
+"""
+outputs = [
+    "./bench_results/sg/*.csv",
+    "./bench_results/sg/benchmark_results.csv",
+]
+
+[tasks.get-chm13v2]
+args = [{ arg = "download_location", default = "./bench/refdata/" }]
+cmd = """
+bash -c '
+DOWNLOAD_LOC="{{ download_location }}"
+mkdir -p $DOWNLOAD_LOC &&
+curl -L https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/CHM13/assemblies/analysis_set/chm13v2.0.fa.gz | gunzip > $DOWNLOAD_LOC/chm13v2.0.fa
+'
+"""
+
+[tasks.run-whole-genome-search]
+depends-on = [
+    "build",
+    { task = "get-chm13v2", args = [
+        "{{download_location}}",
+    ] },
+]
+args = [{ arg = "download_location", default = "./bench/refdata/" }]
+cmd = """
+bash -c '
+mkdir -p ./bench_results/whole_genome/
+DOWNLOAD_LOC="{{ download_location }}"
+SIZE=$(stat -c%s $DOWNLOAD_LOC/chm13v2.0.fa) &&
+echo "Searching through CHM13 reference ($SIZE bytes)..." &&
+START=$(date +%s.%N) &&
+./ish --scoring-matrix actgn --record-type fastx --threads 16 ACCTTTTGGTTATATCATTCTTACATAAAGGACACTGTGAAGGCCCTTTCTTCTGGTTGAGA $DOWNLOAD_LOC/chm13v2.0.fa > /dev/null &&
+END=$(date +%s.%N) &&
+ELAPSED=$(echo "$END - $START" | bc) &&
+BYTES_PER_SEC=$(echo "scale=2; $SIZE / $ELAPSED" | bc) &&
+MB_PER_SEC=$(echo "scale=2; $BYTES_PER_SEC / 1048576" | bc) &&
+echo "Search complete: $SIZE bytes in $ELAPSED seconds" &&
+echo "Speed: $BYTES_PER_SEC bytes/sec ($MB_PER_SEC MB/sec)" > ./bench_results/whole_genome/speed.txt
+'
+"""
+outputs = ["./bench_results/whole_genome/speed.txt"]
+
+[tasks.bench-all-cpu]
+depends-on = ["run-bench-sw", "run-bench-sg", "run-whole-genome-search"]
+
+[tasks.bench-all-gpu]
+depends-on = ["run-bench-gpu"]
+
+[tasks.clean-benchmarks]
+cmd = """
+rm -rf ./bench_results
+"""
 
 [dependencies]
-modular = "=25.4.0"
-rattler-build = "*"
+mojo = "=0.25.6"
 # extramojo = { git = "https://github.com/ExtraMojo/ExtraMojo.git" }
-extramojo = "=0.15.0"
+extramojo = "=0.18.0"
+defopt = ">=7.0.0,<8"
+pandas = ">=2.3.3,<3"
+matplotlib = ">=3.10.7,<4"
+numpy = ">=2.3.4,<3"
