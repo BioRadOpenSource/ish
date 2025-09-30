@@ -3,15 +3,15 @@ from collections.string import StringSlice
 from memory import memcpy, memset_zero
 
 
-@value
+@fieldwise_init
 @register_passable("trivial")
 struct TargetSpan:
     var start: Int
     var end: Int
 
 
-@value
-struct AlignmentResult:
+@fieldwise_init
+struct AlignmentResult(Copyable, Movable):
     var score: Int32
     var alignment1: Optional[String]
     var alignment2: Optional[String]
@@ -40,19 +40,19 @@ struct AlignmentResult:
 fn create_reversed(input: Span[UInt8]) -> List[UInt8]:
     var ret = List(input)
     ret.reverse()
-    return ret
+    return ret^
 
 
 struct AlignedMemory[dtype: DType, width: Int, alignment: Int](
     Copyable, Movable, Sized
 ):
-    var ptr: UnsafePointer[SIMD[dtype, width], alignment=alignment]
+    var ptr: UnsafePointer[SIMD[dtype, width]]
     var length: Int
 
     fn __init__[zero_mem: Bool = True](out self, length: Int):
-        self.ptr = UnsafePointer[
-            SIMD[Self.dtype, self.width], alignment = self.alignment
-        ].alloc(length)
+        self.ptr = UnsafePointer[SIMD[Self.dtype, self.width]].alloc(
+            length, alignment=self.alignment
+        )
         self.length = length
 
         @parameter
@@ -66,17 +66,17 @@ struct AlignedMemory[dtype: DType, width: Int, alignment: Int](
         return self.ptr[offset]
 
     fn __copyinit__(out self, read other: Self):
-        self.ptr = UnsafePointer[
-            SIMD[Self.dtype, self.width], alignment = self.alignment
-        ].alloc(other.length)
+        self.ptr = UnsafePointer[SIMD[Self.dtype, self.width]].alloc(
+            other.length, alignment=self.alignment
+        )
         self.length = other.length
         memcpy(self.ptr, other.ptr, self.length)
 
-    fn __moveinit__(out self, owned other: Self):
+    fn __moveinit__(out self, deinit other: Self):
         self.ptr = other.ptr
         self.length = other.length
 
-    fn __del__(owned self):
+    fn __del__(deinit self):
         self.ptr.free()
 
     @always_inline

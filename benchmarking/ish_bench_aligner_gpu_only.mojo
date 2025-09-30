@@ -3,16 +3,16 @@ from algorithm.functional import parallelize
 from benchmark import Bench, Bencher, BenchId, BenchMetric, ThroughputMeasure
 from math import ceildiv
 from sys import stdout, stderr
-from sys.info import simdwidthof, has_avx512f, alignof, num_physical_cores
+from sys.info import simd_width_of, alignof, num_physical_cores
 from sys.param_env import env_get_int
 from time.time import perf_counter
 
 from gpu.host import DeviceContext
 
 
-from ExtraMojo.cli.parser import OptParser, OptConfig, OptKind, ParsedOpts
-from ExtraMojo.io.buffered import BufferedWriter
-from ExtraMojo.io.delimited import DelimWriter, ToDelimited
+from extramojo.cli.parser import OptParser, OptConfig, OptKind, ParsedOpts
+from extramojo.io.buffered import BufferedWriter
+from extramojo.io.delimited import DelimWriter, ToDelimited
 
 from ishlib.formats.fasta import FastaRecord
 from ishlib.gpu.searcher_device import SearcherDevice
@@ -153,7 +153,7 @@ fn parse_args() raises -> ParsedOpts:
     return parser.parse_sys_args()
 
 
-@value
+@fieldwise_init
 struct ByteFastaRecord(Searchable):
     var name: String
     var seq: List[UInt8]
@@ -161,17 +161,17 @@ struct ByteFastaRecord(Searchable):
 
     fn __init__(
         out self,
-        owned name: String,
-        owned seq: String,
+        var name: String,
+        var seq: String,
         read scoring_matrix: ScoringMatrix,
         convert_to_aa: Bool = True,
     ):
         var seq_bytes = List(seq.as_bytes())
         if convert_to_aa:
-            seq_bytes = scoring_matrix.convert_ascii_to_encoding(seq_bytes)
+            seq_bytes = scoring_matrix.convert_ascii_to_encoding(seq_bytes^)
         var rev = List[UInt8](capacity=len(seq_bytes))
         for s in reversed(seq_bytes):
-            rev.append(s[])
+            rev.append(s)
         self.name = name^
         self.seq = seq_bytes^
         self.rev = rev^
@@ -180,9 +180,9 @@ struct ByteFastaRecord(Searchable):
         return rebind[Span[UInt8, __origin_of(self)]](self.seq)
 
 
-@value
+@fieldwise_init
 @register_passable("trivial")
-struct BasicAlignmentOutput(ToDelimited):
+struct BasicAlignmentOutput(ToDelimited, Copyable, Movable):
     var query_idx: Int
     var target_idx: Int
     var query_len: Int
@@ -272,8 +272,8 @@ struct BasicAlignmentOutput(ToDelimited):
         )
 
 
-@value
-struct BenchmarkResults(ToDelimited):
+@fieldwise_init
+struct BenchmarkResults(ToDelimited, Copyable, Movable):
     var total_query_seqs: Int
     var total_target_seqs: Int
     var query_len: Int
@@ -297,20 +297,20 @@ struct BenchmarkResults(ToDelimited):
         var gcups = 0.0
 
         for result in results:
-            total_query_seqs += result[].total_query_seqs
-            total_target_seqs += result[].total_target_seqs
-            runtime_secs += result[].runtime_secs
-            cells_updated += result[].cells_updated
-            gcups += result[].gcups
+            total_query_seqs += result.total_query_seqs
+            total_target_seqs += result.total_target_seqs
+            runtime_secs += result.runtime_secs
+            cells_updated += result.cells_updated
+            gcups += result.gcups
 
-            if query_len != result[].query_len:
+            if query_len != result.query_len:
                 # TODO: may want to change this if we want to process multiple queries in one go.
                 raise "Mismatching query len"
-            if matrix != result[].matrix:
+            if matrix != result.matrix:
                 raise "Mismatching matrix"
-            if gap_open != result[].gap_open:
+            if gap_open != result.gap_open:
                 raise "Mismatching gap open"
-            if gap_extend != result[].gap_extend:
+            if gap_extend != result.gap_extend:
                 raise "Mismatching gap extend"
 
         return Self(
@@ -473,7 +473,7 @@ fn bench_basic_semi_global_gpu_parallel[
     ].create_devices(
         targets_per_device * MAX_GPU_LENGTH,
         len(queries[0].seq),
-        len(matrix),
+        matrix.__len__(),
         max_target_length=MAX_GPU_LENGTH,
         max_devices=devices,
     )
@@ -484,7 +484,7 @@ fn bench_basic_semi_global_gpu_parallel[
         ctxs[ctx_id].set_block_info(
             targets_per_device,
             len(queries[0].seq),
-            len(matrix),
+            matrix.__len__(),
             matrix_kind,
             gap_open_score,
             gap_extension_score,
@@ -494,7 +494,7 @@ fn bench_basic_semi_global_gpu_parallel[
         ctxs[ctx_id].host_create_input_buffers()
 
     for ctx in ctxs:
-        ctx[].synchronize()
+        ctx.synchronize()
     var host_buffers_created = perf_counter()
     Logger.timing(
         "Host buffer creation time:",
@@ -519,7 +519,7 @@ fn bench_basic_semi_global_gpu_parallel[
         ctxs[i].set_host_inputs(
             Span(queries[0].seq),
             matrix.values.unsafe_ptr(),
-            len(matrix),
+            matrix.__len__(),
             local_targets,
         )
 
@@ -531,13 +531,13 @@ fn bench_basic_semi_global_gpu_parallel[
     var gpu_start = perf_counter()
 
     # Launch Kernel
-    for ctx in ctxs:
-        ctx[].device_create_input_buffers()
-        ctx[].copy_inputs_to_device()
-        ctx[].device_create_output_buffers()
+    for ref ctx in ctxs:
+        ctx.device_create_input_buffers()
+        ctx.copy_inputs_to_device()
+        ctx.device_create_output_buffers()
 
     for ctx in ctxs:
-        ctx[].synchronize()
+        ctx.synchronize()
 
     var b = Bench()
     var gcups_metric = BenchMetric(5, "Giga-Cell Updates per second", "GCUPS")
@@ -555,7 +555,7 @@ fn bench_basic_semi_global_gpu_parallel[
             ctxs[0].launch_kernel[block_size=block_size](threads_to_launch)
 
         # Check at start of fn that we only have 1 devices specified
-        b.iter_custom[kernel_launch](ctxs[0].ctx)
+        b.iter_custom[kernel_launch](DeviceContext())
 
     """
     To further change how things are run, modify the `ctxs[].launch_kernel` on the `SearcherDevice`.
@@ -586,11 +586,11 @@ fn bench_basic_semi_global_gpu_parallel[
 
     # TODO: is this even needed?
     for ctx in ctxs:
-        ctx[].synchronize()
+        ctx.synchronize()
 
-    for ctx in ctxs:
-        ctx[].host_create_output_buffers()
-        ctx[].copy_outputs_to_host()
+    for ref ctx in ctxs:
+        ctx.host_create_output_buffers()
+        ctx.copy_outputs_to_host()
 
     for ctx_id in range(0, num_devices):
         ctxs[ctx_id].synchronize()
@@ -655,15 +655,15 @@ fn write_outputs[
     var total_items = 0
     for ctx in ctxs:
         var end = min(
-            total_items + ctx[].block_info.value().num_targets, len(targets)
+            total_items + ctx.block_info.value().num_targets, len(targets)
         )
 
         for j in range(0, end):
             var query_len = len(queries[0].seq)
-            var target_len = ctx[].host_target_ends.value().as_span()[j]
-            score = ctx[].host_scores.value().as_span()[j]
-            query_end = ctx[].host_query_ends.value().as_span()[j]
-            target_end = ctx[].host_target_ends.value().as_span()[j]
+            var target_len = ctx.host_target_ends.value().as_span()[j]
+            score = ctx.host_scores.value().as_span()[j]
+            query_end = ctx.host_query_ends.value().as_span()[j]
+            target_end = ctx.host_target_ends.value().as_span()[j]
             work += Int(query_len) * Int(target_len)
             writer.serialize(
                 BasicAlignmentOutput(
@@ -710,12 +710,19 @@ fn write_outputs[
         )
     )
     var result = BenchmarkResults.average(results)
-    var metric_writer = DelimWriter(
-        BufferedWriter(
-            open(metrics_file, "w") if metrics_file != "-" else stdout
-        ),
-        delim=",",
-        write_header=True,
-    )
-    metric_writer.serialize(result)
-    metric_writer.flush()
+    if metrics_file == "-":
+        var metric_writer = DelimWriter(
+            BufferedWriter(stdout),
+            delim=",",
+            write_header=True,
+        )
+        metric_writer.serialize(result)
+        metric_writer.flush()
+    else:
+        var metric_writer = DelimWriter(
+            BufferedWriter(open(metrics_file, "w")),
+            delim=",",
+            write_header=True,
+        )
+        metric_writer.serialize(result)
+        metric_writer.flush()

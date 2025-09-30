@@ -93,6 +93,8 @@ fn parallel_starts_ends[
 
     @parameter
     fn copy_data(i: Int):
+        if i >= len(amounts):
+            return
         s, e = amounts[i]
         # Tried sorting here, but it's slower than just processing it
         ctxs[i].set_host_inputs(
@@ -158,4 +160,4 @@ fn parallel_starts_ends[
         total_items = end
     var end = perf_counter()
     Logger.timing("Total time:", end - start)
-    return outputs
+    return outputs^

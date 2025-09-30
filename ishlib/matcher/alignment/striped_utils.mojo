@@ -40,9 +40,9 @@ fn saturating_add[
         return llvm_intrinsic["llvm.sadd.sat", __type_of(lhs)](lhs, rhs)
 
 
-@value
+@fieldwise_init
 @register_passable
-struct ScoreSize:
+struct ScoreSize(ImplicitlyCopyable):
     """Controls the precision used for alignment scores.
 
     This directly effects the max possible score.
@@ -69,7 +69,7 @@ struct ScoreSize:
             return "adaptive"
 
 
-@value
+@fieldwise_init
 @register_passable("trivial")
 struct AlignmentStartEndResult:
     var score: Int32
@@ -84,7 +84,6 @@ struct AlignmentStartEndResult:
     """0-based inclusive target end."""
 
 
-@value
 @register_passable("trivial")
 struct AlignmentResult:
     var best: AlignmentEnd
@@ -101,7 +100,7 @@ struct AlignmentResult:
         self.overflow_detected = overflow_detected
 
 
-@value
+@fieldwise_init
 @register_passable("trivial")
 struct AlignmentEnd:
     var score: Int32
@@ -109,7 +108,7 @@ struct AlignmentEnd:
     var query: Int32  # alignment ending position on query, 0-based
 
 
-@value
+@fieldwise_init
 struct ProfileVectors[dt: DType, width: Int]:
     var pv_h_store: AlignedMemory[dt, width, width]
     var pv_h_load: AlignedMemory[dt, width, width]
@@ -139,15 +138,15 @@ struct ProfileVectors[dt: DType, width: Int]:
         # List to record the alignment query ending position of the largest score of each reference position
         var end_query_column = List[Int32]()
 
-        self.pv_h_store = pv_h_store
-        self.pv_h_load = pv_h_load
-        self.pv_e = pv_e
-        self.pv_h_max = pv_h_max
+        self.pv_h_store = pv_h_store^
+        self.pv_h_load = pv_h_load^
+        self.pv_e = pv_e^
+        self.pv_h_max = pv_h_max^
         self.zero = zero
         self.segment_length = segment_length
         self.query_len = query_len
-        self.max_column = max_column
-        self.end_query_column = end_query_column
+        self.max_column = max_column^
+        self.end_query_column = end_query_column^
 
     fn zero_out(mut self):
         memset_zero(self.pv_h_store.ptr, Int(self.segment_length))

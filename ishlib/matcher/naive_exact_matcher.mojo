@@ -6,7 +6,7 @@ from ishlib.matcher import Matcher, MatchResult
 from ishlib.matcher.alignment.scoring_matrix import ScoringMatrix, MatrixKind
 
 
-@value
+@fieldwise_init
 struct NaiveExactMatcher(Matcher):
     var pattern: List[UInt8]
     var max_score: Int
@@ -19,10 +19,11 @@ struct NaiveExactMatcher(Matcher):
     ):
         Logger.info("Performing matching with NaiveExactMatcher")
         self.scoring_matrix = matrix_kind.matrix()
-        (
-            self.pattern,
-            self.max_score,
-        ) = self.scoring_matrix.convert_ascii_to_encoding_and_score(pattern)
+        var encoding_and_score = (
+            self.scoring_matrix.convert_ascii_to_encoding_and_score(pattern)
+        )
+        self.pattern = encoding_and_score[0].take()
+        self.max_score = encoding_and_score[1].take()
 
     fn first_match(
         read self, haystack: Span[UInt8], pattern: Span[UInt8]

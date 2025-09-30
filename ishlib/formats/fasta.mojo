@@ -1,21 +1,21 @@
 from collections import Optional
-from sys.info import sizeof
+from sys.info import size_of
 
-from ExtraMojo.io.buffered import BufferedReader
-from ExtraMojo.bstr.memchr import memchr
-from ExtraMojo.bstr.bstr import to_ascii_uppercase
+from extramojo.io.buffered import BufferedReader
+from extramojo.bstr.memchr import memchr
+from extramojo.bstr.bstr import to_ascii_uppercase
 
 from ishlib.matcher import Matcher
 from ishlib.gpu.searcher_device import Searchable
 
 
-@value
+@fieldwise_init
 struct ByteFastaRecord(Searchable):
     var name: List[UInt8]
     var seq: List[UInt8]
 
     fn size_in_bytes(read self) -> UInt:
-        return sizeof[Self]() + len(self.name) + len(self.seq)
+        return size_of[Self]() + len(self.name) + len(self.seq)
 
     fn buffer_to_search(ref self) -> Span[UInt8, __origin_of(self)]:
         # This lifetime of seq is at least as long as self
@@ -26,8 +26,8 @@ struct ByteFastaRecord(Searchable):
         # )
 
 
-@value
-struct FastaRecord:
+@fieldwise_init
+struct FastaRecord(Copyable, Movable):
     var name: String
     var seq: String
 
@@ -81,16 +81,16 @@ struct FastaRecord:
                 end = memchr(buffer, ord("\n"), start)
             records.append(FastaRecord(name, seq))
 
-        return records
+        return records^
 
 
-@value
+@fieldwise_init
 struct BorrowedFastaRecord[
     mut: Bool, //,
     name_origin: Origin[mut],
     seq_origin: Origin[mut],
     original_origin: Origin[mut],
-]:
+](Copyable, Movable):
     var name: Span[UInt8, name_origin]
     var seq: Span[UInt8, seq_origin]
     var original_seq: Span[UInt8, original_origin]
@@ -103,7 +103,7 @@ struct FastaReader:
     var header_buffer: List[UInt8]
     var seq_buffer: List[UInt8]
 
-    fn __init__(out self, owned reader: BufferedReader) raises:
+    fn __init__(out self, var reader: BufferedReader) raises:
         self.reader = reader^
         self.buffer = List[UInt8]()
         self.header_buffer = List[UInt8]()
@@ -114,7 +114,7 @@ struct FastaReader:
         if bytes_read != 1:
             raise String.write("File should start with '>': ", len(self.buffer))
 
-    fn __moveinit__(out self, owned existing: Self):
+    fn __moveinit__(out self, deinit existing: Self):
         self.reader = existing.reader^
         self.buffer = existing.buffer^
         self.seq_buffer = existing.seq_buffer^
@@ -170,7 +170,7 @@ struct FastaReader:
 
     # TODO: move the encoding from Matcher to its own encoder trait
 
-    fn read_owned[
+    fn read_var[
         M: Matcher
     ](mut self, read encoder: M) raises -> Optional[ByteFastaRecord]:
         self.buffer.clear()
@@ -209,4 +209,4 @@ struct FastaReader:
             start = end + 1
             end = memchr(self.buffer, ord("\n"), start)
 
-        return ByteFastaRecord(header, seq)
+        return ByteFastaRecord(header^, seq^)

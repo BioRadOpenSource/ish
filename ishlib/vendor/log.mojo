@@ -2,8 +2,8 @@ import sys
 from sys.param_env import env_get_string
 
 
-@value
-struct LogLevel:
+@fieldwise_init
+struct LogLevel(ImplicitlyCopyable):
     var value: Int
     alias Nolog = Self(100000)
     alias Error = Self(500)
@@ -56,8 +56,8 @@ alias BLUE = "\x1b[34m"
 alias RESET = "\x1b[0m"
 
 
-@value
-struct Logger[colorize: Bool = True](Copyable, Movable):
+@fieldwise_init
+struct Logger[colorize: Bool = True](Copyable, ImplicitlyCopyable, Movable):
     alias LEVEL: LogLevel = LogLevel.from_str(
         env_get_string["ISH_LOG_LEVEL", "nolog"]()
     )

@@ -11,9 +11,9 @@ from ishlib.searcher_settings import SemiGlobalEndsFreeness
 from ishlib.vendor.log import Logger
 
 
-@value
+@fieldwise_init
 @register_passable
-struct BlockInfo:
+struct BlockInfo(Copyable, Movable):
     var num_targets: UInt
     var query_len: UInt
     var matrix_len: UInt
@@ -25,8 +25,8 @@ struct BlockInfo:
     var sg_ends_free: SemiGlobalEndsFreeness
 
 
-@value
-struct DeviceBufferWrapper[dtype: DType]:
+@fieldwise_init
+struct DeviceBufferWrapper[dtype: DType](Copyable, Movable):
     var buffer: DeviceBuffer[dtype]
     var size: UInt
     var capacity: UInt
@@ -60,8 +60,8 @@ struct DeviceBufferWrapper[dtype: DType]:
         )
 
 
-@value
-struct HostBufferWrapper[dtype: DType]:
+@fieldwise_init
+struct HostBufferWrapper[dtype: DType](Copyable, Movable):
     var buffer: HostBuffer[dtype]
     var size: UInt
     var capacity: UInt
@@ -95,8 +95,10 @@ struct HostBufferWrapper[dtype: DType]:
         )
 
 
-@value
-struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
+@fieldwise_init
+struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type](
+    Copyable, Movable
+):
     var ctx: DeviceContext
 
     var block_info: Optional[BlockInfo]
@@ -119,7 +121,7 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
 
     fn __init__(
         out self,
-        owned ctx: DeviceContext,
+        var ctx: DeviceContext,
     ):
         self.ctx = ctx^
 
@@ -167,9 +169,9 @@ struct SearcherDevice[func_type: AnyTrivialRegType, //, func: func_type]:
                 s._create_some_input_buffers(
                     query_length, matrix_length, batch_size, max_target_length
                 )
-                ret.append(s)
+                ret.append(s^)
 
-        return ret
+        return ret^
 
     fn set_block_info(
         mut self,

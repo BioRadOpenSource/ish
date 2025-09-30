@@ -1,18 +1,18 @@
 """Test program for SSW."""
 from sys import stdout, stderr
-from sys.info import simdwidthof, has_avx512f
-from sys.param_env import env_get_int
+from sys.info import simd_width_of, CompilationTarget
+from sys.param_env import env_get_string
 from time.time import perf_counter
 
-from ExtraMojo.cli.parser import OptParser, OptConfig, OptKind, ParsedOpts
-from ExtraMojo.io.buffered import BufferedWriter
-from ExtraMojo.io.delimited import DelimWriter, ToDelimited
+from extramojo.cli.parser import OptParser, OptConfig, OptKind, ParsedOpts
+from extramojo.io.buffered import BufferedWriter
+from extramojo.io.delimited import DelimWriter, ToDelimited
 from ishlib.matcher.alignment.local_aln.striped import (
     ssw_align,
     Profile,
-    ScoreSize,
     Alignment,
 )
+from ishlib.matcher.alignment.striped_utils import ScoreSize
 from ishlib.matcher.alignment.scoring_matrix import ScoringMatrix
 from ishlib.formats.fasta import FastaRecord
 from ishlib.matcher.alignment.striped_utils import AlignmentResult
@@ -23,21 +23,27 @@ from ishlib.matcher.alignment.semi_global_aln.striped import (
 )
 
 # Force half width vectors in the case of avx512 since avx 2 seems faster up to around 700len queries.
-# alias SIMD_U8_WIDTH = simdwidthof[
+# alias SIMD_U8_WIDTH = simd_width_of[
 #     UInt8
-# ]() if not has_avx512f() else simdwidthof[UInt8]() // 2
-# alias SIMD_U16_WIDTH = simdwidthof[
+# ]() if not has_avx512f() else simd_width_of[UInt8]() // 2
+# alias SIMD_U16_WIDTH = simd_width_of[
 #     UInt16
-# ]() if not has_avx512f() else simdwidthof[UInt16]() // 2
+# ]() if not has_avx512f() else simd_width_of[UInt16]() // 2
 
-alias SIMD_MOD = env_get_int["SIMD_MOD", 1]()
+alias SIMD_MOD = env_get_string["SIMD_MOD", "sse"]()
 """Modify the SIMD width based on a CLI argument."""
 
-alias FULL_SIMD_U8_WIDTH = simdwidthof[UInt8]()
-alias FULL_SIMD_U16_WIDTH = simdwidthof[UInt16]()
+alias FULL_SIMD_U8_WIDTH = simd_width_of[UInt8]()
+alias FULL_SIMD_U16_WIDTH = simd_width_of[UInt16]()
 
-alias SIMD_U8_WIDTH = simdwidthof[UInt8]() // SIMD_MOD
-alias SIMD_U16_WIDTH = simdwidthof[UInt16]() // SIMD_MOD
+alias SIMD_U8_WIDTH = 16 if SIMD_MOD == "sse" else 
+                      32 if SIMD_MOD == "avx2" else
+                      64 if SIMD_MOD == "avx512" else
+                      FULL_SIMD_U8_WIDTH
+alias SIMD_U16_WIDTH = 8 if SIMD_MOD == "sse" else 
+                       16 if SIMD_MOD == "avx2" else
+                       32 if SIMD_MOD == "avx512" else
+                       FULL_SIMD_U16_WIDTH
 
 
 fn parse_args() raises -> ParsedOpts:
@@ -167,25 +173,43 @@ fn parse_args() raises -> ParsedOpts:
             ),
         )
     )
+    parser.add_opt(
+        OptConfig(
+            "devices",
+            OptKind.IntLike,
+            default_value=String("1"),
+            description="Num GPUs to use.",
+        )
+    )
+    parser.add_opt(
+        OptConfig(
+            "fast-mode",
+            OptKind.BoolLike,
+            is_flag=True,
+            default_value=String("False"),
+            description="Use abbreviated dataset for speed.",
+        )
+    )
+
     return parser.parse_sys_args()
 
 
-@value
-struct ByteFastaRecord:
+@fieldwise_init
+struct ByteFastaRecord(Copyable, Movable):
     var name: String
     var seq: List[UInt8]
     var rev: List[UInt8]
 
     fn __init__(
         out self,
-        owned name: String,
-        owned seq: String,
+        var name: String,
+        var seq: String,
         read scoring_matrix: ScoringMatrix,
         convert_to_aa: Bool = True,
     ):
         var seq_bytes = List(seq.as_bytes())
         if convert_to_aa:
-            seq_bytes = scoring_matrix.convert_ascii_to_encoding(seq_bytes)
+            seq_bytes = scoring_matrix.convert_ascii_to_encoding(seq_bytes^)
         var rev = List[UInt8](capacity=len(seq_bytes))
         for s in reversed(seq_bytes):
             rev.append(s)
@@ -194,8 +218,8 @@ struct ByteFastaRecord:
         self.rev = rev^
 
 
-@value
-struct Profiles[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
+@fieldwise_init
+struct Profiles[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int](Copyable, Movable):
     var fwd: Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH]
     var rev: Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH]
 
@@ -213,8 +237,10 @@ struct Profiles[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
         )
 
 
-@value
-struct SemiGlobalProfiles[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
+@fieldwise_init
+struct SemiGlobalProfiles[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int](
+    Copyable, Movable
+):
     var fwd: SemiGlobalProfile[SIMD_U8_WIDTH, SIMD_U16_WIDTH]
     var rev: SemiGlobalProfile[SIMD_U8_WIDTH, SIMD_U16_WIDTH]
 
@@ -232,7 +258,7 @@ struct SemiGlobalProfiles[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
         )
 
 
-@value
+@fieldwise_init
 @register_passable("trivial")
 struct BasicAlignmentOutput(ToDelimited):
     var query_idx: Int
@@ -298,8 +324,8 @@ struct BasicAlignmentOutput(ToDelimited):
         )
 
 
-@value
-struct BenchmarkResults(ToDelimited):
+@fieldwise_init
+struct BenchmarkResults(Copyable, Movable, ToDelimited):
     var total_query_seqs: Int
     var total_target_seqs: Int
     var query_len: Int
@@ -412,6 +438,7 @@ fn main() raises:
     var output_file = opts.get_string("output-file")
     var metrics_file = opts.get_string("metrics-file")
     var iterations = opts.get_int("iterations")
+    var fast_mode = opts.get_bool("fast-mode")
 
     # Get the algorithm to use
     var algo = opts.get_string("algo")
@@ -467,6 +494,7 @@ fn main() raises:
             matrix_name,
             gap_open_score,
             gap_extension_score,
+            fast_mode
         )
     elif algorithm == "striped-semi-global":
         bench_striped_semi_global(
@@ -480,6 +508,7 @@ fn main() raises:
             matrix_name,
             gap_open_score,
             gap_extension_score,
+            fast_mode
         )
 
 
@@ -494,10 +523,13 @@ fn bench_striped_local(
     matrix_name: String,
     gap_open_score: Int,
     gap_extension_score: Int,
+    fast_mode: Bool
 ) raises:
     var prep_start = perf_counter()
     # Read the fastas and encode the sequences
     var target_seqs = FastaRecord.slurp_fasta(target_file)
+    if fast_mode:
+        target_seqs = target_seqs[0:10]
     var targets = List[ByteFastaRecord](capacity=len(target_seqs))
     while len(target_seqs) > 0:
         var t = target_seqs.pop()
@@ -589,7 +621,7 @@ fn bench_striped_local(
                 gap_extension_score,
                 SIMD_U8_WIDTH,
                 SIMD_U16_WIDTH,
-                String(score_size),
+                score_size.__str__(),
                 elapsed,
                 work,
                 cells_per_second / 1000000000,
@@ -597,15 +629,20 @@ fn bench_striped_local(
         )
 
     var result = BenchmarkResults.average(results)
-    var metric_writer = DelimWriter(
-        BufferedWriter(
-            open(metrics_file, "w") if metrics_file != "-" else stdout
-        ),
-        delim=",",
-        write_header=True,
-    )
-    metric_writer.serialize(result)
-    metric_writer.flush()
+    if metrics_file == "-":
+        var metric_writer = DelimWriter(
+            BufferedWriter(stdout), delim=",", write_header=True
+        )
+        metric_writer.serialize(result)
+        metric_writer.flush()
+    else:
+        var metric_writer = DelimWriter(
+            BufferedWriter(open(metrics_file, "w")),
+            delim=",",
+            write_header=True,
+        )
+        metric_writer.serialize(result)
+        metric_writer.flush()
 
 
 fn bench_striped_semi_global(
@@ -619,10 +656,13 @@ fn bench_striped_semi_global(
     matrix_name: String,
     gap_open_score: Int,
     gap_extension_score: Int,
+    fast_mode: Bool
 ) raises:
     # Read the fastas and encode the sequences
     var prep_start = perf_counter()
     var target_seqs = FastaRecord.slurp_fasta(target_file)
+    if fast_mode:
+        target_seqs = target_seqs[0:10]
     var targets = List[ByteFastaRecord](capacity=len(target_seqs))
     while len(target_seqs) > 0:
         var t = target_seqs.pop()
@@ -718,7 +758,7 @@ fn bench_striped_semi_global(
                 gap_extension_score,
                 SIMD_U8_WIDTH,
                 SIMD_U16_WIDTH,
-                String(score_size),
+                score_size.__str__(),
                 elapsed,
                 work,
                 cells_per_second / 1000000000,
@@ -726,12 +766,17 @@ fn bench_striped_semi_global(
         )
 
     var result = BenchmarkResults.average(results)
-    var metric_writer = DelimWriter(
-        BufferedWriter(
-            open(metrics_file, "w") if metrics_file != "-" else stdout
-        ),
-        delim=",",
-        write_header=True,
-    )
-    metric_writer.serialize(result)
-    metric_writer.flush()
+    if metrics_file == "-":
+        var metric_writer = DelimWriter(
+            BufferedWriter(stdout), delim=",", write_header=True
+        )
+        metric_writer.serialize(result)
+        metric_writer.flush()
+    else:
+        var metric_writer = DelimWriter(
+            BufferedWriter(open(metrics_file, "w")),
+            delim=",",
+            write_header=True,
+        )
+        metric_writer.serialize(result)
+        metric_writer.flush()

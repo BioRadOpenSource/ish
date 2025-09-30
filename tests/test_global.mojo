@@ -1,5 +1,5 @@
 from testing import assert_equal
-from ishlib.matcher.aligment import AlignmentResult
+from ishlib.matcher.alignment import AlignmentResult
 from ishlib.matcher.alignment.global_aln.basic import needleman_wunsch_parasail
 from ishlib.matcher.alignment.scoring_matrix import ScoringMatrix
 

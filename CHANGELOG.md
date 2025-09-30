@@ -1,6 +1,12 @@
 
 # Next
 
+# v1.4.0 (10-31-2025)
+
+- Support for Mojo v0.25.6
+- Improved benchmarking pipeline via `pixi run bench-all-cpu` and `pixi run bench-all-gpu`
+
+
 # v1.3.1 (07-23-2025)
 
 - Revert to lockfile from v1.2.1 to workaround modular-community package `regex` and conda channel ordering.

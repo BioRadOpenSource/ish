@@ -1,7 +1,7 @@
 from collections import InlineArray
 from math import sqrt
 from memory import UnsafePointer, AddressSpace
-from sys.info import alignof
+from sys.info import align_of
 
 from ishlib.vendor.log import Logger
 
@@ -173,9 +173,9 @@ alias ACTGN0 = InlineArray[Int8, 25](
 # fmt: on
 
 
-@value
+@fieldwise_init
 @register_passable
-struct MatrixKind(Sized, Stringable, Writable):
+struct MatrixKind(ImplicitlyCopyable, Sized, Stringable, Writable):
     var value: UInt8
     alias ASCII = Self(0)
     alias ACTGN = Self(1)
@@ -253,13 +253,13 @@ struct MatrixKind(Sized, Stringable, Writable):
             return True
 
 
-@value
+@fieldwise_init
 struct BasicScoringMatrix[
     mut: Bool, //,
     *,
     origin: Origin[mut],
     address_space: AddressSpace = AddressSpace(0),
-    alignment: Int = alignof[Int8](),
+    alignment: Int = align_of[Int8](),
     no_lookup: Bool = False,
     default_match: Int8 = 2,
     default_mismatch: Int8 = -2,
@@ -270,7 +270,6 @@ struct BasicScoringMatrix[
     var values: UnsafePointer[
         Int8,
         address_space=address_space,
-        alignment=alignment,
         mut=mut,
         origin=origin,
     ]
@@ -282,7 +281,6 @@ struct BasicScoringMatrix[
         ptr: UnsafePointer[
             Int8,
             address_space=address_space,
-            alignment=alignment,
             mut=mut,
             origin=origin,
         ],
@@ -303,8 +301,8 @@ struct BasicScoringMatrix[
         return self.len
 
 
-@value
-struct ScoringMatrix:
+@fieldwise_init
+struct ScoringMatrix(Copyable, Movable):
     """The scoring matrix for determining the match/mismatch score between any two values.
 
     Additionally, the matrix is responsible for knowing what the alphabet it represents is,
@@ -333,7 +331,7 @@ struct ScoringMatrix:
         var values = List(Span(BLOSUM50))
         var ascii_to_encoding = List(Span(AA_TO_NUM))
         var encoding_to_ascii = List(Span(NUM_TO_AA))
-        return Self(values, size, ascii_to_encoding, encoding_to_ascii)
+        return Self(values^, size, ascii_to_encoding^, encoding_to_ascii^)
 
     @staticmethod
     fn blosum62() -> Self:
@@ -341,7 +339,7 @@ struct ScoringMatrix:
         var values = List(Span(BLOSUM62))
         var ascii_to_encoding = List(Span(AA_TO_NUM))
         var encoding_to_ascii = List(Span(NUM_TO_AA))
-        return Self(values, size, ascii_to_encoding, encoding_to_ascii)
+        return Self(values^, size, ascii_to_encoding^, encoding_to_ascii^)
 
     @staticmethod
     fn actgn_matrix(match_score: Int8 = 2, mismatch_score: Int8 = -2) -> Self:
@@ -349,7 +347,7 @@ struct ScoringMatrix:
         var values = List(Span(ACTGN))
         var ascii_to_encoding = List(Span(NT_TO_NUM))
         var encoding_to_ascii = List(Span(NUM_TO_NT))
-        return Self(values, size, ascii_to_encoding, encoding_to_ascii)
+        return Self(values^, size, ascii_to_encoding^, encoding_to_ascii^)
 
     @staticmethod
     fn actgn0_matrix(match_score: Int8 = 2, mismatch_score: Int8 = -2) -> Self:
@@ -357,7 +355,7 @@ struct ScoringMatrix:
         var values = List(Span(ACTGN0))
         var ascii_to_encoding = List(Span(NT_TO_NUM))
         var encoding_to_ascii = List(Span(NUM_TO_NT))
-        return Self(values, size, ascii_to_encoding, encoding_to_ascii)
+        return Self(values^, size, ascii_to_encoding^, encoding_to_ascii^)
 
     @staticmethod
     fn all_ascii_default_matrix() -> Self:
@@ -371,10 +369,10 @@ struct ScoringMatrix:
             ascii_to_encoding.append(i)
             encodign_to_acii.append(i)
         return Self(
-            values,
+            values^,
             sqrt(len(values)),
-            ascii_to_encoding=ascii_to_encoding,
-            encoding_to_ascii=encodign_to_acii,
+            ascii_to_encoding=ascii_to_encoding^,
+            encoding_to_ascii=encodign_to_acii^,
         )
 
     @staticmethod
@@ -390,12 +388,12 @@ struct ScoringMatrix:
                     values[i * size + j] = match_score  # match
                 else:
                     values[i * size + j] = mismatch_score  # Mismatch
-        return values
+        return values^
 
     fn __len__(read self) -> Int:
         return len(self.values)
 
-    fn get[I: Indexer](read self, i: I, j: I) -> Int8:
+    fn get[I: Indexer & Intable](read self, i: I, j: I) -> Int8:
         return self.values[Int(i) * self.size + Int(j)]
 
     fn _set_last_row_to_value(mut self, value: Int8 = 2):
@@ -404,8 +402,9 @@ struct ScoringMatrix:
 
     @always_inline
     fn convert_ascii_to_encoding_and_score(
-        read self, seq: Span[UInt8]
-    ) -> (List[UInt8], Int):
+        read self,
+        seq: Span[UInt8],
+    ) -> Tuple[Optional[List[UInt8]], Optional[Int]]:
         """Convert the input seq to the encoding, and also track the optimal alignment score.
         """
         var score = 0
@@ -414,7 +413,7 @@ struct ScoringMatrix:
             var encoded = self.ascii_to_encoding[Int(value)]
             score += Int(self.get(encoded, encoded))
             out.append(encoded)
-        return (out, score)
+        return (out^, score)
 
     @always_inline
     fn convert_ascii_to_encoding[
@@ -428,16 +427,14 @@ struct ScoringMatrix:
         var out = List[UInt8](capacity=len(seq))
         for value in seq:
             out.append(self.ascii_to_encoding[Int(value)])
-        return out
+        return out^
 
     @always_inline
-    fn convert_ascii_to_encoding(
-        read self, owned seq: List[Int8]
-    ) -> List[UInt8]:
+    fn convert_ascii_to_encoding(read self, var seq: List[Int8]) -> List[UInt8]:
         var out = List[UInt8](capacity=len(seq))
         for value in seq:
             out.append(self.ascii_to_encoding[Int(value)])
-        return out
+        return out^
 
     @always_inline
     fn convert_ascii_to_encoding(read self, seq: UInt8) -> UInt8:
@@ -445,11 +442,11 @@ struct ScoringMatrix:
 
     @always_inline
     fn convert_ascii_to_encoding(
-        read self, owned seq: List[UInt8]
+        read self, var seq: List[UInt8]
     ) -> List[UInt8]:
         for ref value in seq:
             value = self.ascii_to_encoding[Int(value)]
-        return seq
+        return seq^
 
     @always_inline
     fn convert_encoding_to_ascii(read self, mut seq: List[UInt8]):
@@ -463,7 +460,7 @@ struct ScoringMatrix:
         var out = List[UInt8](capacity=len(seq))
         for ref value in seq:
             out.append(self.encoding_to_ascii[Int(value)])
-        return out
+        return out^
 
     @always_inline
     fn convert_encoding_to_ascii(read self, seq: UInt8) -> UInt8:

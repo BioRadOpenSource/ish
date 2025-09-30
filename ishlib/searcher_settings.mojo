@@ -3,15 +3,15 @@ from collections import Optional
 from sys.info import num_physical_cores
 from pathlib.path import Path, cwd
 
-from ExtraMojo.cli.parser import OptParser, OptConfig, OptKind
+from extramojo.cli.parser import OptParser, OptConfig, OptKind
 
 from ishlib.matcher.alignment.scoring_matrix import MatrixKind
 from ishlib.vendor.tty_info import TTYInfo, Info as TTYInfoResult, STDOUT_FD
 from ishlib.vendor.walk_dir import walk_dir
 
 
-@value
-struct SearcherSettings:
+@fieldwise_init
+struct SearcherSettings(Copyable, Movable):
     """Settings for the ish searcher."""
 
     var files: List[Path]
@@ -250,9 +250,9 @@ struct SearcherSettings:
             var tty = TTYInfo()
 
             return Self(
-                expanded_files,
-                pattern,
-                matrix_kind,
+                expanded_files^,
+                pattern^,
+                matrix_kind^,
                 Float32(score),
                 output,
                 gap_open,
@@ -263,7 +263,7 @@ struct SearcherSettings:
                 batch_size,
                 max_gpus,
                 tty.info(STDOUT_FD),
-                sg_ends_free,
+                sg_ends_free^,
                 verbose,
             )
         except e:
@@ -282,12 +282,12 @@ fn expand_files_to_search(files: List[String]) raises -> List[Path]:
             out.extend(walk_dir[ignore_dot_files=True](path))
         else:
             out.append(path)
-    return out
+    return out^
 
 
-@value
+@fieldwise_init
 @register_passable
-struct SemiGlobalEndsFreeness:
+struct SemiGlobalEndsFreeness(Copyable, ImplicitlyCopyable, Movable):
     var query_start: Bool
     var query_end: Bool
     var target_start: Bool
@@ -398,7 +398,7 @@ struct SemiGlobalEndsFreeness:
         var upper = value.upper()
         for c in range(0, len(upper)):
             var ch = upper[c]
-            if ch != "T" and ch != "F":
+            if ch != "T".as_string_slice() and ch != "F".as_string_slice():
                 raise "Invalid SemiGlobalEndsFreeness specified. All values must be T or F"
 
         var query_start = upper[0] == "T"

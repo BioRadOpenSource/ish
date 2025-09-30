@@ -20,7 +20,7 @@ struct ByteSpanWriter[origin: ImmutableOrigin](Writable):
         writer.write_bytes(self.inner)
 
 
-@value
+@fieldwise_init
 @register_passable
 struct RecordType:
     var value: Int

@@ -7,7 +7,7 @@
 import math
 
 
-@value
+@fieldwise_init
 struct RunningStats[dtype: DType]:
     """Computes running mean, variance, standard deviation, min, and max using Welford's algorithm.
     """

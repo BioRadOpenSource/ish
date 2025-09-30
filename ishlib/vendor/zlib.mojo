@@ -28,7 +28,7 @@ fn main() raises:
 
 from memory import memset_zero, UnsafePointer
 from sys import ffi
-from sys.info import os_is_macos
+from sys.info import CompilationTarget
 
 from ishlib.vendor.kseq import KRead
 
@@ -57,8 +57,8 @@ alias gzread_fn_type = fn (
 ) -> c_int
 
 
-@value
-struct ZLib:
+@fieldwise_init
+struct ZLib(Movable):
     """Wrapper for zlib library functions."""
 
     var lib_handle: ffi.DLHandle
@@ -66,7 +66,7 @@ struct ZLib:
     @staticmethod
     fn _get_libname() -> StaticString:
         @parameter
-        if os_is_macos():
+        if CompilationTarget.is_macos():
             return "libz.dylib"
         else:
             return "libz.so"
@@ -118,12 +118,12 @@ struct GZFile(KRead):
         if self.handle == c_void_ptr():
             raise Error("Failed to open gzip file: " + filename)
 
-    fn __del__(owned self):
+    fn __del__(deinit self):
         """Close the file when the object is destroyed."""
         if self.handle != c_void_ptr():
             _ = self.lib.gzclose(self.handle)
 
-    fn __moveinit__(out self, owned other: Self):
+    fn __moveinit__(out self, deinit other: Self):
         self.handle = other.handle
         self.lib = other.lib^
         self.filename = other.filename^

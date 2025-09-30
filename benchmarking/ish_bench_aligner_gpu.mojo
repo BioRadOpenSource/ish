@@ -1,15 +1,15 @@
 """Test program for SSW."""
 from memory import AddressSpace
 from sys import stdout, stderr
-from sys.info import simdwidthof, has_avx512f, alignof, num_physical_cores
+from sys.info import simd_width_of, alignof, num_physical_cores
 from sys.param_env import env_get_int
 from time.time import perf_counter
 
 from algorithm.functional import parallelize
 
-from ExtraMojo.cli.parser import OptParser, OptConfig, OptKind, ParsedOpts
-from ExtraMojo.io.buffered import BufferedWriter
-from ExtraMojo.io.delimited import DelimWriter, ToDelimited
+from extramojo.cli.parser import OptParser, OptConfig, OptKind, ParsedOpts
+from extramojo.io.buffered import BufferedWriter
+from extramojo.io.delimited import DelimWriter, ToDelimited
 from ishlib.matcher.alignment.local_aln.striped import (
     ssw_align,
     Profile,
@@ -49,24 +49,24 @@ from layout import Layout, LayoutTensor
 from math import ceildiv
 
 # Force half width vectors in the case of avx512 since avx 2 seems faster up to around 700len queries.
-# alias SIMD_U8_WIDTH = simdwidthof[
+# alias SIMD_U8_WIDTH = simd_width_of[
 #     UInt8
-# ]() if not has_avx512f() else simdwidthof[UInt8]() // 2
-# alias SIMD_U16_WIDTH = simdwidthof[
+# ]() if not has_avx512f() else simd_width_of[UInt8]() // 2
+# alias SIMD_U16_WIDTH = simd_width_of[
 #     UInt16
-# ]() if not has_avx512f() else simdwidthof[UInt16]() // 2
+# ]() if not has_avx512f() else simd_width_of[UInt16]() // 2
 
 alias SIMD_MOD = env_get_int["SIMD_MOD", 1]()
 """Modify the SIMD width based on a CLI argument."""
 
-alias FULL_SIMD_U8_WIDTH = simdwidthof[UInt8]()
-alias FULL_SIMD_U16_WIDTH = simdwidthof[UInt16]()
+alias FULL_SIMD_U8_WIDTH = simd_width_of[UInt8]()
+alias FULL_SIMD_U16_WIDTH = simd_width_of[UInt16]()
 
-# alias SIMD_U8_WIDTH = simdwidthof[UInt8]() // SIMD_MOD
-# alias SIMD_U16_WIDTH = simdwidthof[UInt16]() // SIMD_MOD
+# alias SIMD_U8_WIDTH = simd_width_of[UInt8]() // SIMD_MOD
+# alias SIMD_U16_WIDTH = simd_width_of[UInt16]() // SIMD_MOD
 
-alias SIMD_U8_WIDTH = simdwidthof[UInt8]() // 2
-alias SIMD_U16_WIDTH = simdwidthof[UInt16]() // 2
+alias SIMD_U8_WIDTH = simd_width_of[UInt8]() // 2
+alias SIMD_U16_WIDTH = simd_width_of[UInt16]() // 2
 
 
 fn parse_args() raises -> ParsedOpts:
@@ -207,32 +207,32 @@ fn parse_args() raises -> ParsedOpts:
     return parser.parse_sys_args()
 
 
-@value
-struct ByteFastaRecord:
+@fieldwise_init
+struct ByteFastaRecord(Copyable, Movable):
     var name: String
     var seq: List[UInt8]
     var rev: List[UInt8]
 
     fn __init__(
         out self,
-        owned name: String,
-        owned seq: String,
+        var name: String,
+        var seq: String,
         read scoring_matrix: ScoringMatrix,
         convert_to_aa: Bool = True,
     ):
         var seq_bytes = List(seq.as_bytes())
         if convert_to_aa:
-            seq_bytes = scoring_matrix.convert_ascii_to_encoding(seq_bytes)
+            seq_bytes = scoring_matrix.convert_ascii_to_encoding(seq_bytes^)
         var rev = List[UInt8](capacity=len(seq_bytes))
         for s in reversed(seq_bytes):
-            rev.append(s[])
+            rev.append(s)
         self.name = name^
         self.seq = seq_bytes^
         self.rev = rev^
 
 
-@value
-struct Profiles[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
+@fieldwise_init
+struct Profiles[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int](Copyable, Movable):
     var fwd: Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH]
     var rev: Profile[SIMD_U8_WIDTH, SIMD_U16_WIDTH]
 
@@ -250,8 +250,10 @@ struct Profiles[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
         )
 
 
-@value
-struct SemiGlobalProfiles[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
+@fieldwise_init
+struct SemiGlobalProfiles[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int](
+    Copyable, Movable
+):
     var fwd: SemiGlobalProfile[SIMD_U8_WIDTH, SIMD_U16_WIDTH]
     var rev: SemiGlobalProfile[SIMD_U8_WIDTH, SIMD_U16_WIDTH]
 
@@ -269,9 +271,9 @@ struct SemiGlobalProfiles[SIMD_U8_WIDTH: Int, SIMD_U16_WIDTH: Int]:
         )
 
 
-@value
+@fieldwise_init
 @register_passable("trivial")
-struct BasicAlignmentOutput(ToDelimited):
+struct BasicAlignmentOutput(Copyable, Movable, ToDelimited):
     var query_idx: Int
     var target_idx: Int
     var query_len: Int
@@ -361,8 +363,8 @@ struct BasicAlignmentOutput(ToDelimited):
         )
 
 
-@value
-struct BenchmarkResults(ToDelimited):
+@fieldwise_init
+struct BenchmarkResults(Copyable, Movable, ToDelimited):
     var total_query_seqs: Int
     var total_target_seqs: Int
     var query_len: Int
@@ -392,26 +394,26 @@ struct BenchmarkResults(ToDelimited):
         var gcups = 0.0
 
         for result in results:
-            total_query_seqs += result[].total_query_seqs
-            total_target_seqs += result[].total_target_seqs
-            runtime_secs += result[].runtime_secs
-            cells_updated += result[].cells_updated
-            gcups += result[].gcups
+            total_query_seqs += result.total_query_seqs
+            total_target_seqs += result.total_target_seqs
+            runtime_secs += result.runtime_secs
+            cells_updated += result.cells_updated
+            gcups += result.gcups
 
-            if query_len != result[].query_len:
+            if query_len != result.query_len:
                 # TODO: may want to change this if we want to process multiple queries in one go.
                 raise "Mismatching query len"
-            if matrix != result[].matrix:
+            if matrix != result.matrix:
                 raise "Mismatching matrix"
-            if gap_open != result[].gap_open:
+            if gap_open != result.gap_open:
                 raise "Mismatching gap open"
-            if gap_extend != result[].gap_extend:
+            if gap_extend != result.gap_extend:
                 raise "Mismatching gap extend"
-            if u8_width != result[].u8_width:
+            if u8_width != result.u8_width:
                 raise "Mismatching u8 width"
-            if u16_width != result[].u16_width:
+            if u16_width != result.u16_width:
                 raise "Mismatching u16 width"
-            if score_size != result[].score_size:
+            if score_size != result.score_size:
                 raise "Mismatching score size"
 
         return Self(
@@ -645,7 +647,7 @@ fn bench_striped_local(
     )
     for q in queries:
         profiles.append(
-            Profiles[SIMD_U8_WIDTH, SIMD_U16_WIDTH](q[], matrix, score_size)
+            Profiles[SIMD_U8_WIDTH, SIMD_U16_WIDTH](q, matrix, score_size)
         )
     var prep_end = perf_counter()
     print("Setup Time:", prep_end - prep_start, file=stderr)
@@ -716,7 +718,7 @@ fn bench_striped_local(
                 gap_extension_score,
                 SIMD_U8_WIDTH,
                 SIMD_U16_WIDTH,
-                String(score_size),
+                score_size.__str__(),
                 elapsed,
                 work,
                 cells_per_second / 1000000000,
@@ -724,15 +726,22 @@ fn bench_striped_local(
         )
 
     var result = BenchmarkResults.average(results)
-    var metric_writer = DelimWriter(
-        BufferedWriter(
-            open(metrics_file, "w") if metrics_file != "-" else stdout
-        ),
-        delim=",",
-        write_header=True,
-    )
-    metric_writer.serialize(result)
-    metric_writer.flush()
+    if metrics_file == "-":
+        var metric_writer = DelimWriter(
+            BufferedWriter(stdout),
+            delim=",",
+            write_header=True,
+        )
+        metric_writer.serialize(result)
+        metric_writer.flush()
+    else:
+        var metric_writer = DelimWriter(
+            BufferedWriter(open(metrics_file, "w")),
+            delim=",",
+            write_header=True,
+        )
+        metric_writer.serialize(result)
+        metric_writer.flush()
 
 
 fn bench_striped_semi_global(
@@ -781,7 +790,7 @@ fn bench_striped_semi_global(
     for q in queries:
         profiles.append(
             SemiGlobalProfiles[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
-                q[], matrix, score_size
+                q, matrix, score_size
             )
         )
     var prep_end = perf_counter()
@@ -802,7 +811,6 @@ fn bench_striped_semi_global(
         print("Gap ext penalty:", gap_extension_score, file=stderr)
         print("U8 SIMD Width:", SIMD_U8_WIDTH, file=stderr)
         print("U16 SIMD Width:", SIMD_U16_WIDTH, file=stderr)
-        print("Bias:", profiles[0].fwd.bias, file=stderr)
         var start = perf_counter()
         var work: UInt64 = 0
         for i in range(0, len(queries)):
@@ -856,7 +864,7 @@ fn bench_striped_semi_global(
                 gap_extension_score,
                 SIMD_U8_WIDTH,
                 SIMD_U16_WIDTH,
-                String(score_size),
+                score_size.__str__(),
                 elapsed,
                 work,
                 cells_per_second / 1000000000,
@@ -864,15 +872,22 @@ fn bench_striped_semi_global(
         )
 
     var result = BenchmarkResults.average(results)
-    var metric_writer = DelimWriter(
-        BufferedWriter(
-            open(metrics_file, "w") if metrics_file != "-" else stdout
-        ),
-        delim=",",
-        write_header=True,
-    )
-    metric_writer.serialize(result)
-    metric_writer.flush()
+    if metrics_file == "-":
+        var metric_writer = DelimWriter(
+            BufferedWriter(stdout),
+            delim=",",
+            write_header=True,
+        )
+        metric_writer.serialize(result)
+        metric_writer.flush()
+    else:
+        var metric_writer = DelimWriter(
+            BufferedWriter(open(metrics_file, "w")),
+            delim=",",
+            write_header=True,
+        )
+        metric_writer.serialize(result)
+        metric_writer.flush()
 
 
 fn bench_basic_semi_global(
@@ -1004,7 +1019,7 @@ fn bench_basic_semi_global(
                 gap_extension_score,
                 SIMD_U8_WIDTH,
                 SIMD_U16_WIDTH,
-                String(score_size),
+                score_size.__str__(),
                 elapsed,
                 work,
                 cells_per_second / 1000000000,
@@ -1012,15 +1027,22 @@ fn bench_basic_semi_global(
         )
 
     var result = BenchmarkResults.average(results)
-    var metric_writer = DelimWriter(
-        BufferedWriter(
-            open(metrics_file, "w") if metrics_file != "-" else stdout
-        ),
-        delim=",",
-        write_header=True,
-    )
-    metric_writer.serialize(result)
-    metric_writer.flush()
+    if metrics_file == "-":
+        var metric_writer = DelimWriter(
+            BufferedWriter(stdout),
+            delim=",",
+            write_header=True,
+        )
+        metric_writer.serialize(result)
+        metric_writer.flush()
+    else:
+        var metric_writer = DelimWriter(
+            BufferedWriter(open(metrics_file, "w")),
+            delim=",",
+            write_header=True,
+        )
+        metric_writer.serialize(result)
+        metric_writer.flush()
 
 
 fn bench_striped_semi_global_parallel(
@@ -1073,7 +1095,7 @@ fn bench_striped_semi_global_parallel(
     for q in queries:
         profiles.append(
             SemiGlobalProfiles[SIMD_U8_WIDTH, SIMD_U16_WIDTH](
-                q[], matrix, score_size
+                q, matrix, score_size
             )
         )
     var output = List[BasicAlignmentOutput](capacity=len(targets))
@@ -1099,7 +1121,6 @@ fn bench_striped_semi_global_parallel(
         print("Gap ext penalty:", gap_extension_score, file=stderr)
         print("U8 SIMD Width:", SIMD_U8_WIDTH, file=stderr)
         print("U16 SIMD Width:", SIMD_U16_WIDTH, file=stderr)
-        print("Bias:", profiles[0].fwd.bias, file=stderr)
         var start = perf_counter()
         # var work: UInt64 = 0
         for i in range(0, len(queries)):
@@ -1158,7 +1179,7 @@ fn bench_striped_semi_global_parallel(
                 gap_extension_score,
                 SIMD_U8_WIDTH,
                 SIMD_U16_WIDTH,
-                String(score_size),
+                score_size.__str__(),
                 elapsed,
                 work,
                 cells_per_second / 1000000000,
@@ -1166,15 +1187,22 @@ fn bench_striped_semi_global_parallel(
         )
 
     var result = BenchmarkResults.average(results)
-    var metric_writer = DelimWriter(
-        BufferedWriter(
-            open(metrics_file, "w") if metrics_file != "-" else stdout
-        ),
-        delim=",",
-        write_header=True,
-    )
-    metric_writer.serialize(result)
-    metric_writer.flush()
+    if metrics_file == "-":
+        var metric_writer = DelimWriter(
+            BufferedWriter(stdout),
+            delim=",",
+            write_header=True,
+        )
+        metric_writer.serialize(result)
+        metric_writer.flush()
+    else:
+        var metric_writer = DelimWriter(
+            BufferedWriter(open(metrics_file, "w")),
+            delim=",",
+            write_header=True,
+        )
+        metric_writer.serialize(result)
+        metric_writer.flush()
 
 
 fn bench_basic_semi_global_gpu(
@@ -1300,12 +1328,12 @@ fn bench_basic_semi_global_gpu(
             len(query[].seq)
         )
         var host_basic_matrix = ctx.enqueue_create_host_buffer[DType.int8](
-            len(basic_matrix)
+            basic_matrix.__len__()
         )
 
         var dev_query = ctx.enqueue_create_buffer[DType.uint8](len(query[].seq))
         var dev_basic_matrix = ctx.enqueue_create_buffer[DType.int8](
-            len(basic_matrix)
+            basic_matrix.__len__()
         )
 
         # Result buffers
@@ -1339,7 +1367,7 @@ fn bench_basic_semi_global_gpu(
         memcpy(
             host_basic_matrix.unsafe_ptr(),
             basic_matrix.values,
-            len(basic_matrix),
+            basic_matrix.__len__(),
         )
 
         host_query.enqueue_copy_to(dev_query)
@@ -1375,7 +1403,7 @@ fn bench_basic_semi_global_gpu(
             dev_query_end_result_buffer,
             dev_ref_end_result_buffer,
             dev_basic_matrix,
-            len(basic_matrix),
+            basic_matrix.__len__(),
             len(query[].seq),
             len(target_ends),
             threads_to_launch=15000,
@@ -1425,26 +1453,33 @@ fn bench_basic_semi_global_gpu(
             gap_extension_score,
             SIMD_U8_WIDTH,
             SIMD_U16_WIDTH,
-            String(score_size),
+            score_size.__str__(),
             elapsed,
             work,
             cells_per_second / 1000000000,
         )
     )
     var result = BenchmarkResults.average(results)
-    var metric_writer = DelimWriter(
-        BufferedWriter(
-            open(metrics_file, "w") if metrics_file != "-" else stdout
-        ),
-        delim=",",
-        write_header=True,
-    )
-    metric_writer.serialize(result)
-    metric_writer.flush()
+    if metrics_file == "-":
+        var metric_writer = DelimWriter(
+            BufferedWriter(stdout),
+            delim=",",
+            write_header=True,
+        )
+        metric_writer.serialize(result)
+        metric_writer.flush()
+    else:
+        var metric_writer = DelimWriter(
+            BufferedWriter(open(metrics_file, "w")),
+            delim=",",
+            write_header=True,
+        )
+        metric_writer.serialize(result)
+        metric_writer.flush()
 
 
-@value
-struct BufferPair[dtype: DType]:
+@fieldwise_init
+struct BufferPair[dtype: DType](Copyable, Movable):
     # TODO: maybe we don't want to pair these up, otherwise they can't be destroyed easily?
     var host: HostBuffer[dtype]
     var device: DeviceBuffer[dtype]
@@ -1473,8 +1508,8 @@ struct BufferPair[dtype: DType]:
         self.device.enqueue_copy_to(self.host)
 
 
-@value
-struct AlignerDevice:
+@fieldwise_init
+struct AlignerDevice(Copyable, Movable):
     var ctx: DeviceContext
     var query: Optional[BufferPair[DType.uint8]]
     var targets: Optional[BufferPair[DType.uint8]]
@@ -1484,7 +1519,7 @@ struct AlignerDevice:
     var query_ends: Optional[BufferPair[DType.int32]]
     var target_ends: Optional[BufferPair[DType.int32]]
 
-    fn __init__(out self, owned ctx: DeviceContext):
+    fn __init__(out self, var ctx: DeviceContext):
         self.ctx = ctx^
         self.query = None
         self.targets = None
@@ -1674,7 +1709,7 @@ fn bench_basic_semi_global_gpu_parallel(
         ctxs[ctx_id].create_buffers(
             targets_per_device,
             len(queries[0].seq),
-            len(basic_matrix),
+            basic_matrix.__len__(),
             max_target_length=1024,
         )
 
@@ -1695,7 +1730,7 @@ fn bench_basic_semi_global_gpu_parallel(
         ctxs[i].set_host_inputs(
             Span(queries[0].seq),
             basic_matrix.values,
-            len(basic_matrix),
+            basic_matrix.__len__(),
             # targets[start:end],
             local_targets,
             max_target_length=1024,
@@ -1797,22 +1832,29 @@ fn bench_basic_semi_global_gpu_parallel(
             gap_extension_score,
             SIMD_U8_WIDTH,
             SIMD_U16_WIDTH,
-            String(score_size),
+            score_size.__str__(),
             elapsed,
             work,
             cells_per_second / 1000000000,
         )
     )
     var result = BenchmarkResults.average(results)
-    var metric_writer = DelimWriter(
-        BufferedWriter(
-            open(metrics_file, "w") if metrics_file != "-" else stdout
-        ),
-        delim=",",
-        write_header=True,
-    )
-    metric_writer.serialize(result)
-    metric_writer.flush()
+    if metrics_file == "-":
+        var metric_writer = DelimWriter(
+            BufferedWriter(stdout),
+            delim=",",
+            write_header=True,
+        )
+        metric_writer.serialize(result)
+        metric_writer.flush()
+    else:
+        var metric_writer = DelimWriter(
+            BufferedWriter(open(metrics_file, "w")),
+            delim=",",
+            write_header=True,
+        )
+        metric_writer.serialize(result)
+        metric_writer.flush()
 
 
 ##############################################
@@ -1820,7 +1862,7 @@ fn bench_basic_semi_global_gpu_parallel(
 ##############################################
 
 
-@value
+@fieldwise_init
 @register_passable("trivial")
 struct LineCoords:
     alias UPPER32 = UInt32.MAX.cast[DType.uint64]() << 32

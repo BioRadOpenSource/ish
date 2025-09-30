@@ -2,7 +2,7 @@ from pathlib import Path
 from testing import assert_equal
 from tempfile import TemporaryDirectory
 
-from ExtraMojo.io.buffered import BufferedWriter
+from extramojo.io.buffered import BufferedWriter
 
 from ishlib.do_search import do_search
 from ishlib.gpu import has_gpu
@@ -153,7 +153,7 @@ def test_cases():
                         settings.append(
                             SearcherSettings(
                                 files=List[Path](input),  # Fill
-                                pattern=c.pattern,  # Fill
+                                pattern=c.pattern.copy(),  # Fill
                                 matrix_kind=c.matrix_kind,
                                 score_threshold=0.8,
                                 output_file=output,  # Fill

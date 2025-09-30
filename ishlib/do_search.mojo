@@ -1,6 +1,6 @@
 from time.time import perf_counter
 
-from ExtraMojo.io.buffered import BufferedWriter
+from extramojo.io.buffered import BufferedWriter
 
 from ishlib.gpu import has_gpu
 from ishlib.line_search_runner import LineSearchRunner
@@ -23,12 +23,13 @@ from ishlib.vendor.log import Logger
 
 fn do_search[
     W: Movable & Writer
-](settings: SearcherSettings, owned writer: BufferedWriter[W]) raises:
+](settings: SearcherSettings, var writer: BufferedWriter[W]) raises:
     Logger.info(
         # fmt: off
         "match_algo:", settings.match_algo, "|",
         "threads:", settings.threads, "|",
         "max_gpus:", settings.max_gpus, "|",
+        "has_gpu:", has_gpu(), "|",
         "record_type:", settings.record_type, "|",
         "matrix_kind:", String(settings.matrix_kind), "|",
         "pattern:", String(StringSlice(unsafe_from_utf8=settings.pattern))
@@ -41,7 +42,7 @@ fn do_search[
                 var runner = LineSearchRunner[
                     StripedLocalMatcher[__origin_of(settings.pattern)]
                 ](
-                    settings,
+                    settings.copy(),
                     StripedLocalMatcher(
                         settings.pattern,
                         settings.score_threshold,
@@ -53,7 +54,7 @@ fn do_search[
                 var runner = ParallelLineSearchRunner[
                     StripedLocalMatcher[__origin_of(settings.pattern)]
                 ](
-                    settings,
+                    settings.copy(),
                     StripedLocalMatcher(
                         settings.pattern,
                         settings.score_threshold,
@@ -66,7 +67,7 @@ fn do_search[
                 var runner = FastxSearchRunner[
                     StripedLocalMatcher[__origin_of(settings.pattern)]
                 ](
-                    settings,
+                    settings.copy(),
                     StripedLocalMatcher(
                         settings.pattern,
                         settings.score_threshold,
@@ -78,7 +79,7 @@ fn do_search[
                 var runner = ParallelFastxSearchRunner[
                     StripedLocalMatcher[__origin_of(settings.pattern)]
                 ](
-                    settings,
+                    settings.copy(),
                     StripedLocalMatcher(
                         settings.pattern,
                         settings.score_threshold,
@@ -92,7 +93,7 @@ fn do_search[
         if settings.record_type == "line":
             if settings.threads <= 1:
                 var runner = LineSearchRunner[StripedSemiGlobalMatcher](
-                    settings,
+                    settings.copy(),
                     StripedSemiGlobalMatcher(
                         settings.pattern,
                         settings.score_threshold,
@@ -106,7 +107,7 @@ fn do_search[
                     var runner = ParallelLineSearchRunner[
                         StripedSemiGlobalMatcher
                     ](
-                        settings,
+                        settings.copy(),
                         StripedSemiGlobalMatcher(
                             settings.pattern,
                             settings.score_threshold,
@@ -137,7 +138,7 @@ fn do_search[
                                         StripedSemiGlobalMatcher,
                                         max_query_length=max_len,
                                     ](
-                                        settings,
+                                        settings.copy(),
                                         StripedSemiGlobalMatcher(
                                             settings.pattern,
                                             settings.score_threshold,
@@ -152,7 +153,7 @@ fn do_search[
                                 var runner = ParallelLineSearchRunner[
                                     StripedSemiGlobalMatcher
                                 ](
-                                    settings,
+                                    settings.copy(),
                                     StripedSemiGlobalMatcher(
                                         settings.pattern,
                                         settings.score_threshold,
@@ -169,7 +170,7 @@ fn do_search[
                         var runner = ParallelLineSearchRunner[
                             StripedSemiGlobalMatcher
                         ](
-                            settings,
+                            settings.copy(),
                             StripedSemiGlobalMatcher(
                                 settings.pattern,
                                 settings.score_threshold,
@@ -181,7 +182,7 @@ fn do_search[
         elif settings.record_type == "fastx":
             if settings.threads <= 1:
                 var runner = FastxSearchRunner[StripedSemiGlobalMatcher](
-                    settings,
+                    settings.copy(),
                     StripedSemiGlobalMatcher(
                         settings.pattern,
                         settings.score_threshold,
@@ -195,7 +196,7 @@ fn do_search[
                     var runner = ParallelFastxSearchRunner[
                         StripedSemiGlobalMatcher
                     ](
-                        settings,
+                        settings.copy(),
                         StripedSemiGlobalMatcher(
                             settings.pattern,
                             settings.score_threshold,
@@ -226,7 +227,7 @@ fn do_search[
                                         StripedSemiGlobalMatcher,
                                         max_query_length=max_len,
                                     ](
-                                        settings,
+                                        settings.copy(),
                                         StripedSemiGlobalMatcher(
                                             settings.pattern,
                                             settings.score_threshold,
@@ -241,7 +242,7 @@ fn do_search[
                                 var runner = ParallelFastxSearchRunner[
                                     StripedSemiGlobalMatcher
                                 ](
-                                    settings,
+                                    settings.copy(),
                                     StripedSemiGlobalMatcher(
                                         settings.pattern,
                                         settings.score_threshold,
@@ -258,7 +259,7 @@ fn do_search[
                         var runner = ParallelFastxSearchRunner[
                             StripedSemiGlobalMatcher
                         ](
-                            settings,
+                            settings.copy(),
                             StripedSemiGlobalMatcher(
                                 settings.pattern,
                                 settings.score_threshold,

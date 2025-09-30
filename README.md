@@ -132,6 +132,18 @@ This is a benchmarking tool based on `parasail_aligner`.
 > 
 > `ish-aligner` and all variations of it are for development purposes only.
 
+## Running benchmarks
+
+```
+pixi run bench-all-cpu
+# And if you have a Tier 1 or Tier 2 supported GPU
+pixi run bench-all-gpu
+```
+
+This will download all bench data needed, run the benchmarks, and produce plots. Look in `bench_results` upon completion.
+
+**Note**, if you run or build individual benchmark binaries, the `SIMD_MOD` argument can be `sse`, `avx2`, or `avx512`. REGARDLESS of whether your system supports SIMD vectors at a hardware level of avx2 width, Mojo will simulate vectors of that width if they are not available.
+
 ## Further Reading
 
 The associated paper can be found [here](https://www.biorxiv.org/content/10.1101/2025.06.04.657890v1).
