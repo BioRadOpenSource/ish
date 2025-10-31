@@ -4,7 +4,7 @@ channels = [
     #"https://conda.modular.com/max-nightly",
     "https://prefix.dev/conda-forge",
     "https://conda.modular.com/max",
-    # "https://repo.prefix.dev/modular-community",
+    "https://repo.prefix.dev/modular-community",
 ]
 platforms = ["osx-arm64", "linux-64", "linux-aarch64"]
 preview = ["pixi-build"]
@@ -25,8 +25,8 @@ channels = [
 mojo-compiler = "=0.25.6"
 
 [package.build-dependencies]
+extramojo = "=0.18.0"
 mojo-compiler = "=0.25.6"
-extramojo = { git = "https://github.com/ExtraMojo/ExtraMojo.git" }
 zlib = ">=1.3.1,<2"
 
 [package.run-dependencies]
